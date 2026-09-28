@@ -136,6 +136,28 @@ void main() {
     expect(s.ledger.balance('cash'), kzt(100000));
   });
 
+  test('корзина: удалённая оплата восстанавливается и снова отмечает срок', () async {
+    final f = FakeServer();
+    await f.init();
+    await f.plan();
+    final s = f.state;
+    final due = s.upcoming.firstWhere((d) => d.period == '2026-09');
+    await s.payDue(due, account: 'cash', amount: kzt(10000));
+    final payment = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    await s.deleteTransaction(payment.id);
+    expect(s.deletedTransactions.map((t) => t.id), [payment.id]);
+    expect(s.ledger.balance('cash'), kzt(100000));
+
+    await s.restoreTransaction(payment.id);
+    expect(s.deletedTransactions, isEmpty);
+    expect(s.ledger.balance('cash'), kzt(90000));
+    expect(s.planned.single.paid, contains('2026-09'));
+    expect(s.upcoming.any((d) => d.period == '2026-09'), isFalse);
+    final restored = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    expect(restored.meta['restoredFrom'], payment.id);
+    expect(f.ledger.balance('cash'), kzt(90000), reason: 'сервер применил ту же команду');
+  });
+
   test('F04: неоплаченный сентябрьский срок остаётся просроченным в октябре', () async {
     final f = FakeServer();
     await f.init();

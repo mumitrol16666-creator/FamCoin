@@ -7,6 +7,7 @@ import 'state/app_state.dart';
 import 'state/settings.dart';
 import 'theme/app_theme.dart';
 import 'ui/auth/login_screen.dart';
+import 'ui/auth/pin_screen.dart';
 import 'ui/onboarding/onboarding_screen.dart';
 import 'ui/shell.dart';
 import 'ui/widgets/common.dart';
@@ -25,7 +26,7 @@ class FamCoinApp extends StatefulWidget {
   State<FamCoinApp> createState() => _FamCoinAppState();
 }
 
-class _FamCoinAppState extends State<FamCoinApp> {
+class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
   AppState? _state;
 
   Settings get settings => widget.settings;
@@ -33,15 +34,31 @@ class _FamCoinAppState extends State<FamCoinApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     settings.addListener(_syncSession);
     _syncSession();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     settings.removeListener(_syncSession);
     _state?.dispose();
     super.dispose();
+  }
+
+  /// PIN-код: после паузы в фоне приложение снова просит его.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        settings.noteResumed();
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        settings.noteBackground();
+    }
   }
 
   /// Данные владельца создаются при входе и сбрасываются при выходе.
@@ -83,7 +100,11 @@ class _FamCoinAppState extends State<FamCoinApp> {
             darkTheme: buildTheme(Brightness.dark, season: season),
             themeMode: settings.themeMode,
             navigatorObservers: [routeObserver],
-            home: _state == null ? const LoginScreen() : _Home(state: _state!),
+            home: _state == null
+                ? const LoginScreen()
+                : settings.locked
+                    ? const PinLockScreen()
+                    : _Home(state: _state!),
           ),
         );
       },

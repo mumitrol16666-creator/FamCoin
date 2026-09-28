@@ -70,7 +70,7 @@ String roleName(AppLocalizations l, String role) => switch (role) {
 
 /// Текст ошибки сервера на языке пользователя.
 String errorText(AppLocalizations l, Object e) {
-  if (e is LedgerException) return e.message;
+  if (e is LedgerException) return ledgerErrorText(l, e.code) ?? e.message;
   if (e is! ApiException) return l.errUnknown;
   return switch (e.code) {
     'invalid_credentials' => e.attemptsLeft != null ? l.wrongPassword(e.attemptsLeft!) : l.errInvalidCredentials,
@@ -79,11 +79,58 @@ String errorText(AppLocalizations l, Object e) {
     'weak_password' => l.errWeakPassword,
     'invalid_email' => l.errInvalidEmail,
     'plan_limit' => l.errPlanLimit,
-    'ledger' => e.message ?? l.errUnknown,
+    'ledger' => ledgerErrorText(l, e.ledgerCode) ?? e.message ?? l.errUnknown,
     'network' => l.errNetwork,
     _ => l.errUnknown,
   };
 }
+
+/// Ошибка ядра по машинному коду — на языке пользователя; `null`, если код
+/// неизвестен (тогда показывается русский текст ядра).
+String? ledgerErrorText(AppLocalizations l, String? code) => switch (code) {
+      'invalidId' => l.leInvalidId,
+      'accountExists' => l.leAccountExists,
+      'accountNotFound' => l.leAccountNotFound,
+      'accountNotMoney' => l.leAccountNotMoney,
+      'accountArchived' => l.leAccountArchived,
+      'noPostings' => l.leNoPostings,
+      'amountTooBig' => l.leAmountTooBig,
+      'unbalanced' => l.leUnbalanced,
+      'duplicateDifferent' => l.leDuplicateDifferent,
+      'noSuchTransaction' => l.leNoSuchTransaction,
+      'alreadyReversed' => l.leAlreadyReversed,
+      'invalidAmount' => l.leInvalidAmount,
+      'invalidGoal' => l.leInvalidGoal,
+      'reserveExceedsFree' => l.leReserveExceedsFree,
+      'reserveTooSmall' => l.leReserveTooSmall,
+      'fieldMissing' => l.leFieldMissing,
+      'noCategories' => l.leNoCategories,
+      'invalidData' => l.leInvalidData,
+      'adjustmentReason' => l.leAdjustmentReason,
+      'unknownCommand' => l.leUnknownCommand,
+      'invalidDate' => l.leInvalidDate,
+      'amountNotPositive' => l.leAmountNotPositive,
+      'noBonusWallet' => l.leNoBonusWallet,
+      'notEnoughBonus' => l.leNotEnoughBonus,
+      'sameAccounts' => l.leSameAccounts,
+      'currencyMismatch' => l.leCurrencyMismatch,
+      'negativeParts' => l.leNegativeParts,
+      'repaymentExceeds' => l.leRepaymentExceeds,
+      'principalExceeds' => l.lePrincipalExceeds,
+      'downPaymentNegative' => l.leDownPaymentNegative,
+      'downPaymentExceeds' => l.leDownPaymentExceeds,
+      'noDownPaymentAccount' => l.leNoDownPaymentAccount,
+      'refundMethod' => l.leRefundMethod,
+      'purchaseCancelled' => l.lePurchaseCancelled,
+      'refundExceeds' => l.leRefundExceeds,
+      'zeroAdjustment' => l.leZeroAdjustment,
+      'noPaymentSource' => l.leNoPaymentSource,
+      'noPaymentAccount' => l.leNoPaymentAccount,
+      'zeroRevaluation' => l.leZeroRevaluation,
+      'restoreNotReversed' => l.leRestoreNotReversed,
+      'alreadyRestored' => l.leAlreadyRestored,
+      _ => null,
+    };
 
 /// Выполняет команду и показывает ошибку, если она не прошла.
 Future<bool> runAction(BuildContext context, Future<void> Function() action) async {

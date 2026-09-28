@@ -157,19 +157,63 @@ class TransactionTile extends StatelessWidget {
       'debt' => fam.debt,
       _ => null,
     };
+    // Удалённая запись (корзина): зачёркнута, но нажатие открывает
+    // восстановление. Сама отменяющая запись — только для истории.
+    final deleted = state.ledger.isDeleted(tx.id);
     final cancelled = state.ledger.isReversed(tx.id) || tx.type == EventType.reversal;
     final time = timeFromField(tx.meta['time']);
-    final subtitle = [if (time != null) timeToField(time), ...v.subtitle];
+    final subtitle = [if (time != null) timeToField(time), if (deleted) l.deletedMark, ...v.subtitle];
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      enabled: !cancelled,
-      leading: CategoryAvatar(v.icon),
-      title: Text(v.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: cancelled ? const TextStyle(decoration: TextDecoration.lineThrough) : null),
+      enabled: !cancelled || deleted,
+      leading: CategoryAvatar(deleted ? Icons.restore_from_trash_outlined : v.icon),
+      title: Text(v.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: cancelled ? TextStyle(decoration: TextDecoration.lineThrough, color: fam.text2) : null),
       subtitle: subtitle.isEmpty ? null : Text(subtitle.join(' · '), style: TextStyle(fontSize: 12, color: fam.text2), maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: MoneyText(v.amount, sign: v.kind != 'expense' && (v.kind != 'neutral' || tx.type == EventType.adjustment), color: color),
-      onTap: cancelled ? null : () => showTransactionSheet(context, tx),
+      trailing: MoneyText(v.amount, sign: v.kind != 'expense' && (v.kind != 'neutral' || tx.type == EventType.adjustment), color: cancelled ? fam.text2 : color),
+      onTap: deleted
+          ? () => showRestoreSheet(context, tx)
+          : cancelled
+              ? null
+              : () => showTransactionSheet(context, tx),
     );
   }
+}
+
+/// Корзина: карточка удалённой операции с восстановлением.
+Future<void> showRestoreSheet(BuildContext context, Transaction tx) {
+  final l = context.l10n;
+  final state = AppScope.of(context).state;
+  final locale = Localizations.localeOf(context).toString();
+  final v = TxView.of(state, l, tx);
+  return showFormSheet<void>(
+    context,
+    title: '${l.deletedMark}: ${v.title}',
+    builder: (ctx) {
+      final fam = ctx.fam;
+      final time = timeFromField(tx.meta['time']);
+      Widget row(String a, String b) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(children: [Expanded(child: Text(a, style: TextStyle(color: fam.text2))), Text(b)]),
+          );
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Center(child: BigMoney(v.amount)),
+        const SizedBox(height: 12),
+        row(l.date, '${DateFormat.yMMMMd(locale).format(tx.date)}${time == null ? '' : ' · ${timeToField(time)}'}'),
+        for (final s in v.subtitle) row('', s),
+        const SizedBox(height: 8),
+        InfoBanner(l.restoreNote, icon: Icons.restore_from_trash_outlined),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          icon: const Icon(Icons.restore),
+          label: Text(l.restore),
+          onPressed: () async {
+            final nav = Navigator.of(ctx);
+            if (await runAction(ctx, () => state.restoreTransaction(tx.id))) nav.pop();
+          },
+        ),
+      ]);
+    },
+  );
 }
 
 /// S11 — карточка операции: детали, проводки, удаление с сохранением истории.

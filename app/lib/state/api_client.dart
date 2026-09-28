@@ -11,7 +11,7 @@ import 'package:http/http.dart' as http;
 const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:8080');
 
 class ApiException implements Exception {
-  ApiException(this.code, {this.status, this.retryAfterSeconds, this.attemptsLeft, this.message});
+  ApiException(this.code, {this.status, this.retryAfterSeconds, this.attemptsLeft, this.message, this.ledgerCode});
 
   /// Машинный код ответа сервера или `network` при отсутствии связи.
   final String code;
@@ -19,8 +19,11 @@ class ApiException implements Exception {
   final int? retryAfterSeconds;
   final int? attemptsLeft;
 
-  /// Пояснение сервера для ошибок учёта (`code == 'ledger'`).
+  /// Пояснение сервера для ошибок учёта (`code == 'ledger'`) — по-русски.
   final String? message;
+
+  /// Код ошибки ядра (`code == 'ledger'`): по нему подбирается текст на языке пользователя.
+  final String? ledgerCode;
 
   bool get isNetwork => code == 'network';
 
@@ -72,6 +75,7 @@ class ApiClient {
         retryAfterSeconds: data['retryAfterSeconds'] as int?,
         attemptsLeft: data['attemptsLeft'] as int?,
         message: data['message'] as String?,
+        ledgerCode: data['code'] as String?,
       );
     }
     return data;
@@ -123,6 +127,10 @@ class ApiClient {
 
   /// Удаление аккаунта со всеми записями; сессия перестаёт действовать.
   Future<void> deleteAccount(String token) => _send('POST', '/auth/delete', token: token);
+
+  /// Одноразовая ссылка на файл экспорта (`csv` или `json`); путь относительно API.
+  Future<String> exportLink(String token, {required String format, required List<String> headers, required Map<String, String> names}) async =>
+      (await _send('POST', '/export/link', body: {'format': format, 'headers': headers, 'names': names}, token: token))['path'] as String;
 
   Future<void> changePassword(String token, String current, String next) =>
       _send('POST', '/auth/password', body: {'current': current, 'next': next}, token: token);

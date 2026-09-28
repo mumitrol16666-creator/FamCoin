@@ -12,7 +12,7 @@ int parseMinor(Object? v) {
     final parsed = int.tryParse(v);
     if (parsed != null) return parsed;
   }
-  throw LedgerException('Некорректная сумма');
+  throw LedgerException('Некорректная сумма', code: 'invalidAmount');
 }
 
 String dateToJson(DateTime d) =>
@@ -21,10 +21,10 @@ String dateToJson(DateTime d) =>
 /// Дата операции без времени и часового пояса: `2026-09-22`.
 DateTime dateFromJson(Object? v) {
   final m = v is String ? RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(v) : null;
-  if (m == null) throw LedgerException('Некорректная дата');
+  if (m == null) throw LedgerException('Некорректная дата', code: 'invalidDate');
   final d = DateTime(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
   if (d.month != int.parse(m[2]!) || d.year < 2000 || d.year > 2200) {
-    throw LedgerException('Некорректная дата');
+    throw LedgerException('Некорректная дата', code: 'invalidDate');
   }
   return d;
 }

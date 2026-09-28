@@ -7,6 +7,7 @@ library;
 
 import 'package:famcoin/l10n/app_localizations.dart';
 import 'package:famcoin/state/app_scope.dart';
+import 'package:famcoin/state/secret_store.dart';
 import 'package:famcoin/state/settings.dart';
 import 'package:famcoin/theme/app_theme.dart';
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
@@ -30,7 +31,7 @@ Future<FakeServer> pumpApp(WidgetTester tester, {required Widget home, required 
   await f.init();
   await f.state.upsert('account', 'cash', {'name': 'Kaspi Gold', 'type': 'card'});
   await f.state.send({'type': 'updateProfile', 'profile': {'onboarded': true}});
-  final settings = await Settings.load(api: f.state.api);
+  final settings = await Settings.load(api: f.state.api, secrets: MemorySecretStore());
   await tester.pumpWidget(AppScope(
     settings: settings,
     stateOrNull: f.state,

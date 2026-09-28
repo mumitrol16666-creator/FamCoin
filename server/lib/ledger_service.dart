@@ -38,8 +38,18 @@ class LedgerService {
   final Pool db;
 
   /// Журналы в памяти по ревизии владельца: без повторного чтения всей
-  /// истории на каждую команду.
+  /// истории на каждую команду. Не больше [cacheLimit] владельцев —
+  /// давно не заходившие вытесняются первыми.
   final Map<String, _Cached> _cache = {};
+  static const cacheLimit = 200;
+
+  void _remember(String userId, _Cached c) {
+    _cache.remove(userId);
+    _cache[userId] = c;
+    while (_cache.length > cacheLimit) {
+      _cache.remove(_cache.keys.first);
+    }
+  }
 
   /// Забыть журнал владельца (после удаления аккаунта).
   void forget(String userId) => _cache.remove(userId);
@@ -48,7 +58,10 @@ class LedgerService {
 
   Future<Ledger> _loadLedger(Session s, String userId, int revision) async {
     final cached = _cache[userId];
-    if (cached != null && cached.revision == revision) return cached.ledger;
+    if (cached != null && cached.revision == revision) {
+      _remember(userId, cached); // недавно использован — вытесняется последним
+      return cached.ledger;
+    }
 
     final accounts = await s.execute(
       Sql.named('SELECT id, kind, asset_class, liquid, currency, archived FROM ledger_accounts WHERE user_id = @u'),
@@ -84,7 +97,7 @@ class LedgerService {
         for (final r in reservations) {'goalId': r[0], 'accountId': r[1], 'amount': r[2]},
       ],
     );
-    _cache[userId] = _Cached(revision, ledger);
+    _remember(userId, _Cached(revision, ledger));
     return ledger;
   }
 
@@ -162,13 +175,13 @@ class LedgerService {
           Sql.named('INSERT INTO commands (user_id, id, revision) VALUES (@u, @id, @r)'),
           parameters: {'u': userId, 'id': commandId, 'r': next},
         );
-        _cache[userId] = _Cached(next, ledger);
+        _remember(userId, _Cached(next, ledger));
         return (revision: next, repeated: false);
       });
     } catch (e) {
       // Журнал в памяти мог измениться до отказа — перечитываем из базы.
       _cache.remove(userId);
-      if (e is LedgerException) throw ApiError(422, 'ledger', message: e.message);
+      if (e is LedgerException) throw ApiError(422, 'ledger', message: e.message, ledgerCode: e.code);
       rethrow;
     }
   }

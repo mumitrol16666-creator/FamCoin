@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
+import '../auth/pin_screen.dart';
 import '../budget/sheets.dart';
 import '../widgets/common.dart';
 
@@ -77,9 +78,13 @@ class _SecurityScreenState extends State<SecurityScreen> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final state = AppScope.of(context).state;
+    final scope = AppScope.of(context);
+    final state = scope.state;
+    final settings = scope.settings;
     final fam = context.fam;
-    return Scaffold(
+    return ListenableBuilder(
+      listenable: settings,
+      builder: (context, _) => Scaffold(
       appBar: AppBar(title: Text(l.security)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -119,7 +124,34 @@ class _SecurityScreenState extends State<SecurityScreen> {
             ]),
           ),
           InfoBanner(l.lockPolicy, icon: Icons.lock_clock_outlined),
-          InfoBanner(l.pinSoon, icon: Icons.fingerprint, color: fam.warnBg),
+          AppCard(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.pin_outlined),
+                const SizedBox(width: 12),
+                Expanded(child: Text(l.pinEnable)),
+                Switch(
+                  value: settings.pinEnabled,
+                  onChanged: (on) async {
+                    if (on) {
+                      await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const PinSetupScreen()));
+                    } else if (await confirm(context, title: l.pinDisableTitle, action: l.pinDisable)) {
+                      await settings.clearPin();
+                    }
+                  },
+                ),
+              ]),
+              const SizedBox(height: 6),
+              Text(l.pinNote, style: TextStyle(fontSize: 12, color: fam.text2)),
+              if (settings.pinEnabled) ...[
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () => Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const PinSetupScreen())),
+                  child: Text(l.pinChange),
+                ),
+              ],
+            ]),
+          ),
           const SizedBox(height: 16),
           AppCard(
             onTap: _deleteAccount,
@@ -131,6 +163,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
             ]),
           ),
         ],
+      ),
       ),
     );
   }

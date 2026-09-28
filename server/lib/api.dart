@@ -10,6 +10,7 @@ import 'admin.dart';
 import 'admin_page.dart';
 import 'auth_service.dart';
 import 'billing.dart';
+import 'export.dart';
 import 'ledger_service.dart';
 import 'notifications.dart';
 import 'telegram.dart';
@@ -56,6 +57,8 @@ Handler buildHandler(
     if (id == null) throw ApiError(401, 'unauthorized');
     return id;
   }
+
+  final exports = ExportLinks();
 
   final router = Router()
     ..get('/health', (Request _) => _json(200, {'ok': true}))
@@ -121,6 +124,48 @@ Handler buildHandler(
     // Тариф: оплата Pro звёздами Telegram (D52)
     ..get('/billing', (Request req) async => _json(200, await billing.info(await user(req))))
     ..post('/billing/invoice', (Request req) async => _json(200, await billing.invoice(await user(req))))
+
+    // Экспорт: приложение просит одноразовую ссылку и открывает её в браузере.
+    ..post('/export/link', (Request req) async {
+      final id = await user(req);
+      final b = await _body(req);
+      final format = b['format'] == 'json' ? 'json' : 'csv';
+      final headers = [for (final h in (b['headers'] as List? ?? const [])) '$h'];
+      final names = {for (final e in (b['names'] as Map? ?? const {}).entries) '${e.key}': '${e.value}'};
+      if (headers.length > 20 || names.length > 5000) throw ApiError(400, 'bad_request');
+      final token = exports.create(ExportRequest(
+        userId: id,
+        format: format,
+        headers: headers,
+        names: names,
+        expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+      ));
+      return _json(200, {'path': '/export/$token', 'format': format});
+    })
+    ..get('/export/<token>', (Request req, String token) async {
+      final r = exports.take(token);
+      if (r == null) throw ApiError(404, 'not_found');
+      final snapshot = await ledger.state(r.userId);
+      final day = DateTime.now().toUtc().add(kzOffset).toIso8601String().substring(0, 10);
+      if (r.format == 'json') {
+        return Response.ok(
+          jsonBackup(snapshot, email: '${snapshot['email']}'),
+          headers: {
+            'content-type': 'application/json; charset=utf-8',
+            'content-disposition': 'attachment; filename="famcoin-backup-$day.json"',
+            'cache-control': 'no-store',
+          },
+        );
+      }
+      return Response.ok(
+        csvJournal(snapshot, headers: r.headers, names: r.names),
+        headers: {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': 'attachment; filename="famcoin-$day.csv"',
+          'cache-control': 'no-store',
+        },
+      );
+    })
 
     // Уведомления
     ..get('/notifications', (Request req) async => _json(200, {'items': await notifications.list(await user(req))}))

@@ -26,6 +26,7 @@ const ledgerCommandTypes = {
   'refund',
   'adjustment',
   'reverse',
+  'restore',
   'reserve',
   'release',
 };
@@ -36,7 +37,7 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
   String s(String k) {
     final v = c[k];
     if (v is! String || v.isEmpty || v.length > maxIdLength) {
-      throw LedgerException('Поле $k не заполнено');
+      throw LedgerException('Поле $k не заполнено', code: 'fieldMissing');
     }
     return v;
   }
@@ -47,7 +48,7 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
   DateTime date() => dateFromJson(c['date']);
   Map<String, int> splits() {
     final raw = c['splits'];
-    if (raw is! Map || raw.isEmpty) throw LedgerException('Нет категорий');
+    if (raw is! Map || raw.isEmpty) throw LedgerException('Нет категорий', code: 'noCategories');
     return {
       for (final e in raw.entries) '${e.key}': parseMinor(e.value),
     };
@@ -56,7 +57,7 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
   Map<String, Object?> meta() {
     final raw = c['meta'];
     if (raw == null) return const {};
-    if (raw is! Map) throw LedgerException('Некорректные данные операции');
+    if (raw is! Map) throw LedgerException('Некорректные данные операции', code: 'invalidData');
     return raw.cast<String, Object?>();
   }
 
@@ -92,12 +93,14 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
       l.loanPayment(id: s('id'), date: date(), account: s('account'), debtId: s('debtId'), principal: m('principal'), interest: mo('interest'), fees: mo('fees'), meta: meta());
     case 'creditPurchase':
       l.creditPurchase(id: s('id'), date: date(), debtId: s('debtId'), splits: splits(), downPaymentAccount: so('downPaymentAccount'), downPayment: mo('downPayment'));
+    case 'restore':
+      l.restore(s('txId'), newId: s('id'));
     case 'refund':
       l.refund(id: s('id'), date: date(), category: s('category'), amount: m('amount'), toAccount: so('toAccount'), reduceDebtId: so('reduceDebtId'), meta: meta());
     case 'adjustment':
       final reason = c['reason'];
       if (reason is! String || reason.trim().isEmpty || reason.length > 200) {
-        throw LedgerException('Укажите причину корректировки');
+        throw LedgerException('Укажите причину корректировки', code: 'adjustmentReason');
       }
       l.adjustment(id: s('id'), date: date(), account: s('account'), delta: m('delta'), reason: reason.trim());
     case 'reverse':

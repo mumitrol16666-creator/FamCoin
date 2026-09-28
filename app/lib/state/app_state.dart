@@ -582,6 +582,28 @@ class AppState extends ChangeNotifier {
     return send(reverse, commandId: commandId);
   }
 
+  /// Восстановление удалённой операции (корзина): та же запись заново, с
+  /// пометкой `restoredFrom`. Оплата планового платежа снова отмечает срок.
+  Future<void> restoreTransaction(String txId, {String? commandId}) {
+    final restore = {'type': 'restore', 'txId': txId, 'id': newId()};
+    final tx = ledger.byId(txId);
+    final plannedId = tx?.meta['planned'];
+    if (tx != null && plannedId is String) {
+      final p = planned.where((p) => p.id == plannedId).firstOrNull;
+      final period = tx.meta['period'] as String? ?? _period(tx.date);
+      if (p != null && !p.paid.contains(period)) {
+        return sendBatch([
+          restore,
+          {'type': 'upsertEntity', 'kind': 'planned', 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, period})},
+        ], commandId: commandId);
+      }
+    }
+    return send(restore, commandId: commandId);
+  }
+
+  /// Удалённые операции (корзина): отменённые и ещё не восстановленные.
+  List<Transaction> get deletedTransactions => fullHistory.where((t) => ledger.isDeleted(t.id)).toList();
+
   Future<void> reserve(String goalId, String account, int amount) =>
       send({'type': 'reserve', 'goalId': goalId, 'accountId': account, 'amount': amount.toString()});
 

@@ -61,14 +61,14 @@ extension LedgerEvents on Ledger {
   }
 
   static void _positive(int amount, String what) {
-    if (amount <= 0) throw LedgerException('$what должна быть > 0');
-    if (amount > maxAmount) throw LedgerException('$what слишком большая');
+    if (amount <= 0) throw LedgerException('$what должна быть > 0', code: 'amountNotPositive');
+    if (amount > maxAmount) throw LedgerException('$what слишком большая', code: 'amountTooBig');
   }
 
   /// Каждая часть покупки положительна: отрицательная часть — это возврат,
   /// и он проводится отдельным событием.
   static void _checkSplits(Map<String, int> splits) {
-    if (splits.isEmpty) throw LedgerException('Нет категорий');
+    if (splits.isEmpty) throw LedgerException('Нет категорий', code: 'noCategories');
     for (final v in splits.values) {
       _positive(v, 'Сумма части покупки');
     }
@@ -145,9 +145,9 @@ extension LedgerEvents on Ledger {
     final total = splits.values.fold(0, (a, b) => a + b);
     _positive(total, 'Сумма покупки');
     if (bonusPoints > 0) {
-      final wallet = bonusWallet ?? (throw LedgerException('Не указан бонусный кошелёк'));
+      final wallet = bonusWallet ?? (throw LedgerException('Не указан бонусный кошелёк', code: 'noBonusWallet'));
       final have = bonusWallets[wallet] ?? 0;
-      if (have < bonusPoints) throw LedgerException('Недостаточно бонусов');
+      if (have < bonusPoints) throw LedgerException('Недостаточно бонусов', code: 'notEnoughBonus');
       bonusWallets[wallet] = have - bonusPoints;
     }
     return _post(Transaction(
@@ -193,11 +193,11 @@ extension LedgerEvents on Ledger {
     Map<String, Object?> meta = const {},
   }) {
     _positive(amount, 'Сумма перевода');
-    if (from == to) throw LedgerException('Счета перевода совпадают');
+    if (from == to) throw LedgerException('Счета перевода совпадают', code: 'sameAccounts');
     _money(from);
     _money(to);
     if (account(from).currency != account(to).currency) {
-      throw LedgerException('Для разных валют используйте fxExchange');
+      throw LedgerException('Для разных валют используйте fxExchange', code: 'currencyMismatch');
     }
     return _post(Transaction(
       id: id,
@@ -294,12 +294,12 @@ extension LedgerEvents on Ledger {
     Map<String, Object?> meta = const {},
   }) {
     if (principal < 0 || interest < 0) {
-      throw LedgerException('Части возврата не могут быть отрицательными');
+      throw LedgerException('Части возврата не могут быть отрицательными', code: 'negativeParts');
     }
     _positive(principal + interest, 'Сумма возврата');
     final owed = balance(_recv(person));
     if (principal > owed) {
-      throw LedgerException('Возврат $principal больше требования $owed');
+      throw LedgerException('Возврат $principal больше требования $owed', code: 'repaymentExceeds');
     }
     return _post(Transaction(
       id: id,
@@ -368,13 +368,13 @@ extension LedgerEvents on Ledger {
     Map<String, Object?> meta = const {},
   }) {
     if (principal < 0 || interest < 0 || fees < 0) {
-      throw LedgerException('Части платежа не могут быть отрицательными');
+      throw LedgerException('Части платежа не могут быть отрицательными', code: 'negativeParts');
     }
     final total = principal + interest + fees;
     _positive(total, 'Сумма платежа');
     final owed = balance(_liab(debtId));
     if (principal > owed) {
-      throw LedgerException('Тело $principal больше остатка долга $owed');
+      throw LedgerException('Тело $principal больше остатка долга $owed', code: 'principalExceeds');
     }
     return _post(Transaction(
       id: id,
@@ -403,10 +403,10 @@ extension LedgerEvents on Ledger {
     _checkSplits(splits);
     final total = splits.values.fold(0, (a, b) => a + b);
     _positive(total, 'Сумма покупки');
-    if (downPayment < 0) throw LedgerException('Взнос не может быть отрицательным');
-    if (downPayment > total) throw LedgerException('Взнос больше суммы покупки');
+    if (downPayment < 0) throw LedgerException('Взнос не может быть отрицательным', code: 'downPaymentNegative');
+    if (downPayment > total) throw LedgerException('Взнос больше суммы покупки', code: 'downPaymentExceeds');
     if (downPayment > 0 && downPaymentAccount == null) {
-      throw LedgerException('Не указан счёт первоначального взноса');
+      throw LedgerException('Не указан счёт первоначального взноса', code: 'noDownPaymentAccount');
     }
     return _post(Transaction(
       id: id,
@@ -435,18 +435,18 @@ extension LedgerEvents on Ledger {
   }) {
     _positive(amount, 'Сумма возврата');
     if ((toAccount == null) == (reduceDebtId == null)) {
-      throw LedgerException('Укажите ровно один способ возврата');
+      throw LedgerException('Укажите ровно один способ возврата', code: 'refundMethod');
     }
     // Возврат привязан к покупке (meta.refundOf): нельзя вернуть больше, чем
     // потрачено в категории, с учётом прежних возвратов и правок покупки.
     final of = meta['refundOf'];
     if (of is String && byId(of) != null) {
       final purchase = currentVersion(of);
-      if (purchase == null) throw LedgerException('Покупка отменена — возврат по ней невозможен');
+      if (purchase == null) throw LedgerException('Покупка отменена — возврат по ней невозможен', code: 'purchaseCancelled');
       final bought = purchase.amountOn(_exp(category));
       final already = refundedFor(of, _exp(category));
       if (amount + already > bought) {
-        throw LedgerException('Возврат больше суммы покупки в этой категории');
+        throw LedgerException('Возврат больше суммы покупки в этой категории', code: 'refundExceeds');
       }
     }
     return _post(Transaction(
@@ -496,7 +496,7 @@ extension LedgerEvents on Ledger {
     required int delta,
     required String reason,
   }) {
-    if (delta == 0) throw LedgerException('Нулевая корректировка');
+    if (delta == 0) throw LedgerException('Нулевая корректировка', code: 'zeroAdjustment');
     return _post(Transaction(
       id: id,
       date: date,
@@ -528,12 +528,12 @@ extension LedgerEvents on Ledger {
   }) {
     _positive(amount, 'Стоимость актива');
     if (viaDebtId == null && fromAccount == null) {
-      throw LedgerException('Укажите счёт оплаты или кредит');
+      throw LedgerException('Укажите счёт оплаты или кредит', code: 'noPaymentSource');
     }
     final financed = viaDebtId == null ? 0 : amount - downPayment;
     final paid = amount - financed;
     if (paid > 0 && fromAccount == null) {
-      throw LedgerException('Не указан счёт оплаты');
+      throw LedgerException('Не указан счёт оплаты', code: 'noPaymentAccount');
     }
     return _post(Transaction(
       id: id,
@@ -554,7 +554,7 @@ extension LedgerEvents on Ledger {
     required String assetId,
     required int delta,
   }) {
-    if (delta == 0) throw LedgerException('Нулевая переоценка');
+    if (delta == 0) throw LedgerException('Нулевая переоценка', code: 'zeroRevaluation');
     return _post(Transaction(
       id: id,
       date: date,

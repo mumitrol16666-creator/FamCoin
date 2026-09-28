@@ -16,7 +16,10 @@ const lockMinutes = 15;
 const sessionDays = 30;
 
 class ApiError implements Exception {
-  ApiError(this.status, this.code, {this.retryAfterSeconds, this.attemptsLeft, this.message});
+  ApiError(this.status, this.code, {this.retryAfterSeconds, this.attemptsLeft, this.message, this.ledgerCode});
+
+  /// Код ошибки ядра (`LedgerException.code`): приложение переводит его.
+  final String? ledgerCode;
 
   final int status;
 
@@ -30,6 +33,7 @@ class ApiError implements Exception {
 
   Map<String, Object?> toJson() => {
         'error': code,
+        if (ledgerCode != null) 'code': ledgerCode,
         if (retryAfterSeconds != null) 'retryAfterSeconds': retryAfterSeconds,
         if (attemptsLeft != null) 'attemptsLeft': attemptsLeft,
         if (message != null) 'message': message,

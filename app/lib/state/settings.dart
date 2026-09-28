@@ -1,23 +1,48 @@
-/// Настройки устройства и сессия.
+/// Настройки устройства, сессия и PIN-код.
 ///
 /// Счётчик ошибок и блокировку ведёт сервер (F003/F004). Здесь хранится
 /// только время окончания блокировки из ответа сервера — для таймера.
+/// Токен сессии и PIN-код лежат в защищённом хранилище устройства
+/// ([SecretStore]); остальные настройки — в обычном.
 library;
 
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
+import 'secret_store.dart';
 
 class Settings extends ChangeNotifier {
-  Settings._(this._prefs, this.api);
+  Settings._(this._prefs, this.api, this._secrets, {String? token, String? pinHash, String? pinSalt})
+      : _token = token,
+        _pinHash = pinHash,
+        _pinSalt = pinSalt,
+        _locked = pinHash != null;
 
   final SharedPreferences _prefs;
   final ApiClient api;
+  final SecretStore _secrets;
 
-  static Future<Settings> load({ApiClient? api}) async {
+  /// Сколько приложение может быть в фоне без повторного запроса PIN-кода.
+  static const lockAfter = Duration(seconds: 30);
+
+  static Future<Settings> load({ApiClient? api, SecretStore? secrets}) async {
     final prefs = await SharedPreferences.getInstance();
-    return Settings._(prefs, api ?? ApiClient());
+    final store = secrets ?? (kIsWeb ? PrefsSecretStore(prefs) : const SecureSecretStore());
+    // Перенос сессии из старых сборок, где токен лежал в обычном хранилище.
+    var token = await store.read('token');
+    final legacy = prefs.getString('token');
+    if (token == null && legacy != null) {
+      token = legacy;
+      await store.write('token', token);
+    }
+    if (legacy != null && store is! PrefsSecretStore) await prefs.remove('token');
+    return Settings._(prefs, api ?? ApiClient(), store, token: token, pinHash: await store.read('pinHash'), pinSalt: await store.read('pinSalt'));
   }
 
   Locale get locale => Locale(_prefs.getString('lang') ?? 'ru');
@@ -46,7 +71,8 @@ class Settings extends ChangeNotifier {
 
   // ---------------------------------------------------------------- сессия
 
-  String? get token => _prefs.getString('token');
+  String? _token;
+  String? get token => _token;
   String? get email => _prefs.getString('email');
   bool get signedIn => token != null;
 
@@ -63,15 +89,19 @@ class Settings extends ChangeNotifier {
   }
 
   Future<void> signedInWith(AuthResult r) async {
-    await _prefs.setString('token', r.token);
+    _token = r.token;
+    await _secrets.write('token', r.token);
     await _prefs.setString('email', r.email);
     await _prefs.remove('lockUntil');
     notifyListeners();
   }
 
-  /// Сессия больше не действует (истекла или отозвана на сервере).
+  /// Сессия больше не действует (истекла, отозвана или закрыта). PIN-код
+  /// защищал именно эту сессию на этом устройстве — сбрасывается вместе с ней.
   Future<void> dropSession() async {
-    await _prefs.remove('token');
+    _token = null;
+    await _secrets.write('token', null);
+    await clearPin();
     notifyListeners();
   }
 
@@ -79,5 +109,64 @@ class Settings extends ChangeNotifier {
     final t = token;
     await dropSession();
     if (t != null) await api.logout(t);
+  }
+
+  // --------------------------------------------------------------- PIN-код
+
+  String? _pinHash;
+  String? _pinSalt;
+  bool _locked;
+  DateTime? _backgroundSince;
+
+  bool get pinEnabled => _pinHash != null;
+
+  /// Экран заблокирован: нужен PIN-код.
+  bool get locked => pinEnabled && _locked;
+
+  static String _hash(String pin, String salt) => sha256.convert(utf8.encode('$salt:$pin')).toString();
+
+  bool verifyPin(String pin) => _pinHash != null && _pinSalt != null && _hash(pin, _pinSalt!) == _pinHash;
+
+  Future<void> setPin(String pin) async {
+    final rnd = Random.secure();
+    final salt = base64Url.encode(List<int>.generate(16, (_) => rnd.nextInt(256)));
+    _pinSalt = salt;
+    _pinHash = _hash(pin, salt);
+    await _secrets.write('pinSalt', salt);
+    await _secrets.write('pinHash', _pinHash);
+    _locked = false;
+    notifyListeners();
+  }
+
+  Future<void> clearPin() async {
+    if (_pinHash == null && _pinSalt == null) return;
+    _pinHash = null;
+    _pinSalt = null;
+    _locked = false;
+    await _secrets.write('pinHash', null);
+    await _secrets.write('pinSalt', null);
+    notifyListeners();
+  }
+
+  void lock() {
+    if (!pinEnabled || _locked) return;
+    _locked = true;
+    notifyListeners();
+  }
+
+  bool unlock(String pin) {
+    if (!verifyPin(pin)) return false;
+    _locked = false;
+    notifyListeners();
+    return true;
+  }
+
+  /// Приложение ушло в фон / вернулось: после [lockAfter] снова просим PIN.
+  void noteBackground() => _backgroundSince ??= DateTime.now();
+
+  void noteResumed() {
+    final since = _backgroundSince;
+    _backgroundSince = null;
+    if (since != null && DateTime.now().difference(since) >= lockAfter) lock();
   }
 }

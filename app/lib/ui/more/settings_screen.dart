@@ -6,6 +6,7 @@ import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../budget/sheets.dart';
 import '../widgets/common.dart';
+import 'export.dart';
 import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'tariff_screen.dart';
@@ -131,6 +132,24 @@ class SettingsScreen extends StatelessWidget {
                 child: Row(children: [
                   Expanded(child: Text(l.security)),
                   const Icon(Icons.chevron_right),
+                ]),
+              ),
+              section(
+                l.dataSection,
+                Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.table_chart_outlined),
+                    label: Text(l.exportCsv),
+                    onPressed: () => exportData(context, format: 'csv'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.save_alt),
+                    label: Text(l.exportJson),
+                    onPressed: () => exportData(context, format: 'json'),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(l.exportNote, style: TextStyle(fontSize: 12, color: fam.text2)),
                 ]),
               ),
               const SizedBox(height: 12),

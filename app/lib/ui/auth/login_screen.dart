@@ -23,9 +23,14 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   late final _email = TextEditingController(text: AppScope.of(context).settings.email ?? '');
   final _password = TextEditingController();
+  final _repeat = TextEditingController();
   Timer? _timer;
   bool _busy = false;
   bool _showEmail = false;
+
+  /// Регистрация по email — альтернатива Telegram (для магазинов и тех, у
+  /// кого его нет). Подтверждение почты отложено (D23).
+  bool _register = false;
   String? _error;
 
   @override
@@ -41,6 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _timer?.cancel();
     _email.dispose();
     _password.dispose();
+    _repeat.dispose();
     super.dispose();
   }
 
@@ -49,12 +55,24 @@ class _LoginScreenState extends State<LoginScreen> {
     final l = context.l10n;
     final settings = AppScope.of(context).settings;
     final email = _email.text.trim();
+    if (_register) {
+      if (_password.text.length < 8) {
+        setState(() => _error = l.errWeakPassword);
+        return;
+      }
+      if (_password.text != _repeat.text) {
+        setState(() => _error = l.passwordsDiffer);
+        return;
+      }
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final r = await settings.api.login(email, _password.text);
+      final r = _register
+          ? await settings.api.register(email, _password.text, settings.locale.languageCode)
+          : await settings.api.login(email, _password.text);
       await settings.signedInWith(r);
     } on ApiException catch (e) {
       if (e.code == 'locked' && e.retryAfterSeconds != null) {
@@ -106,18 +124,33 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: _password,
           enabled: !locked && !_busy,
           obscureText: true,
-          autofillHints: const [AutofillHints.password],
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _submit(),
+          autofillHints: [_register ? AutofillHints.newPassword : AutofillHints.password],
+          textInputAction: _register ? TextInputAction.next : TextInputAction.done,
+          onSubmitted: _register ? null : (_) => _submit(),
+          decoration: _register ? InputDecoration(helperText: l.passwordHint) : null,
         ),
+        if (_register) ...[
+          FieldLabel(l.passwordRepeat),
+          TextField(
+            controller: _repeat,
+            enabled: !locked && !_busy,
+            obscureText: true,
+            autofillHints: const [AutofillHints.newPassword],
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
         const SizedBox(height: 16),
         OutlinedButton(
           style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
           onPressed: locked || _busy ? null : _submit,
-          child: _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : Text(l.signIn),
+          child: _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : Text(_register ? l.createAccount : l.signIn),
         ),
-        const SizedBox(height: 4),
-        Center(child: Text(l.forgotViaTelegram, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: fam.text2))),
+        TextButton(
+          onPressed: _busy ? null : () => setState(() { _register = !_register; _error = null; }),
+          child: Text(_register ? l.backToLogin : l.registerByEmail),
+        ),
+        if (!_register) Center(child: Text(l.forgotViaTelegram, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: fam.text2))),
       ],
       // Установщик для Android лежит рядом с API: <origin>/download/famcoin.apk.
       if (kIsWeb && apiUrl.startsWith('https://')) ...[

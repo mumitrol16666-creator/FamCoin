@@ -102,8 +102,14 @@ const maxAmount = 1000000000000000;
 const maxIdLength = 100;
 
 class LedgerException implements Exception {
-  LedgerException(this.message);
+  LedgerException(this.message, {this.code = 'invalid'});
+
+  /// Пояснение по-русски — запасной текст, если приложение не знает [code].
   final String message;
+
+  /// Машинный код: приложение показывает по нему текст на языке пользователя,
+  /// сервер передаёт его в ответе как `code`.
+  final String code;
   @override
   String toString() => 'LedgerException: $message';
 }
@@ -164,10 +170,10 @@ class Ledger {
 
   void addAccount(LedgerAccount account) {
     if (account.id.isEmpty || account.id.length > maxIdLength) {
-      throw LedgerException('Некорректный идентификатор счёта');
+      throw LedgerException('Некорректный идентификатор счёта', code: 'invalidId');
     }
     if (_accounts.containsKey(account.id)) {
-      throw LedgerException('Счёт ${account.id} уже существует');
+      throw LedgerException('Счёт ${account.id} уже существует', code: 'accountExists');
     }
     _accounts[account.id] = account;
   }
@@ -184,7 +190,7 @@ class Ledger {
   }
 
   LedgerAccount account(String id) =>
-      _accounts[id] ?? (throw LedgerException('Счёт $id не найден'));
+      _accounts[id] ?? (throw LedgerException('Счёт $id не найден', code: 'accountNotFound'));
 
   bool hasAccount(String id) => _accounts.containsKey(id);
 
@@ -205,8 +211,8 @@ class Ledger {
   /// Денежный счёт для новой операции: существует, денежный, не в архиве.
   LedgerAccount requireActiveMoney(String id) {
     final a = account(id);
-    if (!a.isMoney) throw LedgerException('$id — не денежный счёт');
-    if (a.archived) throw LedgerException('Счёт $id в архиве');
+    if (!a.isMoney) throw LedgerException('$id — не денежный счёт', code: 'accountNotMoney');
+    if (a.archived) throw LedgerException('Счёт $id в архиве', code: 'accountArchived');
     return a;
   }
 
@@ -214,7 +220,7 @@ class Ledger {
   LedgerAccount ensure(String id, LedgerKind kind,
       {AssetClass? assetClass, String currency = 'KZT'}) {
     if (id.isEmpty || id.length > maxIdLength) {
-      throw LedgerException('Некорректный идентификатор');
+      throw LedgerException('Некорректный идентификатор', code: 'invalidId');
     }
     return _accounts.putIfAbsent(
       id,
@@ -227,14 +233,14 @@ class Ledger {
 
   /// Проверяет операцию, ничего не меняя.
   void validate(Transaction tx) {
-    if (tx.postings.isEmpty) throw LedgerException('Нет проводок');
+    if (tx.postings.isEmpty) throw LedgerException('Нет проводок', code: 'noPostings');
     if (tx.id.isEmpty || tx.id.length > maxIdLength) {
-      throw LedgerException('Некорректный идентификатор операции');
+      throw LedgerException('Некорректный идентификатор операции', code: 'invalidId');
     }
     var debit = 0;
     var credit = 0;
     for (final p in tx.postings) {
-      if (p.amount.abs() > maxAmount) throw LedgerException('Слишком большая сумма');
+      if (p.amount.abs() > maxAmount) throw LedgerException('Слишком большая сумма', code: 'amountTooBig');
       final acc = account(p.accountId);
       if (acc.isDebitNatural) {
         debit += p.amount;
@@ -244,7 +250,7 @@ class Ledger {
     }
     if (debit != credit) {
       throw LedgerException(
-          'Операция ${tx.id} не сбалансирована: дебет $debit ≠ кредит $credit');
+          'Операция ${tx.id} не сбалансирована: дебет $debit ≠ кредит $credit', code: 'unbalanced');
     }
   }
 
@@ -255,15 +261,15 @@ class Ledger {
     if (existing != null) {
       if (_samePostings(existing, tx)) return false;
       throw LedgerException(
-          'Команда ${tx.id} уже проведена с другим содержимым');
+          'Команда ${tx.id} уже проведена с другим содержимым', code: 'duplicateDifferent');
     }
     validate(tx);
     if (tx.reverses != null) {
       if (!_byId.containsKey(tx.reverses)) {
-        throw LedgerException('Нет операции ${tx.reverses}');
+        throw LedgerException('Нет операции ${tx.reverses}', code: 'noSuchTransaction');
       }
       if (_reversed.contains(tx.reverses)) {
-        throw LedgerException('Операция ${tx.reverses} уже отменена');
+        throw LedgerException('Операция ${tx.reverses} уже отменена', code: 'alreadyReversed');
       }
     }
     _transactions.add(tx);
@@ -323,9 +329,9 @@ class Ledger {
   /// Исправление через отменяющую запись: исходная операция остаётся в
   /// истории, её эффект снимается. Повторная отмена — ошибка.
   Transaction reverse(String txId, {required String newId, DateTime? date}) {
-    final original = byId(txId) ?? (throw LedgerException('Нет операции $txId'));
+    final original = byId(txId) ?? (throw LedgerException('Нет операции $txId', code: 'noSuchTransaction'));
     if (_reversed.contains(txId)) {
-      throw LedgerException('Операция $txId уже отменена');
+      throw LedgerException('Операция $txId уже отменена', code: 'alreadyReversed');
     }
     final tx = Transaction(
       id: newId,
@@ -333,6 +339,37 @@ class Ledger {
       type: EventType.reversal,
       postings: [for (final p in original.postings) Posting(p.accountId, -p.amount)],
       reverses: txId,
+    );
+    post(tx);
+    return tx;
+  }
+
+  /// Удалённая операция уже восстановлена действующей копией.
+  bool isRestored(String txId) =>
+      _transactions.any((t) => t.meta['restoredFrom'] == txId && !_reversed.contains(t.id));
+
+  /// В корзине: удалена и ещё не восстановлена (сами отмены не считаются).
+  bool isDeleted(String txId) {
+    final t = _byId[txId];
+    return t != null && t.type != EventType.reversal && _reversed.contains(txId) && !isRestored(txId);
+  }
+
+  /// Восстановление удалённой операции: новая запись с теми же проводками и
+  /// `meta.restoredFrom`; исходная и отменяющая записи остаются в истории.
+  Transaction restore(String txId, {required String newId}) {
+    final original = byId(txId) ?? (throw LedgerException('Нет операции $txId', code: 'noSuchTransaction'));
+    if (!_reversed.contains(txId) || original.type == EventType.reversal) {
+      throw LedgerException('Восстановить можно только удалённую операцию', code: 'restoreNotReversed');
+    }
+    if (isRestored(txId)) {
+      throw LedgerException('Операция уже восстановлена', code: 'alreadyRestored');
+    }
+    final tx = Transaction(
+      id: newId,
+      date: original.date,
+      type: original.type,
+      postings: original.postings,
+      meta: {...original.meta, 'restoredFrom': txId},
     );
     post(tx);
     return tx;
@@ -460,13 +497,13 @@ class Ledger {
   /// Зарезервировать деньги счёта под цель (O05). Резерв не может превышать
   /// доступный положительный остаток счёта.
   void reserve({required String goalId, required String accountId, required int amount}) {
-    if (amount <= 0 || amount > maxAmount) throw LedgerException('Сумма резерва должна быть > 0');
-    if (goalId.isEmpty || goalId.length > maxIdLength) throw LedgerException('Некорректная цель');
+    if (amount <= 0 || amount > maxAmount) throw LedgerException('Сумма резерва должна быть > 0', code: 'invalidAmount');
+    if (goalId.isEmpty || goalId.length > maxIdLength) throw LedgerException('Некорректная цель', code: 'invalidGoal');
     requireActiveMoney(accountId);
     final available = balance(accountId) - reserved(accountId: accountId);
     if (amount > available) {
       throw LedgerException(
-          'Дефицит резерва: доступно $available, запрошено $amount');
+          'Дефицит резерва: доступно $available, запрошено $amount', code: 'reserveExceedsFree');
     }
     _reservations
         .putIfAbsent(_rkey(goalId, accountId),
@@ -485,7 +522,7 @@ class Ledger {
   void release({required String goalId, required String accountId, required int amount}) {
     final r = _reservations[_rkey(goalId, accountId)];
     if (r == null || r.amount < amount) {
-      throw LedgerException('Резерв меньше запрошенной суммы');
+      throw LedgerException('Резерв меньше запрошенной суммы', code: 'reserveTooSmall');
     }
     r.amount -= amount;
     if (r.amount == 0) _reservations.remove(_rkey(goalId, accountId));
@@ -498,7 +535,7 @@ class Ledger {
     validate(tx);
     final r = _reservations[_rkey(goalId, accountId)];
     if (r == null || r.amount < amount) {
-      throw LedgerException('Резерв цели $goalId меньше $amount');
+      throw LedgerException('Резерв цели $goalId меньше $amount', code: 'reserveTooSmall');
     }
     final posted = post(tx);
     if (posted) release(goalId: goalId, accountId: accountId, amount: amount);
