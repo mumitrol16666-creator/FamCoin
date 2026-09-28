@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "famcoin-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "cd app && /opt/homebrew/bin/flutter run -d web-server --web-port 8787 --web-hostname 127.0.0.1"],
+      "port": 8787
+    },
+    {
+      "name": "famcoin-web-release",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8788", "--bind", "127.0.0.1", "--directory", "app/build/web"],
+      "port": 8788
+    }
+  ]
+}

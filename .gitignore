@@ -23,4 +23,11 @@ local-data/
 node_modules/
 .dart_tool/
 build/
+# Генерируется `flutter pub get` из ARB-файлов
+app/lib/l10n/app_localizations*.dart
 /Finance-Tracker-Product-Map.md
+
+# Ключи подписи Android и сборки
+keys/
+app/android/key.properties
+dist/

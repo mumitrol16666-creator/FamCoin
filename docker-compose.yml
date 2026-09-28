@@ -1,0 +1,58 @@
+# Локальная среда FamCoin: база, API и приложение.
+#   docker compose up -d --build
+#   Приложение: http://localhost:3000
+#   API:        http://localhost:8080/health
+# Пароли ниже — только для локальной разработки.
+
+services:
+  db:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: famcoin
+      POSTGRES_USER: famcoin
+      POSTGRES_PASSWORD: famcoin
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U famcoin -d famcoin"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: famcoin
+      DB_USER: famcoin
+      DB_PASSWORD: famcoin
+      PORT: "8080"
+      # Переключатель тарифа без магазина — только для разработки.
+      ALLOW_DEV_PLAN: "1"
+      # Админка локально: http://localhost:8080/admin/
+      ADMIN_PASSWORD: admin-local-dev
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  web:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+      args:
+        # Адрес, по которому API виден из браузера пользователя.
+        API_URL: http://localhost:8080
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3000:80"
+
+volumes:
+  pgdata:

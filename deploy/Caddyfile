@@ -1,0 +1,25 @@
+# Вход с интернета: HTTPS с автоматическим сертификатом Let's Encrypt.
+# Домен берётся из переменной DOMAIN (см. docker-compose.prod.yml).
+{$DOMAIN} {
+	encode gzip
+
+	# Установочные файлы (APK) — из /opt/famcoin/dist.
+	handle_path /download/* {
+		root * /srv/dist
+		file_server
+	}
+
+	# Всё остальное — приложение и API через его nginx.
+	reverse_proxy web:80
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
+
+# Обращения по голому IP перенаправляем на домен.
+http://{$SERVER_IP} {
+	redir https://{$DOMAIN}{uri} permanent
+}

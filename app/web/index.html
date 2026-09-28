@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1F5E4F" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#12151A" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-title" content="FamCoin">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>FamCoin</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script>
+    // Старые установки: снимаем service worker прежних сборок, иначе он
+    // продолжит отдавать закешированную версию.
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        rs.forEach(function (r) { r.unregister(); });
+        if (window.caches) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
+      });
+    }
+  </script>
+  <script>
+    // Safari на iOS 26: после клавиатуры визуальная область (visualViewport)
+    // не совпадает со слоем, где нарисован интерфейс, — нажатия попадают
+    // выше кнопок. Когда клавиатура закрыта, возвращаем страницу в начало и
+    // заставляем Safari заново разместить фиксированный слой приложения.
+    (function () {
+      var vv = window.visualViewport;
+      function keyboardClosed() {
+        return !vv || window.innerHeight - vv.height < 100;
+      }
+      function realign() {
+        if (!keyboardClosed()) return;
+        if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+        var body = document.body;
+        if (!body) return;
+        body.style.transform = 'translateZ(0)';
+        requestAnimationFrame(function () {
+          body.style.transform = '';
+          window.dispatchEvent(new Event('resize'));
+        });
+      }
+      function later() {
+        setTimeout(realign, 50);
+        setTimeout(realign, 400);
+      }
+      document.addEventListener('focusout', later, true);
+      window.addEventListener('orientationchange', later);
+      if (vv) {
+        vv.addEventListener('resize', realign);
+        vv.addEventListener('scroll', realign);
+      }
+      // Известный обход Safari: без слушателя touchstart часть касаний теряется.
+      document.addEventListener('touchstart', function () {}, { passive: true });
+    })();
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

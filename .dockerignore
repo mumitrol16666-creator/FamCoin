@@ -1,0 +1,14 @@
+# В образы попадают только сервер, приложение и общее ядро.
+*
+!server/
+!app/
+!packages/famcoin_core/
+
+**/.dart_tool/
+**/build/
+app/ios/
+app/android/
+app/macos/
+app/linux/
+app/windows/
+server/test/

@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FamCoin — макет</title>
+<meta name="description" content="Кликабельный макет ключевых сценариев FamCoin: RU/ҚАЗ, светлая и тёмная темы, обычный тариф и Pro.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ---------- Дизайн-токены (раздел 12 карты продукта) ---------- */
+  :root {
+    --bg: #F5F3EE; --surface: #FFFFFF; --surface-2: #EEEBE4;
+    --text: #1A1D21; --text-2: #58645F; --line: #E3DFD6;
+    --primary: #1F5E4F; --on-primary: #FFFFFF;
+    --accent: #E0A43A; --on-accent: #1A1D21;
+    --income: #226A44; --expense: #AA402C; --debt: #6B4FBB; --warn: #B7791F;
+    --income-bg: #E4F1E9; --expense-bg: #F7E5E0; --debt-bg: #ECE7F8; --warn-bg: #FBF0D9;
+    --shadow: 0 1px 2px rgba(26,29,33,.06), 0 4px 16px rgba(26,29,33,.06);
+    --page-bg: #E6E2D9;
+  }
+  .dark {
+    --bg: #12151A; --surface: #1B2028; --surface-2: #232A34;
+    --text: #ECEEF1; --text-2: #A8B3AD; --line: #2C333E;
+    --primary: #4FB39A; --on-primary: #12151A;
+    --accent: #F0B955; --on-accent: #12151A;
+    --income: #70D7A1; --expense: #FF9789; --debt: #B9A4F5; --warn: #F0B955;
+    --income-bg: #1C2E27; --expense-bg: #33221F; --debt-bg: #26223A; --warn-bg: #332B1A;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Noto Sans", system-ui, sans-serif; color: #1A1D21; background: var(--page-bg);
+    display: grid; grid-template-columns: 300px 1fr; min-height: 100vh;
+  }
+  @media (max-width: 800px) { body { grid-template-columns: 1fr; } aside { position: static !important; height: auto !important; } }
+
+  /* ---------- Панель управления макетом ---------- */
+  aside {
+    background: #fff; border-right: 1px solid #ddd8cc; padding: 20px 18px; position: sticky; top: 0; height: 100vh; overflow: auto;
+    font-size: 13px;
+  }
+  aside h1 { font-family: Manrope, sans-serif; font-size: 20px; margin: 0 0 2px; }
+  aside .sub { color: #58645F; margin-bottom: 18px; }
+  aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #58645F; margin: 18px 0 8px; }
+  .seg { display: flex; border: 1px solid #ddd8cc; border-radius: 10px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; background: transparent; padding: 8px 6px; cursor: pointer; font: inherit; color: #1A1D21; }
+  .seg button.on { background: #1F5E4F; color: #fff; }
+  .jump { display: grid; gap: 4px; }
+  .jump button { text-align: left; border: 0; background: transparent; padding: 6px 8px; border-radius: 8px; cursor: pointer; font: inherit; color: #1A1D21; }
+  .jump button:hover { background: #F5F3EE; }
+  .jump button.on { background: #E4F1E9; color: #1F5E4F; font-weight: 600; }
+  .jump .id { display: inline-block; width: 34px; color: #58645F; font-size: 11px; }
+  aside .note { color: #58645F; font-size: 12px; line-height: 1.45; margin-top: 16px; }
+
+  /* ---------- Телефон ---------- */
+  main { display: flex; align-items: flex-start; justify-content: center; padding: 28px 16px; }
+  .phone {
+    width: 390px; height: 844px; border-radius: 44px; background: var(--bg); color: var(--text);
+    box-shadow: 0 0 0 10px #1a1d21, 0 30px 60px rgba(0,0,0,.35); overflow: hidden; position: relative;
+    font-variant-numeric: tabular-nums; display: flex; flex-direction: column;
+  }
+  .status { height: 44px; display: flex; justify-content: space-between; align-items: center; padding: 0 28px; font-size: 13px; font-weight: 600; flex: none; }
+  .screen { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+  .screen::-webkit-scrollbar { width: 0; }
+  .content { padding: 8px 16px 24px; flex: 1; }
+  .content.with-nav { padding-bottom: 96px; }
+
+  /* Шапка */
+  .top { display: flex; align-items: center; gap: 8px; padding: 6px 12px 8px; min-height: 48px; }
+  .top h1 { font-family: Manrope, sans-serif; font-size: 22px; font-weight: 700; margin: 0; flex: 1; }
+  .top .icon { width: 40px; height: 40px; border-radius: 12px; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 20px; cursor: pointer; display: grid; place-items: center; }
+  .top .icon:hover { background: var(--surface-2); }
+
+  /* Нижняя навигация */
+  .nav {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 84px; background: var(--surface); border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: 1fr 1fr 76px 1fr 1fr; align-items: start; padding: 8px 8px 0;
+  }
+  .nav button { border: 0; background: transparent; font: inherit; font-size: 11px; color: var(--text-2); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; border-radius: 10px; }
+  .nav button .ic { font-size: 22px; line-height: 1; }
+  .nav button.on { color: var(--primary); font-weight: 600; }
+  .nav .add { margin-top: -24px; }
+  .nav .add .ic { width: 60px; height: 60px; border-radius: 20px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 30px; font-weight: 700; box-shadow: 0 6px 18px rgba(224,164,58,.45); }
+  .nav .add { color: var(--text); font-weight: 600; }
+
+  /* Карточки и типографика */
+  .card { background: var(--surface); border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow); margin-bottom: 12px; }
+  .card h3 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 0 0 8px; text-transform: none; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .row .grow { flex: 1; min-width: 0; }
+  .muted { color: var(--text-2); }
+  .small { font-size: 12px; }
+  .big { font-family: Manrope, sans-serif; font-size: 34px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+  .big small { font-size: 18px; font-weight: 700; color: var(--text-2); }
+  .amt { font-weight: 600; white-space: nowrap; }
+  .amt.in { color: var(--income); } .amt.out { color: var(--expense); } .amt.debt { color: var(--debt); }
+  .link { color: var(--primary); font-weight: 600; background: none; border: 0; font: inherit; cursor: pointer; padding: 0; }
+  .link:hover { text-decoration: underline; }
+  .sect { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 0 8px; }
+  .sect h2 { font-size: 15px; font-weight: 700; margin: 0; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 14px; padding: 14px 18px; font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; width: 100%; }
+  .btn.primary { background: var(--primary); color: var(--on-primary); }
+  .btn.accent { background: var(--accent); color: var(--on-accent); }
+  .btn.ghost { background: var(--surface-2); color: var(--text); }
+  .btn.text { background: transparent; color: var(--primary); }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .pill.pro { background: var(--accent); color: var(--on-accent); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.ok { background: var(--income-bg); color: var(--income); }
+  .pill.debt { background: var(--debt-bg); color: var(--debt); }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 4px; }
+  .input { width: 100%; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 12px; padding: 12px 14px; font: inherit; font-size: 15px; }
+  .input:focus { outline: 2px solid var(--primary); outline-offset: 0; border-color: transparent; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .chip.on { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+  .bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin: 6px 0 4px; }
+  .bar i { display: block; height: 100%; background: var(--primary); border-radius: 999px; }
+  .bar i.warn { background: var(--warn); } .bar i.over { background: var(--expense); }
+  .list .item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .list .item:last-child { border-bottom: 0; }
+  .cat { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; background: var(--surface-2); flex: none; }
+  .day { font-size: 12px; font-weight: 700; color: var(--text-2); margin: 14px 0 4px; display: flex; justify-content: space-between; }
+  .acct-strip { display: flex; gap: 10px; overflow-x: auto; padding: 2px 16px 6px; margin: 0 -16px; }
+  .acct-strip::-webkit-scrollbar { display: none; }
+  .acct { flex: none; width: 150px; background: var(--surface); border-radius: 16px; padding: 12px 12px 12px 16px; box-shadow: var(--shadow); position: relative; overflow: hidden; cursor: pointer; }
+  .acct::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--c, var(--primary)); }
+  .acct .name { font-size: 12px; color: var(--text-2); }
+  .acct .bal { font-weight: 700; font-size: 16px; margin-top: 4px; }
+  .banner { border-radius: 14px; padding: 12px 14px; font-size: 13px; margin-bottom: 12px; display: flex; gap: 10px; align-items: flex-start; }
+  .banner.warn { background: var(--warn-bg); color: var(--text); }
+  .banner.err { background: var(--expense-bg); color: var(--text); }
+  .banner.info { background: var(--income-bg); color: var(--text); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kv { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+  .kv + .kv { border-top: 1px solid var(--line); }
+  .kv.total { font-weight: 700; }
+  .steps { display: flex; gap: 4px; margin: 4px 0 16px; }
+  .steps i { flex: 1; height: 4px; border-radius: 999px; background: var(--line); }
+  .steps i.done { background: var(--primary); }
+  .radio { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; cursor: pointer; background: var(--surface); }
+  .radio.on { border-color: var(--primary); outline: 1px solid var(--primary); }
+  .radio .dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); flex: none; }
+  .radio.on .dot { border-color: var(--primary); background: var(--primary); box-shadow: inset 0 0 0 3px var(--surface); }
+  .sheet { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; z-index: 5; }
+  .sheet .panel { background: var(--surface); color: var(--text); border-radius: 24px 24px 0 0; padding: 18px 16px 28px; width: 100%; max-height: 80%; overflow: auto; }
+  .sheet .panel h2 { font-family: Manrope, sans-serif; margin: 0 0 8px; font-size: 20px; }
+  .num { font-size: 40px; font-family: Manrope, sans-serif; font-weight: 800; border: 0; background: transparent; color: var(--text); width: 100%; text-align: center; outline: none; }
+  .type-seg { display: flex; background: var(--surface-2); border-radius: 12px; padding: 3px; margin-bottom: 14px; }
+  .type-seg button { flex: 1; border: 0; background: transparent; border-radius: 10px; padding: 9px 4px; font: inherit; font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer; }
+  .type-seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .sticky-bottom { position: sticky; bottom: 0; background: linear-gradient(transparent, var(--bg) 30%); padding: 16px 0 4px; }
+  .center { text-align: center; }
+  .logo { font-family: Manrope, sans-serif; font-weight: 800; font-size: 34px; letter-spacing: -.02em; }
+  .logo b { color: var(--primary); }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; font-weight: 700; flex: none; }
+  .tag { font-size: 11px; color: var(--text-2); }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; font-size: 12px; text-align: center; }
+  .cal div { padding: 6px 0; border-radius: 8px; }
+  .cal .h { color: var(--text-2); font-size: 10px; }
+  .cal .pay { background: var(--warn-bg); font-weight: 700; }
+  .cal .today { outline: 2px solid var(--primary); }
+  .cal .inc { background: var(--income-bg); font-weight: 700; }
+  table.sched { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.sched td, table.sched th { padding: 7px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+  table.sched th { color: var(--text-2); font-weight: 600; font-size: 11px; }
+  table.sched td:first-child, table.sched th:first-child { text-align: left; }
+  .menu .item { padding: 14px 0; }
+  .menu .item .cat { background: var(--surface-2); }
+</style>
+</head>
+<body>
+<aside>
+  <h1>FamCoin · макет</h1>
+  <div class="sub">Этап 1 по карте продукта · S/Q-идентификаторы</div>
+
+  <h2>Язык</h2>
+  <div class="seg" id="segLang"><button data-v="ru">Русский</button><button data-v="kk">Қазақша</button></div>
+  <h2>Тема</h2>
+  <div class="seg" id="segTheme"><button data-v="light">Светлая</button><button data-v="dark">Тёмная</button></div>
+  <h2>Тариф</h2>
+  <div class="seg" id="segPro"><button data-v="0">Обычный</button><button data-v="1">Pro</button></div>
+  <h2>Режим учёта</h2>
+  <div class="seg" id="segFam"><button data-v="0">Личный</button><button data-v="1">Семейный</button></div>
+
+  <h2>Экраны</h2>
+  <div class="jump" id="jump"></div>
+  <div class="note">Вход: пароль <b>demo</b>. Любой другой пароль — ошибка; после трёх ошибок блокировка на 15 минут с таймером (F004).<br><br>Суммы — KZT, данные условные. Подписи на казахском — рабочий корпус, требуют редактуры носителем.</div>
+</aside>
+
+<main><div class="phone" id="phone"></div></main>
+
+<script>
+/* =========================== Локализация =========================== */
+const T = {
+ru: {
+  home:'Главная', ops:'Операции', budget:'Бюджет', more:'Ещё', add:'Добавить',
+  expense:'Расход', income:'Доход', transfer:'Перевод', debt:'Долг',
+  accounts:'Счета', goals:'Цели', debts:'Долги', family:'Семья', settings:'Настройки', analytics:'Аналитика',
+  calendar:'Календарь платежей', security:'Безопасность', categories:'Категории', data:'Данные и синхронизация',
+  tariff:'Тариф и подписка', help:'Справка и материалы', trash:'Корзина', ai:'ИИ-консультант', templates:'Шаблоны', dict:'Словарь распознавания',
+  today:'Сегодня', yesterday:'Вчера', guide:'Ориентир на сегодня', leftToday:'Осталось на сегодня', perDay:'в день',
+  daysToIncome:'дней до зарплаты', howCalc:'Как посчитано', upcoming:'Ближайшие платежи', allPayments:'Все платежи',
+  limits:'Лимиты', limitsRisk:'Лимиты с риском', monthReport:'Отчёт за месяц', recent:'Последние операции', all:'Все',
+  spent:'потрачено', of:'из', limit:'лимит', forecast:'Прогноз к концу месяца', approx:'приблизительно',
+  amount:'Сумма', category:'Категория', account:'Счёт', date:'Дата', note:'Заметка', forWhom:'Для кого', shared:'Общее',
+  from:'Со счёта', to:'На счёт', save:'Сохранить', cancel:'Отмена', back:'Назад', next:'Продолжить', skip:'Пропустить', done:'Готово',
+  voice:'Голос', receipt:'Чек', proOnly:'Доступно в Pro', proBadge:'Pro',
+  search:'Поиск по заметкам и продавцам', filters:'Фильтры', period:'Период', month:'Сентябрь 2026',
+  login:'Вход', register:'Регистрация', email:'Email', password:'Пароль', signIn:'Войти', forgot:'Забыли пароль?',
+  noAccount:'Нет аккаунта?', createAccount:'Создать аккаунт', chooseLang:'Выберите язык', welcome:'Учёт денег семьи: быстро, точно, на двух языках',
+  wrongPw:'Неверный пароль. Осталось попыток:', locked:'Вход заблокирован на 15 минут', lockedHint:'Три ошибки подряд. Таймер идёт по серверному времени, переустановка приложения его не сбрасывает.', remaining:'Осталось',
+  onboarding:'Настройка', step:'Шаг', ofN:'из',
+  ob1:'Как ведём учёт?', ob1p:'Режим можно сменить позже без потери истории', personal:'Личный', familyMode:'Семейный', personalD:'Только мои деньги', familyD:'Я веду деньги всей семьи один',
+  ob2:'Основная валюта', ob2p:'В ней считаются отчёты и капитал',
+  ob3:'Первый денежный счёт', ob3p:'В обычной версии — один активный счёт', accName:'Название', accType:'Тип', openBal:'Начальный остаток', startDate:'Дата начала учёта', card:'Карта', cash:'Наличные', deposit:'Депозит',
+  ob4:'Кредиты и рассрочки', ob4p:'Остаток на дату начала учёта, без дохода',
+  ob5:'Личные долги', ob5p:'Кто должен мне и кому должен я', iOwe:'Я должен', oweMe:'Мне должны',
+  ob6:'Доходы', ob6p:'Зарплата «на руки». Ожидаемый доход не меняет баланс', salary:'Зарплата', advance:'Аванс', payDay:'Дата',
+  ob7:'Обязательные платежи', ob7p:'Сроки и суммы за месяц', rent:'Аренда', utilities:'Коммунальные', internet:'Интернет', phone:'Связь',
+  ob8:'Метод бюджета', ob8p:'Можно сменить в любой период',
+  ob9:'Сводка', ob9p:'Проверьте данные и добавьте первую операцию', capital:'Учтённый капитал', assets:'Активы', liabilities:'Обязательства', free:'Свободно', firstOp:'Первая операция',
+  mSimple:'Просто учёт', mSimpleD:'Записываю и смотрю, куда уходят деньги', mLimits:'Лимиты категорий', mLimitsD:'Потолок расходов на выбранные категории',
+  m503020:'50 / 30 / 20', m503020D:'Нужды, желания, накопления от дохода на руки', mEnv:'Конверты', mEnvD:'Каждый тенге получает назначение', mPayFirst:'Сначала себе', mPayFirstD:'Процент дохода уходит в резерв первым',
+  plan:'План', fact:'Факт', payouts:'Выплаты по долгам', unallocated:'Не распределено', method:'Метод', allocation:'Распределение',
+  needs:'Нужды', wants:'Желания', savings:'Накопления', addLimit:'Добавить лимит', limitFree:'В обычной версии — 2 лимита',
+  reserve:'Резерв', progress:'Прогресс', needMonthly:'Нужно в месяц', target:'Цель', deadline:'Срок',
+  totalOwe:'Всего должен', totalOwed:'Мне должны', monthlyPay:'Платежи в месяц', banks:'Банки', people:'Люди', nextPay:'Ближайший платёж',
+  balanceLeft:'Остаток долга', payment:'Платёж', principal:'Тело', interest:'Проценты', left:'осталось', schedule:'График', early:'Досрочное погашение', strategy:'Стратегия погашения', pay:'Провести платёж',
+  installment:'Рассрочка', creditCard:'Кредитная карта', loan:'Кредит', gave:'дал в долг', returned:'вернул', payments:'платежей',
+  members:'Члены семьи', addMember:'Добавить человека', me:'Я', spouse:'Супруга', daughter:'Дочь', sharedSpend:'Общие расходы', personalSpend:'Личные', thisMonth:'в этом месяце', archive:'Архивировать',
+  language:'Язык', theme:'Тема', light:'Светлая', dark:'Тёмная', system:'Системная', mode:'Режим учёта', profile:'Профиль', currentPlan:'Активный тариф', freePlan:'Обычная версия', proPlan:'Pro',
+  proTitle:'FamCoin Pro', proPrice:'10 000 ₸ / год', proSub:'≈ 833 ₸ в месяц при оплате за год', buyPro:'Купить Pro', restore:'Восстановить покупку', proNote:'Цена и условия показываются из магазина перед оплатой. История и данные сохраняются при любом тарифе.',
+  f_accounts:'Несколько денежных счетов', f_limits:'Лимиты без ограничения, по счёту и человеку', f_fast:'Голос, чеки, шаблоны', f_reports:'Сравнения, прогнозы, история капитала', f_ai:'ИИ-консультант и месячный разбор', f_early:'Сценарии досрочного погашения',
+  gateTitle:'Эта возможность в Pro', gateVoice:'Голосовой ввод на русском и казахском, разбор суммы, счёта и категории — с подтверждением перед записью.', gateLimit:'Третий лимит и лимиты по счёту или члену семьи открываются в Pro.', later:'Позже',
+  txDetails:'Операция', related:'Связанные записи', history:'История изменений', edit:'Изменить', del:'Удалить', split:'Разделить по категориям', refund:'Оформить возврат', created:'Создано', family_for:'Для',
+  liquid:'Ликвидные деньги', reserves:'Резервы в них', obligations:'Неоплаченные обязательства до зарплаты', savingsPlan:'План накоплений', days:'Дней до дохода', base:'База', formula:'Дневной бюджет = max(0, B0 / D)',
+  guideNote:'Это оценка по записанному плану. Ожидаемая зарплата не считается полученной.',
+  reportSpend:'Расходы', reportIncome:'Доходы', reportResult:'Результат', cashflow:'Денежный поток', top:'Крупные категории', openReport:'Открыть отчёт',
+  transferNote:'Перевод не является расходом', debtNote:'Выдача долга уменьшает деньги, но не расход',
+  demoHint:'Демо: пароль demo', okBtn:'Понятно', addOp:'Записать операцию', fillLater:'Заполнить позже',
+  cats:{ food:'Продукты', cafe:'Кафе', transport:'Транспорт', health:'Здоровье', kids:'Дети', home:'Жильё', phone:'Связь', household:'Бытовые покупки', fun:'Развлечения', clothes:'Одежда', salary:'Зарплата', cashback:'Кешбэк', interest:'Проценты', fees:'Комиссии' },
+  accs:{ kaspi:'Kaspi Gold', halyk:'Halyk', cash:'Наличные', deposit:'Депозит Freedom' },
+  ppl:{ me:'Владислав', spouse:'Айгерим', daughter:'Алина' },
+  names:{ askhat:'Асхат', daniyar:'Данияр' },
+  goalNames:{ cushion:'Подушка безопасности', vacation:'Отпуск в Турции' },
+  months:['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'],
+  wd:['Пн','Вт','Ср','Чт','Пт','Сб','Вс'],
+},
+kk: {
+  home:'Басты бет', ops:'Операциялар', budget:'Бюджет', more:'Қосымша', add:'Қосу',
+  expense:'Шығыс', income:'Кіріс', transfer:'Аударым', debt:'Қарыз',
+  accounts:'Шоттар', goals:'Мақсаттар', debts:'Қарыздар', family:'Отбасы', settings:'Баптаулар', analytics:'Талдау',
+  calendar:'Төлем күнтізбесі', security:'Қауіпсіздік', categories:'Санаттар', data:'Деректер және синхрондау',
+  tariff:'Тариф және жазылым', help:'Анықтама және материалдар', trash:'Себет', ai:'ЖИ-кеңесші', templates:'Үлгілер', dict:'Тану сөздігі',
+  today:'Бүгін', yesterday:'Кеше', guide:'Бүгінгі бағдар', leftToday:'Бүгінге қалды', perDay:'күніне',
+  daysToIncome:'жалақыға дейінгі күн', howCalc:'Қалай есептелді', upcoming:'Жақын төлемдер', allPayments:'Барлық төлемдер',
+  limits:'Лимиттер', limitsRisk:'Қауіпті лимиттер', monthReport:'Ай есебі', recent:'Соңғы операциялар', all:'Барлығы',
+  spent:'жұмсалды', of:'/', limit:'лимит', forecast:'Ай соңына болжам', approx:'шамамен',
+  amount:'Сома', category:'Санат', account:'Шот', date:'Күні', note:'Ескертпе', forWhom:'Кім үшін', shared:'Ортақ',
+  from:'Қай шоттан', to:'Қай шотқа', save:'Сақтау', cancel:'Болдырмау', back:'Артқа', next:'Жалғастыру', skip:'Өткізіп жіберу', done:'Дайын',
+  voice:'Дауыс', receipt:'Чек', proOnly:'Pro нұсқасында', proBadge:'Pro',
+  search:'Ескертпе мен сатушы бойынша іздеу', filters:'Сүзгілер', period:'Кезең', month:'Қыркүйек 2026',
+  login:'Кіру', register:'Тіркелу', email:'Email', password:'Құпиясөз', signIn:'Кіру', forgot:'Құпиясөзді ұмыттыңыз ба?',
+  noAccount:'Аккаунт жоқ па?', createAccount:'Аккаунт құру', chooseLang:'Тілді таңдаңыз', welcome:'Отбасы ақшасының есебі: жылдам, дәл, екі тілде',
+  wrongPw:'Құпиясөз қате. Қалған әрекет:', locked:'Кіру 15 минутқа бұғатталды', lockedHint:'Қатарынан үш қате. Таймер сервер уақытымен жүреді, қолданбаны қайта орнату оны нөлдемейді.', remaining:'Қалды',
+  onboarding:'Баптау', step:'Қадам', ofN:'/',
+  ob1:'Есепті қалай жүргіземіз?', ob1p:'Режимді кейін тарихты жоғалтпай өзгертуге болады', personal:'Жеке', familyMode:'Отбасылық', personalD:'Тек менің ақшам', familyD:'Бүкіл отбасының ақшасын өзім жүргіземін',
+  ob2:'Негізгі валюта', ob2p:'Есептер мен капитал осы валютада есептеледі',
+  ob3:'Бірінші ақша шоты', ob3p:'Қарапайым нұсқада — бір белсенді шот', accName:'Атауы', accType:'Түрі', openBal:'Бастапқы қалдық', startDate:'Есеп басталу күні', card:'Карта', cash:'Қолма-қол ақша', deposit:'Депозит',
+  ob4:'Несиелер мен бөліп төлеу', ob4p:'Есеп басталу күніндегі қалдық, кіріссіз',
+  ob5:'Жеке қарыздар', ob5p:'Маған кім қарыз және мен кімге қарызбын', iOwe:'Мен қарызбын', oweMe:'Маған қарыз',
+  ob6:'Кірістер', ob6p:'«Қолға» жалақы. Күтілетін кіріс балансты өзгертпейді', salary:'Жалақы', advance:'Аванс', payDay:'Күні',
+  ob7:'Міндетті төлемдер', ob7p:'Айлық мерзімдер мен сомалар', rent:'Жалдау ақысы', utilities:'Коммуналдық', internet:'Интернет', phone:'Байланыс',
+  ob8:'Бюджет әдісі', ob8p:'Кез келген кезеңде өзгертуге болады',
+  ob9:'Қорытынды', ob9p:'Деректерді тексеріп, бірінші операцияны қосыңыз', capital:'Есептелген капитал', assets:'Активтер', liabilities:'Міндеттемелер', free:'Бос', firstOp:'Бірінші операция',
+  mSimple:'Жай есеп', mSimpleD:'Жазып, ақшаның қайда кететінін көремін', mLimits:'Санат лимиттері', mLimitsD:'Таңдалған санаттарға шығыс шегі',
+  m503020:'50 / 30 / 20', m503020D:'Қолға алған кірістен қажеттілік, қалау, жинақ', mEnv:'Конверттер', mEnvD:'Әр теңгенің өз мақсаты бар', mPayFirst:'Алдымен өзіме', mPayFirstD:'Кірістің пайызы алдымен резервке кетеді',
+  plan:'Жоспар', fact:'Нақты', payouts:'Қарыз төлемдері', unallocated:'Бөлінбеген', method:'Әдіс', allocation:'Бөлу',
+  needs:'Қажеттілік', wants:'Қалау', savings:'Жинақ', addLimit:'Лимит қосу', limitFree:'Қарапайым нұсқада — 2 лимит',
+  reserve:'Резерв', progress:'Прогресс', needMonthly:'Айына қажет', target:'Мақсат', deadline:'Мерзім',
+  totalOwe:'Барлық қарызым', totalOwed:'Маған қарыз', monthlyPay:'Айлық төлемдер', banks:'Банктер', people:'Адамдар', nextPay:'Келесі төлем',
+  balanceLeft:'Қарыз қалдығы', payment:'Төлем', principal:'Негізгі қарыз', interest:'Пайыз', left:'қалды', schedule:'Кесте', early:'Мерзімінен бұрын өтеу', strategy:'Өтеу стратегиясы', pay:'Төлем жүргізу',
+  installment:'Бөліп төлеу', creditCard:'Несие картасы', loan:'Несие', gave:'қарыз бердім', returned:'қайтарды', payments:'төлем',
+  members:'Отбасы мүшелері', addMember:'Адам қосу', me:'Мен', spouse:'Жұбайым', daughter:'Қызым', sharedSpend:'Ортақ шығыстар', personalSpend:'Жеке', thisMonth:'осы айда', archive:'Мұрағаттау',
+  language:'Тіл', theme:'Тақырып', light:'Ашық', dark:'Қараңғы', system:'Жүйелік', mode:'Есеп режимі', profile:'Профиль', currentPlan:'Белсенді тариф', freePlan:'Қарапайым нұсқа', proPlan:'Pro',
+  proTitle:'FamCoin Pro', proPrice:'10 000 ₸ / жыл', proSub:'жылдық төлемде айына ≈ 833 ₸', buyPro:'Pro сатып алу', restore:'Сатып алуды қалпына келтіру', proNote:'Баға мен шарттар төлем алдында дүкеннен көрсетіледі. Тарихыңыз кез келген тарифте сақталады.',
+  f_accounts:'Бірнеше ақша шоты', f_limits:'Шексіз лимиттер, шот пен адам бойынша', f_fast:'Дауыс, чектер, үлгілер', f_reports:'Салыстыру, болжам, капитал тарихы', f_ai:'ЖИ-кеңесші және айлық талдау', f_early:'Мерзімінен бұрын өтеу сценарийлері',
+  gateTitle:'Бұл мүмкіндік Pro нұсқасында', gateVoice:'Орыс және қазақ тілінде дауыспен енгізу: сома, шот пен санатты тану — жазар алдында растаумен.', gateLimit:'Үшінші лимит және шот немесе отбасы мүшесі бойынша лимиттер Pro нұсқасында ашылады.', later:'Кейін',
+  txDetails:'Операция', related:'Байланысты жазбалар', history:'Өзгерістер тарихы', edit:'Өзгерту', del:'Жою', split:'Санаттарға бөлу', refund:'Қайтару рәсімдеу', created:'Құрылды', family_for:'Кімге',
+  liquid:'Өтімді ақша', reserves:'Ондағы резервтер', obligations:'Жалақыға дейінгі төленбеген міндеттемелер', savingsPlan:'Жинақ жоспары', days:'Кіріске дейінгі күн', base:'База', formula:'Күндік бюджет = max(0, B0 / D)',
+  guideNote:'Бұл жазылған жоспар бойынша бағалау. Күтілетін жалақы алынған деп есептелмейді.',
+  reportSpend:'Шығыстар', reportIncome:'Кірістер', reportResult:'Нәтиже', cashflow:'Ақша ағыны', top:'Ірі санаттар', openReport:'Есепті ашу',
+  transferNote:'Аударым шығыс емес', debtNote:'Қарыз беру ақшаны азайтады, бірақ шығыс емес',
+  demoHint:'Демо: құпиясөз demo', okBtn:'Түсінікті', addOp:'Операция жазу', fillLater:'Кейін толтыру',
+  cats:{ food:'Азық-түлік', cafe:'Кафе', transport:'Көлік', health:'Денсаулық', kids:'Балалар', home:'Тұрғын үй', phone:'Байланыс', household:'Тұрмыстық заттар', fun:'Ойын-сауық', clothes:'Киім', salary:'Жалақы', cashback:'Кешбэк', interest:'Пайыз', fees:'Комиссиялар' },
+  accs:{ kaspi:'Kaspi Gold', halyk:'Halyk', cash:'Қолма-қол ақша', deposit:'Freedom депозиті' },
+  ppl:{ me:'Владислав', spouse:'Айгерім', daughter:'Алина' },
+  names:{ askhat:'Асхат', daniyar:'Данияр' },
+  goalNames:{ cushion:'Қауіпсіздік жастығы', vacation:'Түркиядағы демалыс' },
+  months:['қаңтар','ақпан','наурыз','сәуір','мамыр','маусым','шілде','тамыз','қыркүйек','қазан','қараша','желтоқсан'],
+  wd:['Дс','Сс','Ср','Бс','Жм','Сб','Жс'],
+}};
+
+/* =========================== Данные (условные, KZT) =========================== */
+const CAT_ICON = { food:'🛒', cafe:'☕', transport:'🚕', health:'💊', kids:'🧒', home:'🏠', phone:'📱', household:'🧴', fun:'🎬', clothes:'👕', salary:'💼', cashback:'🎁', interest:'🏦', fees:'🧾', transfer:'🔁', debt:'🤝', loan:'🏦' };
+const ACC_COLOR = { kaspi:'#D62F2F', halyk:'#1F8A4C', cash:'#8A7A55', deposit:'#2C6FB2' };
+const ACCOUNTS = [
+  { id:'kaspi', bal:312400, liquid:true },
+  { id:'halyk', bal:148900, liquid:true },
+  { id:'cash',  bal:25000,  liquid:true },
+  { id:'deposit', bal:1200000, liquid:false },
+];
+// occurred: 2026-09-22 — сегодня
+const TX = [
+  { id:1,  d:'2026-09-22', type:'expense', cat:'cafe', amt:1200, acc:'kaspi', note:'Coffee Boom', who:'me' },
+  { id:2,  d:'2026-09-22', type:'expense', cat:'transport', amt:1850, acc:'kaspi', note:'Yandex Go', who:'me' },
+  { id:3,  d:'2026-09-21', type:'expense', cat:'food', amt:12340, acc:'kaspi', note:'Magnum', who:'shared' },
+  { id:4,  d:'2026-09-21', type:'expense', cat:'health', amt:4600, acc:'kaspi', note:'Europharma', who:'spouse' },
+  { id:5,  d:'2026-09-20', type:'income',  cat:'salary', amt:450000, acc:'halyk', note:'', who:'me' },
+  { id:6,  d:'2026-09-20', type:'transfer', amt:100000, acc:'halyk', to:'deposit', note:'', who:'me' },
+  { id:7,  d:'2026-09-19', type:'loanpay', cat:'loan', amt:25000, acc:'kaspi', note:'Kaspi Red', who:'me', principal:23200, interest:1800 },
+  { id:8,  d:'2026-09-18', type:'expense', cat:'kids', amt:18000, acc:'kaspi', note:'Школьная одежда', who:'daughter' },
+  { id:9,  d:'2026-09-17', type:'expense', cat:'phone', amt:4000, acc:'kaspi', note:'Beeline', who:'shared' },
+  { id:10, d:'2026-09-15', type:'debtback', amt:10000, acc:'cash', note:'', who:'me', person:'askhat' },
+  { id:11, d:'2026-09-14', type:'expense', cat:'food', amt:9870, acc:'kaspi', note:'Small', who:'shared' },
+  { id:12, d:'2026-09-12', type:'expense', cat:'fun', amt:7500, acc:'kaspi', note:'Kinopark', who:'shared' },
+  { id:13, d:'2026-09-10', type:'income',  cat:'cashback', amt:3120, acc:'kaspi', note:'Kaspi Bonus → деньги', who:'me' },
+  { id:14, d:'2026-09-08', type:'debtgive', amt:30000, acc:'cash', note:'', who:'me', person:'askhat' },
+  { id:15, d:'2026-09-05', type:'expense', cat:'home', amt:150000, acc:'halyk', note:'Аренда', who:'shared' },
+];
+const LIMITS = [
+  { cat:'cafe', spent:24900, limit:30000 },
+  { cat:'food', spent:96500, limit:120000 },
+  { cat:'transport', spent:14200, limit:25000, pro:true },
+];
+const GOALS = [
+  { id:'cushion', saved:300000, target:600000, deadline:'2027-06-01', monthly:35000 },
+  { id:'vacation', saved:120000, target:400000, deadline:'2027-07-01', monthly:28000 },
+];
+const DEBTS_BANK = [
+  { id:'red', name:'Kaspi Red', kind:'creditCard', left:220000, pay:25000, due:'2026-10-05', rate:0 },
+  { id:'inst', name:'Halyk · iPhone', kind:'installment', left:200000, pay:20000, due:'2026-10-01', rate:0, total:240000, n:12, paid:2 },
+];
+const GUIDE = { L0:486300, R0:60000, C0:185000, P0:50000, D:13, spentToday:3050 };
+
+/* =========================== Состояние =========================== */
+const S = { lang:'ru', theme:'light', pro:false, family:true, screen:'S01', stack:[], attempts:0, lockUntil:null, ob:1, obMode:'family', obMethod:'m503020', addType:'expense', addCat:'cafe', addWho:'shared', tx:null, sheet:null, tab:'home', pw:'' };
+const t = () => T[S.lang];
+const fmt = n => (n<0?'−':'') + Math.abs(n).toLocaleString('ru-RU').replace(/ |,/g,' ') + ' ₸';
+const sfmt = (n, sign) => (sign==='+'?'+':sign==='-'?'−':'') + fmt(Math.abs(n));
+function dstr(iso){ const [y,m,d]=iso.split('-').map(Number); if(iso==='2026-09-22') return t().today; if(iso==='2026-09-21') return t().yesterday; return `${d} ${t().months[m-1]}`; }
+const catName = c => t().cats[c] || c;
+const accName = a => t().accs[a] || a;
+const who = w => w==='shared'? t().shared : w==='me'? t().ppl.me : w==='spouse'? t().ppl.spouse : t().ppl.daughter;
+
+/* =========================== Навигация =========================== */
+const ROOT = { S07:'home', S10:'ops', S12:'budget', S29:'more' };
+function go(id, push=true){ if(push && S.screen!==id) S.stack.push(S.screen); S.screen=id; S.sheet=null; if(ROOT[id]) S.tab=ROOT[id]; render(); }
+function back(){ S.screen = S.stack.pop() || 'S07'; S.sheet=null; render(); }
+function openSheet(name){ S.sheet=name; render(); }
+function closeSheet(){ S.sheet=null; render(); }
+function gate(what){ if(S.pro) return false; S.sheet='gate:'+what; render(); return true; }
+
+/* =========================== Общие блоки =========================== */
+function statusBar(){ return `<div class="status"><span>9:41</span><span>●●● ▲ ▮</span></div>`; }
+function topBar(title, opts={}){
+  return `<div class="top">${opts.root?'':`<button class="icon" onclick="back()" aria-label="${t().back}">‹</button>`}<h1>${title}</h1>${opts.right||''}</div>`;
+}
+function nav(){
+  const L=t();
+  const b=(tab,id,ic,lbl)=>`<button class="${S.tab===tab?'on':''}" onclick="go('${id}')"><span class="ic">${ic}</span>${lbl}</button>`;
+  return `<div class="nav">
+    ${b('home','S07','⌂',L.home)}${b('ops','S10','☰',L.ops)}
+    <button class="add" onclick="go('Q02')" aria-label="${L.add}"><span class="ic">＋</span>${L.add}</button>
+    ${b('budget','S12','◔',L.budget)}${b('more','S29','⋯',L.more)}
+  </div>`;
+}
+const pro = () => `<span class="pill pro">${t().proBadge}</span>`;
+function bar(v, max){ const p=max>0? Math.min(100, v/max*100):100; const cls = p>=100?'over':p>=80?'warn':''; return `<div class="bar"><i class="${cls}" style="width:${p}%"></i></div>`; }
+function txItem(x){
+  const L=t(); let title, sub, amt, ic;
+  if(x.type==='expense'){ title=catName(x.cat); sub=[x.note, accName(x.acc), S.family&&x.who!=='me'?who(x.who):''].filter(Boolean).join(' · '); amt=`<span class="amt out">${sfmt(x.amt,'-')}</span>`; ic=CAT_ICON[x.cat]; }
+  else if(x.type==='income'){ title=catName(x.cat); sub=[x.note, accName(x.acc)].filter(Boolean).join(' · '); amt=`<span class="amt in">${sfmt(x.amt,'+')}</span>`; ic=CAT_ICON[x.cat]; }
+  else if(x.type==='transfer'){ title=L.transfer; sub=`${accName(x.acc)} → ${accName(x.to)}`; amt=`<span class="amt">${fmt(x.amt)}</span>`; ic='🔁'; }
+  else if(x.type==='loanpay'){ title=`${L.payment} · ${x.note}`; sub=`${L.principal} ${fmt(x.principal)} · ${L.interest} ${fmt(x.interest)}`; amt=`<span class="amt out">${sfmt(x.amt,'-')}</span>`; ic='🏦'; }
+  else if(x.type==='debtgive'){ title=`${L.debt} · ${L.names[x.person]}`; sub=L.gave; amt=`<span class="amt debt">${sfmt(x.amt,'-')}</span>`; ic='🤝'; }
+  else if(x.type==='debtback'){ title=`${L.debt} · ${L.names[x.person]}`; sub=L.returned; amt=`<span class="amt debt">${sfmt(x.amt,'+')}</span>`; ic='🤝'; }
+  return `<div class="item" onclick="S.tx=${x.id};go('S11')"><div class="cat">${ic}</div><div class="grow"><div>${title}</div><div class="small muted">${sub}</div></div>${amt}</div>`;
+}
+
+/* =========================== Экраны =========================== */
+const SCREENS = {};
+
+SCREENS.S01 = () => { const L=t(); return `
+  <div class="content" style="display:flex;flex-direction:column;justify-content:center;gap:18px;">
+    <div class="center" style="margin-bottom:28px"><div class="logo">Fam<b>Coin</b></div><div class="muted" style="margin-top:8px">${L.welcome}</div></div>
+    <div class="card"><h3>${L.chooseLang}</h3>
+      <div class="radio ${S.lang==='ru'?'on':''}" onclick="setLang('ru')"><span class="dot"></span><span>Русский</span></div>
+      <div class="radio ${S.lang==='kk'?'on':''}" onclick="setLang('kk')"><span class="dot"></span><span>Қазақша</span></div>
+    </div>
+    <button class="btn primary" onclick="go('S03')">${L.signIn}</button>
+    <button class="btn ghost" onclick="go('S02')">${L.createAccount}</button>
+  </div>`; };
+
+SCREENS.S02 = () => { const L=t(); return `${topBar(L.register)}
+  <div class="content">
+    <div class="field"><label>${L.email}</label><input class="input" placeholder="name@mail.kz"></div>
+    <div class="field"><label>${L.password}</label><input class="input" type="password" placeholder="••••••••"></div>
+    <div class="small muted" style="margin-bottom:16px">Минимум 8 символов. Политика пароля задаётся сервером авторизации.</div>
+    <button class="btn primary" onclick="go('S04')">${L.next}</button>
+  </div>`; };
+
+SCREENS.S04 = () => { const L=t(); return `${topBar('Подтверждение')}
+  <div class="content">
+    <div class="card"><div class="muted small">Код отправлен на</div><div style="font-weight:600">name@mail.kz</div></div>
+    <div class="field"><label>Код</label><input class="input" placeholder="______" style="letter-spacing:.4em;text-align:center;font-size:22px"></div>
+    <button class="btn primary" onclick="go('S06')">${L.next}</button>
+  </div>`; };
+
+SCREENS.S03 = () => { const L=t();
+  const locked = S.lockUntil && S.lockUntil > Date.now();
+  let msg='';
+  if(locked){ const s=Math.max(0,Math.ceil((S.lockUntil-Date.now())/1000)); const mm=String(Math.floor(s/60)).padStart(2,'0'), ss=String(s%60).padStart(2,'0');
+    msg=`<div class="banner err"><span>🔒</span><div><b>${L.locked}</b><div class="small" style="margin-top:4px">${L.lockedHint}</div><div style="margin-top:8px;font-family:Manrope;font-size:26px;font-weight:800">${mm}:${ss}</div></div></div>`; }
+  else if(S.attempts>0){ msg=`<div class="banner warn"><span>⚠️</span><div>${L.wrongPw} <b>${3-S.attempts}</b></div></div>`; }
+  return `${topBar(L.login)}
+  <div class="content">
+    <div class="center" style="margin:10px 0 26px"><div class="logo">Fam<b>Coin</b></div></div>
+    ${msg}
+    <div class="field"><label>${L.email}</label><input class="input" value="vlad@mail.kz" ${locked?'disabled':''}></div>
+    <div class="field"><label>${L.password}</label><input class="input" type="password" id="pw" placeholder="${L.demoHint}" ${locked?'disabled':''} onkeydown="if(event.key==='Enter')tryLogin()"></div>
+    <button class="btn primary" onclick="tryLogin()" ${locked?'disabled':''}>${L.signIn}</button>
+    <div class="center" style="margin-top:14px"><button class="link" onclick="go('S05')">${L.forgot}</button></div>
+    <div class="center muted small" style="margin-top:28px">${L.noAccount} <button class="link" onclick="go('S02')">${L.createAccount}</button></div>
+  </div>`; };
+function tryLogin(){
+  if(S.lockUntil && S.lockUntil>Date.now()) return;
+  const v=document.getElementById('pw').value;
+  if(v==='demo'){ S.attempts=0; S.stack=[]; go('S06'); return; }
+  S.attempts++;
+  if(S.attempts>=3){ S.lockUntil=Date.now()+15*60*1000; S.attempts=0; tick(); }
+  render();
+}
+let tickTimer=null; function tick(){ clearInterval(tickTimer); tickTimer=setInterval(()=>{ if(S.screen==='S03') render(); if(!S.lockUntil||S.lockUntil<Date.now()){ S.lockUntil=null; clearInterval(tickTimer);} },1000); }
+
+SCREENS.S05 = () => { const L=t(); return `${topBar(L.forgot)}
+  <div class="content">
+    <div class="field"><label>${L.email}</label><input class="input" placeholder="name@mail.kz"></div>
+    <button class="btn primary" onclick="back()">${L.next}</button>
+  </div>`; };
+
+/* ---- Анкета S06 ---- */
+SCREENS.S06 = () => { const L=t(); const n=S.ob;
+  const steps = `<div class="steps">${[1,2,3,4,5,6,7,8,9].map(i=>`<i class="${i<=n?'done':''}"></i>`).join('')}</div>`;
+  const head = (h,p)=>`<h2 style="font-family:Manrope;font-size:22px;margin:0 0 4px">${h}</h2><div class="muted small" style="margin-bottom:16px">${p}</div>`;
+  const opt=(k,lbl,d,on,cb)=>`<div class="radio ${on?'on':''}" onclick="${cb}"><span class="dot"></span><div><div>${lbl}</div><div class="small muted">${d}</div></div></div>`;
+  let body='';
+  if(n===1) body = head(L.ob1,L.ob1p) + opt('p',L.personal,L.personalD,S.obMode==='personal',"S.obMode='personal';render()") + opt('f',L.familyMode,L.familyD,S.obMode==='family',"S.obMode='family';render()")
+    + (S.obMode==='family'?`<div class="card" style="margin-top:12px"><h3>${L.members}</h3><div class="row" style="margin-bottom:8px"><div class="avatar">В</div><div class="grow">${L.ppl.me} <span class="tag">· ${L.me}</span></div></div><div class="row" style="margin-bottom:8px"><div class="avatar" style="background:var(--accent);color:var(--on-accent)">А</div><div class="grow">${L.ppl.spouse} <span class="tag">· ${L.spouse}</span></div></div><div class="row"><div class="avatar" style="background:var(--debt)">А</div><div class="grow">${L.ppl.daughter} <span class="tag">· ${L.daughter}</span></div></div><button class="btn text" style="padding:10px 0 0;justify-content:flex-start">＋ ${L.addMember}</button></div>`:'');
+  if(n===2) body = head(L.ob2,L.ob2p) + ['KZT ₸ — тенге','USD $','RUB ₽','EUR €'].map((c,i)=>opt('c',c,'',i===0,'')).join('') + `<div class="card"><div class="kv"><span class="muted">Пример</span><b>1 250 000 ₸</b></div></div>`;
+  if(n===3) body = head(L.ob3,L.ob3p) + `<div class="field"><label>${L.accName}</label><input class="input" value="Kaspi Gold"></div><div class="field"><label>${L.accType}</label><div class="chips"><button class="chip on">${L.card}</button><button class="chip">${L.cash}</button><button class="chip">${L.deposit}</button></div></div><div class="field"><label>${L.openBal}</label><input class="input" value="312 400 ₸"></div><div class="field"><label>${L.startDate}</label><input class="input" value="22.09.2026"></div>` + (S.pro?`<button class="btn ghost">＋ ${L.accounts}</button>`:`<div class="banner info"><span>ℹ️</span><div>${L.limitFree.replace('2 лимита','1 счёт').replace('2 лимит','1 шот')}. ${L.f_accounts} — ${pro()}</div></div>`);
+  if(n===4) body = head(L.ob4,L.ob4p) + `<div class="card"><div class="row"><div class="cat">💳</div><div class="grow"><div>Kaspi Red</div><div class="small muted">${L.creditCard} · ${L.payment} 25 000 ₸</div></div><span class="amt debt">220 000 ₸</span></div></div><div class="card"><div class="row"><div class="cat">📱</div><div class="grow"><div>Halyk · iPhone</div><div class="small muted">${L.installment} 0-0-12 · 20 000 ₸</div></div><span class="amt debt">200 000 ₸</span></div></div><button class="btn ghost">＋ ${L.loan}</button>`;
+  if(n===5) body = head(L.ob5,L.ob5p) + `<div class="card"><h3>${L.oweMe}</h3><div class="row"><div class="avatar" style="background:var(--debt)">А</div><div class="grow">${L.names.askhat}</div><span class="amt debt">20 000 ₸</span></div></div><div class="card"><h3>${L.iOwe}</h3><div class="row"><div class="avatar" style="background:var(--expense)">Д</div><div class="grow">${L.names.daniyar}</div><span class="amt out">15 000 ₸</span></div></div><button class="btn ghost">＋ ${L.debt}</button>`;
+  if(n===6) body = head(L.ob6,L.ob6p) + `<div class="field"><label>${L.salary}</label><input class="input" value="450 000 ₸"></div><div class="field"><label>${L.payDay}</label><input class="input" value="5"></div><div class="field"><label>${L.advance}</label><input class="input" placeholder="—"></div><div class="banner info"><span>ℹ️</span><div>${L.guideNote}</div></div>`;
+  if(n===7) body = head(L.ob7,L.ob7p) + [[L.rent,150000,25],[L.utilities,18000,10],[L.internet,6000,15],[L.phone,4000,17]].map(([n,a,d])=>`<div class="card" style="padding:12px 16px"><div class="row"><div class="grow"><div>${n}</div><div class="small muted">${d}-е число</div></div><span class="amt">${fmt(a)}</span></div></div>`).join('') + `<button class="btn ghost">＋ ${L.payment}</button>`;
+  if(n===8) body = head(L.ob8,L.ob8p) + [['mSimple'],['mLimits'],['m503020'],['mEnv'],['mPayFirst']].map(([k])=>opt(k,L[k],L[k+'D'],S.obMethod===k,`S.obMethod='${k}';render()`)).join('');
+  if(n===9) body = head(L.ob9,L.ob9p) + `<div class="card"><div class="muted small">${L.capital}</div><div class="big">1 271 300 <small>₸</small></div><div class="kv" style="margin-top:8px"><span class="muted">${L.assets}</span><span>1 706 300 ₸</span></div><div class="kv"><span class="muted">${L.liabilities}</span><span class="amt debt">435 000 ₸</span></div></div><div class="card"><div class="kv"><span class="muted">${L.free} (${L.month})</span><b>191 300 ₸</b></div><div class="kv"><span class="muted">${L.guide}</span><b>≈ 14 700 ₸ ${L.perDay}</b></div></div><div class="banner warn"><span>✎</span><div>${L.ob5}: ${L.fillLater}</div></div>`;
+  return `${topBar(`${L.onboarding} · ${L.step} ${n} ${L.ofN} 9`, {right: n<9?`<button class="link" onclick="S.ob=9;render()">${L.skip}</button>`:''})}
+  <div class="content">${steps}${body}
+    <div class="sticky-bottom">
+      ${n<9?`<button class="btn primary" onclick="S.ob++;render()">${L.next}</button>`:`<button class="btn accent" onclick="S.ob=1;S.stack=[];S.family=(S.obMode==='family');syncPanel();go('Q02')">${L.firstOp}</button><button class="btn text" onclick="S.ob=1;S.stack=[];go('S07')">${L.done}</button>`}
+      ${n>1&&n<9?`<button class="btn text" onclick="S.ob--;render()">${L.back}</button>`:''}
+    </div>
+  </div>`; };
+
+/* ---- Главная S07 ---- */
+SCREENS.S07 = () => { const L=t(); const g=GUIDE; const B0=g.L0-g.R0-g.C0-g.P0; const daily=Math.floor(B0/g.D/100)*100; const left=daily-g.spentToday;
+  const risk = LIMITS.filter(l=>(!l.pro||S.pro) && l.spent/l.limit>=0.8);
+  const spend = TX.filter(x=>x.type==='expense').reduce((a,x)=>a+x.amt,0)+1800; const inc=TX.filter(x=>x.type==='income').reduce((a,x)=>a+x.amt,0);
+  return `${topBar(L.home,{root:true, right:`<button class="icon" onclick="go('S31')" aria-label="${L.profile}"><span class="avatar" style="width:32px;height:32px;font-size:13px">В</span></button>`})}
+  <div class="content with-nav">
+    <div class="card" style="background:var(--primary);color:var(--on-primary)">
+      <div class="row"><div class="grow" style="opacity:.85;font-size:13px">${L.leftToday}</div><button class="link" style="color:inherit;opacity:.9;font-size:12px" onclick="openSheet('guide')">${L.howCalc} ›</button></div>
+      <div class="big" style="margin:4px 0 2px">${left.toLocaleString('ru-RU').replace(/ /g,' ')} <small style="color:inherit;opacity:.8">₸</small></div>
+      <div style="font-size:13px;opacity:.85">${fmt(daily)} ${L.perDay} · ${g.D} ${L.daysToIncome}</div>
+      <div class="bar" style="background:rgba(255,255,255,.25);margin-top:10px"><i style="width:${Math.round(left/daily*100)}%;background:var(--accent)"></i></div>
+    </div>
+
+    <div class="sect"><h2>${L.accounts}</h2><button class="link" onclick="go('S08')">${L.all} ›</button></div>
+    <div class="acct-strip">${ACCOUNTS.filter(a=>S.pro||a.id==='kaspi').map(a=>`<div class="acct" style="--c:${ACC_COLOR[a.id]}" onclick="go('S09')"><div class="name">${accName(a.id)}${a.liquid?'':' · 🔒'}</div><div class="bal">${fmt(a.bal)}</div></div>`).join('')}${S.pro?'':`<div class="acct" style="--c:var(--accent);opacity:.8" onclick="go('S37')"><div class="name">${L.f_accounts}</div><div class="bal" style="font-size:13px">${pro()} ${L.proOnly}</div></div>`}</div>
+
+    <div class="sect"><h2>${L.upcoming}</h2><button class="link" onclick="go('S15')">${L.allPayments} ›</button></div>
+    <div class="card list" style="padding:4px 16px">
+      <div class="item" onclick="go('S15')"><div class="cat">🏠</div><div class="grow"><div>${L.rent}</div><div class="small muted">25 ${L.months[8]} · ${L.reserve} ✓</div></div><span class="amt">150 000 ₸</span></div>
+      <div class="item" onclick="go('S19')"><div class="cat">📱</div><div class="grow"><div>Halyk · iPhone</div><div class="small muted">1 ${L.months[9]} · ${L.installment}</div></div><span class="amt debt">20 000 ₸</span></div>
+      <div class="item" onclick="go('S19')"><div class="cat">💳</div><div class="grow"><div>Kaspi Red</div><div class="small muted">5 ${L.months[9]}</div></div><span class="amt debt">25 000 ₸</span></div>
+    </div>
+
+    ${risk.length?`<div class="sect"><h2>${L.limitsRisk}</h2><button class="link" onclick="go('S13')">${L.all} ›</button></div>
+    <div class="card">${risk.map(l=>`<div style="margin-bottom:10px"><div class="row"><div class="grow">${CAT_ICON[l.cat]} ${catName(l.cat)}</div><span class="small"><b>${fmt(l.spent)}</b> <span class="muted">${L.of} ${fmt(l.limit)}</span></span></div>${bar(l.spent,l.limit)}<div class="small muted">${Math.round(l.spent/l.limit*100)}% · ${L.forecast}: ≈ ${fmt(Math.round(l.spent/22*30/100)*100)}</div></div>`).join('')}</div>`:''}
+
+    <div class="sect"><h2>${L.monthReport}</h2><button class="link" onclick="go('S23')">${L.openReport} ›</button></div>
+    <div class="card"><div class="grid2"><div><div class="small muted">${L.reportIncome}</div><div class="amt in" style="font-size:18px">${fmt(inc)}</div></div><div><div class="small muted">${L.reportSpend}</div><div class="amt out" style="font-size:18px">${fmt(spend)}</div></div></div><div class="kv" style="margin-top:8px;border-top:1px solid var(--line)"><span class="muted">${L.reportResult}</span><b>${sfmt(inc-spend,'+')}</b></div></div>
+
+    <div class="sect"><h2>${L.recent}</h2><button class="link" onclick="go('S10')">${L.all} ›</button></div>
+    <div class="card list" style="padding:4px 16px">${TX.slice(0,5).map(txItem).join('')}</div>
+  </div>${nav()}`; };
+
+/* Шторка «Как посчитано» */
+function guideSheet(){ const L=t(); const g=GUIDE; const B0=g.L0-g.R0-g.C0-g.P0; const daily=Math.floor(B0/g.D/100)*100;
+  return `<div class="sheet" onclick="closeSheet()"><div class="panel" onclick="event.stopPropagation()"><h2>${L.howCalc}</h2>
+   <div class="kv"><span class="muted">L0 · ${L.liquid}</span><span>${fmt(g.L0)}</span></div>
+   <div class="kv"><span class="muted">R0 · ${L.reserves}</span><span>− ${fmt(g.R0)}</span></div>
+   <div class="kv"><span class="muted">C0 · ${L.obligations}</span><span>− ${fmt(g.C0)}</span></div>
+   <div class="kv"><span class="muted">P0 · ${L.savingsPlan}</span><span>− ${fmt(g.P0)}</span></div>
+   <div class="kv total"><span>B0 · ${L.base}</span><span>${fmt(B0)}</span></div>
+   <div class="kv"><span class="muted">D · ${L.days}</span><span>${g.D}</span></div>
+   <div class="kv total"><span>${L.formula}</span><span>≈ ${fmt(daily)}</span></div>
+   <div class="kv"><span class="muted">${L.today}</span><span>− ${fmt(g.spentToday)}</span></div>
+   <div class="kv total" style="color:var(--primary)"><span>${L.leftToday}</span><span>${fmt(daily-g.spentToday)}</span></div>
+   <div class="small muted" style="margin-top:10px">${L.guideNote}</div>
+   <button class="btn ghost" style="margin-top:14px" onclick="closeSheet()">${L.okBtn}</button></div></div>`; }
+
+function gateSheet(what){ const L=t(); return `<div class="sheet" onclick="closeSheet()"><div class="panel" onclick="event.stopPropagation()"><div style="margin-bottom:6px">${pro()}</div><h2>${L.gateTitle}</h2><div class="muted" style="margin-bottom:16px">${what==='voice'||what==='receipt'?L.gateVoice:L.gateLimit}</div><div class="card" style="background:var(--surface-2);box-shadow:none"><div class="row"><div class="grow"><b>${L.proTitle}</b><div class="small muted">${L.proSub}</div></div><b>${L.proPrice}</b></div></div><button class="btn accent" onclick="go('S37')">${L.buyPro}</button><button class="btn text" onclick="closeSheet()">${L.later}</button></div></div>`; }
+
+/* ---- Счета ---- */
+SCREENS.S08 = () => { const L=t(); const total=ACCOUNTS.filter(a=>S.pro||a.id==='kaspi').reduce((s,a)=>s+a.bal,0);
+  return `${topBar(L.accounts)}<div class="content with-nav">
+  <div class="card"><div class="small muted">${L.assets} · ${L.today}</div><div class="big">${total.toLocaleString('ru-RU').replace(/ /g,' ')} <small>₸</small></div></div>
+  ${ACCOUNTS.filter(a=>S.pro||a.id==='kaspi').map(a=>`<div class="card" style="border-left:6px solid ${ACC_COLOR[a.id]}" onclick="go('S09')"><div class="row"><div class="grow"><div>${accName(a.id)}</div><div class="small muted">${a.liquid?L.card:L.deposit+' · 🔒 '+L.reserve}</div></div><span class="amt">${fmt(a.bal)}</span></div></div>`).join('')}
+  ${S.pro?`<button class="btn ghost">＋ ${L.account}</button>`:`<button class="btn ghost" onclick="gate('acc')">＋ ${L.account} ${pro()}</button>`}
+  </div>${nav()}`; };
+SCREENS.S09 = () => { const L=t(); const a=ACCOUNTS[0]; const items=TX.filter(x=>x.acc==='kaspi');
+  return `${topBar(accName('kaspi'), {right:`<button class="icon">✎</button>`})}<div class="content with-nav">
+  <div class="card" style="border-left:6px solid ${ACC_COLOR.kaspi}"><div class="small muted">${L.card} · KZT</div><div class="big">${a.bal.toLocaleString('ru-RU').replace(/ /g,' ')} <small>₸</small></div><div class="small muted" style="margin-top:6px">${L.reserve}: 60 000 ₸ · ${L.free}: 252 400 ₸</div></div>
+  <div class="grid2" style="margin-bottom:12px"><button class="btn ghost" onclick="${S.pro?"S.addType='transfer';go('Q02')":"gate('acc')"}">${L.transfer}${S.pro?'':' '+pro()}</button><button class="btn ghost">${L.openBal}</button></div>
+  <div class="card list" style="padding:4px 16px">${items.map(txItem).join('')}</div>
+  </div>${nav()}`; };
+
+/* ---- Журнал S10 / Карточка S11 ---- */
+SCREENS.S10 = () => { const L=t(); const days=[...new Set(TX.map(x=>x.d))];
+  return `${topBar(L.ops,{root:true, right:`<button class="icon" onclick="openSheet('filters')">⚲</button>`})}<div class="content with-nav">
+  <input class="input" placeholder="🔍 ${L.search}" style="margin-bottom:10px">
+  <div class="chips" style="margin-bottom:6px"><button class="chip on">${L.month}</button><button class="chip">${L.expense}</button><button class="chip">${L.income}</button>${S.family?`<button class="chip">${L.family}</button>`:''}</div>
+  ${days.map(d=>{ const xs=TX.filter(x=>x.d===d); const sum=xs.filter(x=>x.type==='expense').reduce((s,x)=>s+x.amt,0); return `<div class="day"><span>${dstr(d)}</span><span>${sum?'− '+fmt(sum):''}</span></div><div class="card list" style="padding:4px 16px">${xs.map(txItem).join('')}</div>`; }).join('')}
+  </div>${nav()}`; };
+SCREENS.S11 = () => { const L=t(); const x=TX.find(x=>x.id===S.tx)||TX[0];
+  const isExp=x.type==='expense';
+  let extra='';
+  if(x.type==='transfer') extra=`<div class="banner info"><span>ℹ️</span><div>${L.transferNote}</div></div>`;
+  if(x.type==='debtgive') extra=`<div class="banner info"><span>ℹ️</span><div>${L.debtNote}</div></div><div class="card list"><h3>${L.related}</h3><div class="item" onclick="go('S20')"><div class="cat">🤝</div><div class="grow">${L.names.askhat} · ${L.oweMe}</div><span class="amt debt">20 000 ₸</span></div></div>`;
+  if(x.type==='loanpay') extra=`<div class="card"><h3>${L.related}</h3><div class="kv"><span class="muted">${L.principal}</span><span>${fmt(x.principal)}</span></div><div class="kv"><span class="muted">${L.interest} → ${L.expense}</span><span class="amt out">${fmt(x.interest)}</span></div><div class="kv"><span class="muted">${L.balanceLeft}</span><button class="link" onclick="go('S19')">Kaspi Red ›</button></div></div>`;
+  return `${topBar(L.txDetails,{right:`<button class="icon">⋯</button>`})}<div class="content">
+  <div class="card center" style="padding:22px 16px"><div class="cat" style="margin:0 auto 10px;width:56px;height:56px;font-size:26px">${x.type==='transfer'?'🔁':x.type.startsWith('debt')?'🤝':x.type==='loanpay'?'🏦':CAT_ICON[x.cat]}</div>
+    <div class="big ${isExp?'':''}" style="color:${isExp||x.type==='loanpay'?'var(--expense)':x.type==='income'?'var(--income)':'var(--text)'}">${isExp||x.type==='loanpay'?'−':x.type==='income'?'+':''}${x.amt.toLocaleString('ru-RU').replace(/ /g,' ')} <small>₸</small></div>
+    <div class="muted" style="margin-top:6px">${x.cat?catName(x.cat):x.type==='transfer'?L.transfer:L.debt}${x.note?' · '+x.note:''}</div></div>
+  <div class="card">
+    <div class="kv"><span class="muted">${L.date}</span><span>${dstr(x.d)}, 2026</span></div>
+    <div class="kv"><span class="muted">${L.account}</span><span>${accName(x.acc)}${x.to?' → '+accName(x.to):''}</span></div>
+    ${S.family&&isExp?`<div class="kv"><span class="muted">${L.forWhom}</span><span>${who(x.who)}</span></div>`:''}
+    <div class="kv"><span class="muted">${L.created}</span><span class="small">${dstr(x.d)} 14:32 · v1</span></div>
+  </div>
+  ${extra}
+  ${isExp?`<div class="grid2"><button class="btn ghost" onclick="openSheet('split')">${L.split}</button><button class="btn ghost">${L.refund}</button></div>`:''}
+  <div class="grid2" style="margin-top:10px"><button class="btn primary">${L.edit}</button><button class="btn ghost" style="color:var(--expense)">${L.del}</button></div>
+  </div>`; };
+function splitSheet(){ const L=t(); const x=TX.find(x=>x.id===S.tx)||TX[2]; return `<div class="sheet" onclick="closeSheet()"><div class="panel" onclick="event.stopPropagation()"><h2>${L.split}</h2><div class="muted small" style="margin-bottom:12px">${fmt(x.amt)} · ${x.note}</div>
+  <div class="row" style="margin-bottom:8px"><div class="cat">🛒</div><div class="grow">${L.cats.food}</div><input class="input" style="width:120px;text-align:right" value="8 340"></div>
+  <div class="row" style="margin-bottom:8px"><div class="cat">🧴</div><div class="grow">${L.cats.household}</div><input class="input" style="width:120px;text-align:right" value="4 000"></div>
+  <div class="kv total"><span>${L.amount}</span><span class="pill ok">12 340 = 12 340 ✓</span></div>
+  <button class="btn primary" style="margin-top:12px" onclick="closeSheet()">${L.save}</button></div></div>`; }
+function filtersSheet(){ const L=t(); return `<div class="sheet" onclick="closeSheet()"><div class="panel" onclick="event.stopPropagation()"><h2>${L.filters}</h2>
+  <div class="field"><label>${L.period}</label><div class="chips"><button class="chip on">${L.month}</button><button class="chip">2026</button><button class="chip">…</button></div></div>
+  <div class="field"><label>${L.category}</label><div class="chips">${['food','cafe','transport','health','kids','home'].map(c=>`<button class="chip">${CAT_ICON[c]} ${catName(c)}</button>`).join('')}</div></div>
+  <div class="field"><label>${L.account}</label><div class="chips">${ACCOUNTS.filter(a=>S.pro||a.id==='kaspi').map(a=>`<button class="chip">${accName(a.id)}</button>`).join('')}</div></div>
+  ${S.family?`<div class="field"><label>${L.forWhom}</label><div class="chips"><button class="chip">${L.shared}</button><button class="chip">${L.ppl.me}</button><button class="chip">${L.ppl.spouse}</button><button class="chip">${L.ppl.daughter}</button></div></div>`:''}
+  <button class="btn primary" onclick="closeSheet()">${L.done}</button></div></div>`; }
+
+/* ---- Ввод Q02 ---- */
+SCREENS.Q02 = () => { const L=t(); const ty=S.addType;
+  const cats = ty==='income'?['salary','cashback','interest']:['cafe','food','transport','health','kids','home','phone','household','fun','clothes'];
+  const fastBtn=(k,ic,lbl)=>`<button class="chip" onclick="${S.pro?`go('${k==='voice'?'S38':'S39'}')`:`gate('${k}')`}">${ic} ${lbl}${S.pro?'':' '+pro()}</button>`;
+  let body='';
+  if(ty==='transfer'){ body = `<div class="field"><label>${L.from}</label><select class="input"><option>${accName('halyk')}</option><option>${accName('kaspi')}</option></select></div><div class="field"><label>${L.to}</label><select class="input"><option>${accName('deposit')}</option><option>${accName('kaspi')}</option></select></div><div class="banner info"><span>ℹ️</span><div>${L.transferNote}</div></div>`; }
+  else if(ty==='debt'){ body = `<div class="field"><label>${L.debt}</label><div class="chips"><button class="chip on">${L.gave}</button><button class="chip">${L.iOwe}</button><button class="chip">${L.returned}</button></div></div><div class="field"><label>${L.people}</label><input class="input" value="${L.names.askhat}"></div><div class="field"><label>${L.account}</label><select class="input"><option>${accName('cash')}</option></select></div><div class="banner info"><span>ℹ️</span><div>${L.debtNote}</div></div>`; }
+  else { body = `<div class="field"><label>${L.category}</label><div class="chips">${cats.map(c=>`<button class="chip ${S.addCat===c?'on':''}" onclick="S.addCat='${c}';render()">${CAT_ICON[c]} ${catName(c)}</button>`).join('')}</div></div>
+    <div class="field"><label>${L.account}</label><select class="input">${ACCOUNTS.filter(a=>S.pro||a.id==='kaspi').map(a=>`<option>${accName(a.id)}</option>`).join('')}</select></div>
+    ${S.family&&ty==='expense'?`<div class="field"><label>${L.forWhom}</label><div class="chips">${[['shared',L.shared],['me',L.ppl.me],['spouse',L.ppl.spouse],['daughter',L.ppl.daughter]].map(([k,v])=>`<button class="chip ${S.addWho===k?'on':''}" onclick="S.addWho='${k}';render()">${v}</button>`).join('')}</div></div>`:''}`; }
+  return `${topBar(L.addOp,{right:`<button class="icon" onclick="back()">✕</button>`})}<div class="content">
+  <div class="type-seg">${[['expense',L.expense],['income',L.income],['transfer',L.transfer],['debt',L.debt]].map(([k,v])=>`<button class="${ty===k?'on':''}" onclick="S.addType='${k}';render()">${v}</button>`).join('')}</div>
+  <div class="card center" style="padding:14px"><div class="small muted">${L.amount}</div><input class="num" value="1 200" inputmode="decimal"><div class="small muted">KZT · ${L.today}</div></div>
+  ${ty!=='transfer'&&ty!=='debt'?`<div class="chips" style="margin-bottom:14px">${fastBtn('voice','🎙',L.voice)}${fastBtn('receipt','🧾',L.receipt)}<button class="chip" onclick="${S.pro?"go('S40')":"gate('voice')"}">⚡ ${L.templates}${S.pro?'':' '+pro()}</button></div>`:''}
+  ${body}
+  <div class="field"><label>${L.date}</label><div class="chips"><button class="chip on">${L.today}</button><button class="chip">${L.yesterday}</button><button class="chip">📅</button></div></div>
+  <div class="field"><label>${L.note}</label><input class="input" placeholder="Coffee Boom"></div>
+  <div class="sticky-bottom"><button class="btn primary" onclick="back()">${L.save}</button></div>
+  </div>`; };
+
+/* ---- Голос / Чек / Шаблоны (Pro) ---- */
+SCREENS.S38 = () => { const L=t(); return `${topBar(L.voice)}<div class="content">
+  <div class="card center" style="padding:28px 16px"><div style="width:84px;height:84px;border-radius:50%;background:var(--expense-bg);margin:0 auto 12px;display:grid;place-items:center;font-size:36px">🎙</div><div style="font-size:17px">«${S.lang==='kk'?'Кеше таксиге 1 800 теңге төледім':'Вчера такси 1 800 с Kaspi'}»</div></div>
+  <div class="card"><h3>${L.txDetails} · черновик</h3>
+    <div class="kv"><span class="muted">${L.expense}</span><span class="pill ok">✓</span></div>
+    <div class="kv"><span class="muted">${L.amount}</span><b>1 800 ₸</b></div>
+    <div class="kv"><span class="muted">${L.category}</span><span>🚕 ${L.cats.transport}</span></div>
+    <div class="kv"><span class="muted">${L.date}</span><span>${L.yesterday}</span></div>
+    <div class="kv"><span class="muted">${L.account}</span><span>Kaspi Gold</span></div>
+  </div>
+  <div class="grid2"><button class="btn ghost" onclick="go('Q02')">${L.edit}</button><button class="btn primary" onclick="S.stack=[];go('S10')">${L.save}</button></div>
+  </div>`; };
+SCREENS.S39 = () => { const L=t(); return `${topBar(L.receipt)}<div class="content">
+  <div class="card"><div class="row"><div class="grow"><b>Magnum</b><div class="small muted">21.09.2026 18:42 · QR ОФД ✓</div></div><b>12 340 ₸</b></div></div>
+  <div class="card list" style="padding:4px 16px">
+    ${[['Молоко 2.5% 1л','food',560],['Хлеб','food',250],['Яблоки 1.2 кг','food',1180],['Курица 1.5 кг','food',3900],['Сыр','food',2450],['Порошок Persil','household',4000]].map(([n,c,a])=>`<div class="item"><div class="cat">${CAT_ICON[c]}</div><div class="grow"><div>${n}</div><div class="small muted">${catName(c)}</div></div><span class="amt">${fmt(a)}</span></div>`).join('')}
+  </div>
+  <div class="card"><div class="kv"><span class="muted">${L.cats.food}</span><span>8 340 ₸</span></div><div class="kv"><span class="muted">${L.cats.household}</span><span>4 000 ₸</span></div><div class="kv total"><span>${L.amount}</span><span class="pill ok">12 340 = 12 340 ✓</span></div></div>
+  <button class="btn primary" onclick="S.stack=[];go('S10')">${L.save}</button></div>`; };
+SCREENS.S40 = () => { const L=t(); return `${topBar(L.templates)}<div class="content">
+  <div class="grid2">${[['☕','Coffee Boom',1200,'cafe'],['🚕','Yandex Go',1800,'transport'],['🛒','Magnum',10000,'food'],['📱','Beeline',4000,'phone'],['⛽','Бензин',15000,'transport'],['🍞','Нан',250,'food']].map(([i,n,a,c])=>`<div class="card" style="margin:0" onclick="S.addType='expense';S.addCat='${c}';go('Q02')"><div style="font-size:24px">${i}</div><div style="margin-top:6px">${n}</div><div class="small muted">${fmt(a)}</div></div>`).join('')}</div>
+  <button class="btn ghost" style="margin-top:12px">＋ ${L.templates}</button></div>`; };
+
+/* ---- Бюджет S12 / Лимиты S13 / Метод S14 / Календарь S15 ---- */
+SCREENS.S12 = () => { const L=t();
+  return `${topBar(`${L.budget} · ${L.month}`,{root:true})}<div class="content with-nav">
+  <div class="card"><div class="grid2"><div><div class="small muted">${L.plan}</div><div style="font-size:18px;font-weight:700">450 000 ₸</div></div><div><div class="small muted">${L.fact} · ${L.reportSpend}</div><div class="amt out" style="font-size:18px">211 660 ₸</div></div></div>
+    <div class="kv" style="margin-top:10px;border-top:1px solid var(--line)"><span class="muted">${L.payouts}</span><span class="amt debt">45 000 ₸</span></div>
+    <div class="kv"><span class="muted">${L.savings}</span><span class="amt in">100 000 ₸</span></div>
+    <div class="kv total"><span>${L.free}</span><span>93 340 ₸</span></div></div>
+  <div class="card" onclick="go('S14')"><div class="row"><div class="grow"><h3 style="margin:0">${L.method}</h3><div>${L.m503020}</div></div><span class="muted">›</span></div>
+    <div style="margin-top:10px">${[[L.needs,225000,178000],[L.wants,135000,33660],[L.savings,90000,100000]].map(([n,p,f])=>`<div class="row small" style="margin-top:6px"><div class="grow">${n}</div><span>${fmt(f)} <span class="muted">/ ${fmt(p)}</span></span></div>${bar(f,p)}`).join('')}</div></div>
+  <div class="sect"><h2>${L.limits}</h2><button class="link" onclick="go('S13')">${L.all} ›</button></div>
+  <div class="card">${LIMITS.filter(l=>!l.pro||S.pro).map(l=>`<div style="margin-bottom:10px"><div class="row"><div class="grow">${CAT_ICON[l.cat]} ${catName(l.cat)}</div><span class="small"><b>${fmt(l.spent)}</b> <span class="muted">/ ${fmt(l.limit)}</span></span></div>${bar(l.spent,l.limit)}</div>`).join('')}</div>
+  <div class="sect"><h2>${L.goals}</h2><button class="link" onclick="go('S16')">${L.all} ›</button></div>
+  <div class="card">${GOALS.map(g=>`<div style="margin-bottom:10px" onclick="go('S17')"><div class="row"><div class="grow">${L.goalNames[g.id]}</div><span class="small"><b>${fmt(g.saved)}</b> <span class="muted">/ ${fmt(g.target)}</span></span></div>${bar(g.saved,g.target)}</div>`).join('')}</div>
+  <div class="sect"><h2>${L.debts}</h2><button class="link" onclick="go('S18')">${L.all} ›</button></div>
+  <div class="card" onclick="go('S18')"><div class="row"><div class="grow"><div class="small muted">${L.totalOwe}</div><div class="amt debt" style="font-size:18px">435 000 ₸</div></div><div><div class="small muted">${L.monthlyPay}</div><div style="font-size:18px;font-weight:700">45 000 ₸</div></div></div></div>
+  </div>${nav()}`; };
+SCREENS.S13 = () => { const L=t(); return `${topBar(L.limits)}<div class="content with-nav">
+  ${LIMITS.filter(l=>!l.pro||S.pro).map(l=>`<div class="card"><div class="row"><div class="cat">${CAT_ICON[l.cat]}</div><div class="grow"><div>${catName(l.cat)}</div><div class="small muted">${L.month}</div></div><span class="pill ${l.spent/l.limit>=0.8?'warn':'ok'}">${Math.round(l.spent/l.limit*100)}%</span></div>${bar(l.spent,l.limit)}<div class="row small"><div class="grow"><b>${fmt(l.spent)}</b> <span class="muted">${L.of} ${fmt(l.limit)}</span></div><span class="muted">${L.left}: ${fmt(l.limit-l.spent)} · ≈ ${fmt(Math.round((l.limit-l.spent)/8/100)*100)} ${L.perDay}</span></div></div>`).join('')}
+  ${S.pro?`<button class="btn ghost">＋ ${L.addLimit}</button>`:`<div class="banner info"><span>ℹ️</span><div>${L.limitFree}: 2 / 2</div></div><button class="btn ghost" onclick="gate('limit')">＋ ${L.addLimit} ${pro()}</button>`}
+  </div>${nav()}`; };
+SCREENS.S14 = () => { const L=t(); return `${topBar(L.method)}<div class="content with-nav">
+  ${[['mSimple'],['mLimits'],['m503020'],['mEnv'],['mPayFirst']].map(([k])=>`<div class="radio ${S.obMethod===k?'on':''}" onclick="S.obMethod='${k}';render()"><span class="dot"></span><div><div>${L[k]}</div><div class="small muted">${L[k+'D']}</div></div></div>`).join('')}
+  <div class="card" style="margin-top:12px"><h3>${L.allocation} · ${L.salary} 450 000 ₸</h3>
+    <div class="kv"><span>${L.needs} · 50%</span><span>225 000 ₸</span></div><div class="kv"><span>${L.wants} · 30%</span><span>135 000 ₸</span></div><div class="kv"><span>${L.savings} · 20%</span><span>90 000 ₸</span></div><div class="kv total"><span>${L.unallocated}</span><span class="pill ok">0 ₸</span></div></div>
+  <button class="btn primary" onclick="back()">${L.save}</button></div>${nav()}`; };
+SCREENS.S15 = () => { const L=t(); const days=[]; for(let i=0;i<30;i++) days.push(i+1);
+  return `${topBar(L.calendar)}<div class="content with-nav">
+  <div class="card"><h3>${L.month}</h3><div class="cal">${L.wd.map(w=>`<div class="h">${w}</div>`).join('')}<div></div>${days.map(d=>`<div class="${d===22?'today':''} ${[25,10,15,17].includes(d)?'pay':''} ${d===5?'inc':''}">${d}</div>`).join('')}</div></div>
+  <div class="card list" style="padding:4px 16px">
+    ${[[L.rent,150000,'25 '+L.months[8],'🏠',true],[L.utilities,18000,'10 '+L.months[9],'💡',false],['Halyk · iPhone',20000,'1 '+L.months[9],'📱',false],['Kaspi Red',25000,'5 '+L.months[9],'💳',false],[L.salary,450000,'5 '+L.months[9],'💼',false]].map(([n,a,d,i,r])=>`<div class="item"><div class="cat">${i}</div><div class="grow"><div>${n}</div><div class="small muted">${d}${r?' · '+L.reserve+' ✓':''}</div></div><span class="amt ${n===L.salary?'in':''}">${n===L.salary?'+':''}${fmt(a)}</span></div>`).join('')}
+  </div>
+  <button class="btn ghost">＋ ${L.payment}</button></div>${nav()}`; };
+
+/* ---- Цели ---- */
+SCREENS.S16 = () => { const L=t(); return `${topBar(L.goals)}<div class="content with-nav">
+  ${GOALS.map(g=>`<div class="card" onclick="go('S17')"><div class="row"><div class="grow"><div>${L.goalNames[g.id]}</div><div class="small muted">${L.deadline}: ${g.deadline.slice(8,10)*1} ${L.months[g.deadline.slice(5,7)*1-1]} 2027</div></div><span class="pill ok">${Math.round(g.saved/g.target*100)}%</span></div>${bar(g.saved,g.target)}<div class="row small"><div class="grow"><b>${fmt(g.saved)}</b> <span class="muted">/ ${fmt(g.target)}</span></div><span class="muted">${L.needMonthly}: ${fmt(g.monthly)}</span></div></div>`).join('')}
+  <button class="btn ghost">＋ ${L.target}</button></div>${nav()}`; };
+SCREENS.S17 = () => { const L=t(); const g=GOALS[0]; return `${topBar(L.goalNames.cushion)}<div class="content with-nav">
+  <div class="card center" style="padding:22px"><div class="small muted">${L.progress}</div><div class="big">${g.saved.toLocaleString('ru-RU').replace(/ /g,' ')} <small>/ 600 000 ₸</small></div>${bar(g.saved,g.target)}<div class="small muted">50% · ${L.needMonthly} ${fmt(g.monthly)} · ${L.deadline} 1 ${L.months[5]} 2027</div></div>
+  <div class="card"><h3>${L.reserve}</h3><div class="kv"><span class="muted">${accName('deposit')}</span><span>240 000 ₸</span></div><div class="kv"><span class="muted">${accName('kaspi')}</span><span>60 000 ₸</span></div><div class="small muted" style="margin-top:6px">Резерв — назначение уже существующих денег, не новый актив.</div></div>
+  <div class="grid2"><button class="btn primary">＋ ${L.reserve}</button><button class="btn ghost">− ${L.reserve}</button></div>
+  ${S.pro?`<div class="card" style="margin-top:12px"><h3>Прогноз достижения</h3><div>≈ ${L.months[2]} 2027</div><div class="small muted">по среднему чистому пополнению 42 000 ₸ за 3 месяца</div></div>`:`<div class="card" style="margin-top:12px"><div class="row"><div class="grow small">Прогноз достижения и правила автопополнения</div>${pro()}</div></div>`}
+  </div>${nav()}`; };
+
+/* ---- Долги S18 / Кредит S19 / Личный S20 / Досрочно S21 ---- */
+SCREENS.S18 = () => { const L=t(); return `${topBar(L.debts)}<div class="content with-nav">
+  <div class="grid2" style="margin-bottom:12px"><div class="card" style="margin:0"><div class="small muted">${L.totalOwe}</div><div class="amt debt" style="font-size:20px">435 000 ₸</div><div class="small muted">${L.monthlyPay}: 45 000 ₸</div></div><div class="card" style="margin:0"><div class="small muted">${L.totalOwed}</div><div class="amt in" style="font-size:20px">20 000 ₸</div><div class="small muted">1 ${L.people.toLowerCase()}</div></div></div>
+  <div class="sect"><h2>${L.banks}</h2></div>
+  <div class="card list" style="padding:4px 16px">${DEBTS_BANK.map(d=>`<div class="item" onclick="go('S19')"><div class="cat">${d.kind==='creditCard'?'💳':'📱'}</div><div class="grow"><div>${d.name}</div><div class="small muted">${L[d.kind]} · ${L.nextPay} ${d.due.slice(8,10)*1} ${L.months[d.due.slice(5,7)*1-1]} · ${fmt(d.pay)}</div></div><span class="amt debt">${fmt(d.left)}</span></div>`).join('')}</div>
+  <div class="sect"><h2>${L.people}</h2></div>
+  <div class="card list" style="padding:4px 16px">
+    <div class="item" onclick="go('S20')"><div class="avatar" style="background:var(--debt)">А</div><div class="grow"><div>${L.names.askhat}</div><div class="small muted">${L.oweMe}</div></div><span class="amt in">20 000 ₸</span></div>
+    <div class="item" onclick="go('S20')"><div class="avatar" style="background:var(--expense)">Д</div><div class="grow"><div>${L.names.daniyar}</div><div class="small muted">${L.iOwe}</div></div><span class="amt out">15 000 ₸</span></div>
+  </div>
+  <div class="grid2"><button class="btn ghost" onclick="${S.pro?"go('S22')":"gate('early')"}">${L.strategy}${S.pro?'':' '+pro()}</button><button class="btn ghost" onclick="S.addType='debt';go('Q02')">＋ ${L.debt}</button></div>
+  </div>${nav()}`; };
+SCREENS.S19 = () => { const L=t(); const d=DEBTS_BANK[1]; const rows=[]; for(let i=1;i<=12;i++){ rows.push([i, i<=2?'✓':'', `${i<=3?'0'+(i+8)%12+1:''}`]); }
+  return `${topBar('Halyk · iPhone')}<div class="content with-nav">
+  <div class="card"><div class="small muted">${L.installment} 0-0-12 · ${L.balanceLeft}</div><div class="big" style="color:var(--debt)">200 000 <small>₸</small></div>${bar(40000,240000)}<div class="row small"><div class="grow muted">${L.principal}: 40 000 / 240 000 ₸</div><span class="muted">10 ${L.payments} ${L.left}</span></div></div>
+  <div class="card"><div class="kv"><span class="muted">${L.nextPay}</span><b>1 ${L.months[9]} · 20 000 ₸</b></div><div class="kv"><span class="muted">${L.interest}</span><span>0% · ${L.installment}</span></div><div class="kv"><span class="muted">${L.expense}</span><span class="small muted">240 000 ₸ учтён 20.08.2026</span></div></div>
+  <div class="card"><h3>${L.schedule}</h3><table class="sched"><tr><th>#</th><th>${L.date}</th><th>${L.principal}</th><th>${L.interest}</th><th>${L.balanceLeft}</th></tr>
+    ${Array.from({length:12},(_,i)=>`<tr style="${i<2?'opacity:.55':''}"><td>${i+1} ${i<2?'✓':''}</td><td>1.${String((i+8)%12+1).padStart(2,'0')}</td><td>20 000</td><td>0</td><td>${(240000-20000*(i+1)).toLocaleString('ru-RU').replace(/ /g,' ')}</td></tr>`).join('')}</table></div>
+  <div class="grid2"><button class="btn primary">${L.pay}</button><button class="btn ghost" onclick="${S.pro?"go('S21')":"gate('early')"}">${L.early}${S.pro?'':' '+pro()}</button></div>
+  </div>${nav()}`; };
+SCREENS.S20 = () => { const L=t(); return `${topBar(L.names.askhat)}<div class="content with-nav">
+  <div class="card center" style="padding:22px"><div class="avatar" style="margin:0 auto 8px;width:56px;height:56px;font-size:22px;background:var(--debt)">А</div><div class="small muted">${L.oweMe}</div><div class="big" style="color:var(--debt)">20 000 <small>₸</small></div></div>
+  <div class="card list" style="padding:4px 16px"><div class="item"><div class="cat">🤝</div><div class="grow"><div>${L.gave}</div><div class="small muted">8 ${L.months[8]} · ${accName('cash')}</div></div><span class="amt debt">30 000 ₸</span></div><div class="item"><div class="cat">↩︎</div><div class="grow"><div>${L.returned}</div><div class="small muted">15 ${L.months[8]} · ${accName('cash')}</div></div><span class="amt in">+10 000 ₸</span></div></div>
+  <div class="grid2"><button class="btn primary">＋ ${L.returned}</button><button class="btn ghost">🔔</button></div></div>${nav()}`; };
+SCREENS.S21 = () => { const L=t(); return `${topBar(L.early)}<div class="content with-nav">
+  <div class="card"><div class="small muted">Kaspi Red · ${L.balanceLeft} 220 000 ₸ · 22% годовых · 12 ${L.payments}</div><div class="field" style="margin-top:10px"><label>${L.amount}</label><input class="input" value="100 000 ₸"></div></div>
+  <div class="grid2"><div class="card" style="margin:0"><div class="small muted">Сократить срок</div><div style="font-size:18px;font-weight:700">6 ${L.payments}</div><div class="small muted">${L.payment} 20 600 ₸</div><div class="small" style="color:var(--income);margin-top:6px">Экономия ≈ 14 900 ₸</div></div><div class="card" style="margin:0"><div class="small muted">Уменьшить платёж</div><div style="font-size:18px;font-weight:700">11 240 ₸</div><div class="small muted">12 ${L.payments}</div><div class="small" style="color:var(--income);margin-top:6px">Экономия ≈ 12 300 ₸</div></div></div>
+  <div class="small muted" style="margin:10px 0">Модель равных периодов; график банка приоритетнее. Внесённое тело не считается экономией.</div>
+  <button class="btn primary">${L.pay}</button></div>${nav()}`; };
+SCREENS.S22 = () => { const L=t(); return `${topBar(L.strategy)}<div class="content with-nav">
+  <div class="card"><div class="small muted">Бюджет выплат в месяц</div><input class="input" value="60 000 ₸" style="margin-top:6px"></div>
+  <div class="grid2"><div class="card" style="margin:0;outline:2px solid var(--primary)"><b>Лавина</b><div class="small muted">по ставке ↓</div><div style="margin-top:8px">Kaspi Red → Данияр → iPhone</div><div class="small" style="margin-top:6px">Без долгов: <b>${L.months[5]} 2027</b></div><div class="small" style="color:var(--income)">${L.interest}: 21 400 ₸</div></div><div class="card" style="margin:0"><b>Снежный ком</b><div class="small muted">по остатку ↑</div><div style="margin-top:8px">Данияр → iPhone → Kaspi Red</div><div class="small" style="margin-top:6px">Без долгов: <b>${L.months[6]} 2027</b></div><div class="small" style="color:var(--expense)">${L.interest}: 27 900 ₸</div></div></div>
+  <div class="small muted" style="margin:10px 0">Одинаковый бюджет выплат, минимальные платежи учтены по всем долгам.</div>
+  <button class="btn primary">${L.save}</button></div>${nav()}`; };
+
+/* ---- Аналитика S23 ---- */
+SCREENS.S23 = () => { const L=t(); const cats=[['home',150000],['food',22210],['kids',18000],['fun',7500],['health',4600],['phone',4000],['transport',3650],['cafe',1200]]; const tot=cats.reduce((s,c)=>s+c[1],0);
+  return `${topBar(L.analytics,{right:`<button class="chip">${L.month} ▾</button>`})}<div class="content with-nav">
+  <div class="card"><div class="grid2"><div><div class="small muted">${L.reportIncome}</div><div class="amt in" style="font-size:18px">453 120 ₸</div></div><div><div class="small muted">${L.reportSpend}</div><div class="amt out" style="font-size:18px">${fmt(tot+1800)}</div></div></div><div class="kv" style="margin-top:8px;border-top:1px solid var(--line)"><span class="muted">${L.reportResult}</span><b>+238 160 ₸</b></div><div class="kv"><span class="muted">${L.cashflow}</span><span>+298 120 ₸</span></div><div class="kv"><span class="muted">${L.payouts}</span><span class="amt debt">45 000 ₸</span></div></div>
+  <div class="card"><h3>${L.top}</h3>${cats.map(([c,a])=>`<div class="row small" style="margin-top:6px" onclick="go('S24')"><div class="cat" style="width:28px;height:28px;font-size:14px">${CAT_ICON[c]}</div><div class="grow">${catName(c)}</div><span><b>${fmt(a)}</b> <span class="muted">${Math.round(a/tot*100)}%</span></span></div>${bar(a,tot)}`).join('')}</div>
+  ${S.family?`<div class="card"><h3>${L.family}</h3><div class="kv"><span>${L.shared}</span><span>184 710 ₸</span></div><div class="kv"><span>${L.ppl.daughter}</span><span>18 000 ₸</span></div><div class="kv"><span>${L.ppl.spouse}</span><span>4 600 ₸</span></div><div class="kv"><span>${L.ppl.me}</span><span>3 050 ₸</span></div></div>`:''}
+  <div class="card"><div class="row"><div class="grow"><b>${L.capital}</b><div class="small muted">${L.assets} 1 706 300 − ${L.liabilities} 435 000</div></div><b>1 271 300 ₸</b></div></div>
+  ${S.pro?`<div class="grid2"><button class="btn ghost" onclick="go('S25')">Сравнения</button><button class="btn ghost" onclick="go('S26')">История капитала</button></div>`:`<div class="card"><div class="row"><div class="grow small">${L.f_reports}</div>${pro()}</div></div>`}
+  </div>${nav()}`; };
+SCREENS.S24 = () => { const L=t(); const xs=TX.filter(x=>x.cat==='food'); return `${topBar(L.cats.food)}<div class="content with-nav"><div class="card"><div class="big">22 210 <small>₸</small></div><div class="small muted">${L.month} · 3 операции · ${L.limit} 120 000 ₸</div></div><div class="card list" style="padding:4px 16px">${xs.map(txItem).join('')}</div></div>${nav()}`; };
+SCREENS.S25 = () => { const L=t(); return `${topBar('Сравнения и тенденции')}<div class="content with-nav"><div class="card"><h3>${L.month} vs Август</h3>${[['food',22210,31500],['cafe',1200,9800],['transport',3650,6200],['fun',7500,2000]].map(([c,a,b])=>`<div class="kv"><span>${CAT_ICON[c]} ${catName(c)}</span><span>${fmt(a)} <span class="${a>b?'amt out':'amt in'} small">${a>b?'▲':'▼'} ${Math.abs(Math.round((a-b)/b*100))}%</span></span></div>`).join('')}</div><div class="card"><h3>Аномалии</h3><div class="small">🎬 ${L.cats.fun}: в 3,7 раза выше среднего за 3 мес.</div></div></div>${nav()}`; };
+SCREENS.S26 = () => { const L=t(); return `${topBar(L.capital)}<div class="content with-nav"><div class="card"><div class="big">1 271 300 <small>₸</small></div><div class="small muted">+238 160 ₸ ${L.thisMonth}</div></div><div class="card"><h3>Разложение изменения</h3><div class="kv"><span>${L.reportResult}</span><span class="amt in">+238 160</span></div><div class="kv"><span>Корректировки</span><span>0</span></div><div class="kv"><span>Переоценка валюты</span><span>0</span></div></div></div>${nav()}`; };
+
+/* ---- ИИ S27 / S28 ---- */
+SCREENS.S27 = () => { const L=t(); return `${topBar(L.ai,{right:`<span class="pill pro">12 / 30</span>`})}<div class="content" style="display:flex;flex-direction:column">
+  <div style="flex:1">
+   <div class="card" style="background:var(--surface-2);box-shadow:none;margin-left:40px">${S.lang==='kk'?'Шілдеде 150 мың теңгеге демалысқа бара аламын ба?':'Могу ли я позволить отпуск за 150 000 ₸ в июле?'}</div>
+   <div class="card">${S.lang==='kk'?'Есеп модулі бойынша: шілдеге дейін «Демалыс» мақсатында 400 000 ₸ жиналады (қазір 120 000 + айына 28 000). 150 000 ₸ мақсат резервінен жабылады, күнделікті бюджетке әсер етпейді. Тәуекел: Kaspi Red төлемі 5 шілдеге түседі.':'По расчётному модулю: к июлю в цели «Отпуск» будет 400 000 ₸ (сейчас 120 000 + 28 000 в месяц). 150 000 ₸ покрываются резервом цели, дневной ориентир не меняется. Риск: платёж Kaspi Red приходится на 5 июля.'}<div class="small muted" style="margin-top:8px">${L.goals} › ${L.goalNames.vacation} · ${L.calendar}</div></div>
+  </div>
+  <input class="input" placeholder="${L.ai}…"></div>`; };
+SCREENS.S28 = () => { const L=t(); return `${topBar('Разбор · Август 2026')}<div class="content with-nav"><div class="card"><b>Что изменилось</b><div class="small" style="margin-top:6px">Расходы 198 400 ₸ (−8% к июлю). Доход стабилен. Норма результата 56%.</div></div><div class="card"><b>Причины</b><div class="small" style="margin-top:6px">Кафе −4 200 ₸, транспорт −2 900 ₸. Развлечения +5 500 ₸ (Kinopark ×3).</div></div><div class="card"><b>Предложения</b><div class="small" style="margin-top:6px">1. Лимит «Развлечения» 8 000 ₸. 2. Досрочно закрыть Kaspi Red из свободных 93 000 ₸ — экономия ≈ 14 900 ₸.</div><button class="btn ghost" style="margin-top:10px">Просмотреть изменения</button></div></div>${nav()}`; };
+
+/* ---- Ещё S29 ---- */
+SCREENS.S29 = () => { const L=t(); const items=[['S08','💳',L.accounts],['S23','📊',L.analytics],['S16','🎯',L.goals],['S18','🤝',L.debts],['S15','📅',L.calendar],['S30','👨‍👩‍👧',L.family],['S27','✨',L.ai,true],['S40','⚡',L.templates,true],['S41','📖',L.dict,true],['S33','🏷',L.categories],['S42','📚',L.help],['S31','⚙️',L.settings],['S37','⭐',L.tariff]];
+  return `${topBar(L.more,{root:true})}<div class="content with-nav"><div class="card list menu" style="padding:4px 16px">${items.map(([id,ic,n,p])=>`<div class="item" onclick="${p&&!S.pro?`gate('more')`:`go('${id}')`}"><div class="cat">${ic}</div><div class="grow">${n}</div>${p?pro():''}<span class="muted">›</span></div>`).join('')}</div></div>${nav()}`; };
+
+/* ---- Семья S30 ---- */
+SCREENS.S30 = () => { const L=t(); return `${topBar(L.family)}<div class="content with-nav">
+  <div class="banner info"><span>ℹ️</span><div class="small">Учёт ведёт один владелец. Члены семьи — справочник для метки «Для кого», без отдельных аккаунтов.</div></div>
+  <div class="card list" style="padding:4px 16px">
+   ${[['В',L.ppl.me,L.me,3050,'var(--primary)'],['А',L.ppl.spouse,L.spouse,4600,'var(--accent)'],['А',L.ppl.daughter,L.daughter,18000,'var(--debt)']].map(([i,n,r,a,c])=>`<div class="item"><div class="avatar" style="background:${c}">${i}</div><div class="grow"><div>${n}</div><div class="small muted">${r} · ${L.personalSpend} ${L.thisMonth}</div></div><span class="amt">${fmt(a)}</span></div>`).join('')}
+  </div>
+  <div class="card"><div class="kv"><span>${L.sharedSpend} ${L.thisMonth}</span><b>184 710 ₸</b></div><div class="kv"><span class="muted">${L.cats.home}</span><span>150 000 ₸</span></div><div class="kv"><span class="muted">${L.cats.food}</span><span>22 210 ₸</span></div></div>
+  <button class="btn ghost">＋ ${L.addMember}</button></div>${nav()}`; };
+
+/* ---- Настройки S31 / Pro S37 / прочее ---- */
+SCREENS.S31 = () => { const L=t(); const seg=(id,opts,cur,cb)=>`<div class="type-seg" style="margin:0">${opts.map(([k,v])=>`<button class="${cur===k?'on':''}" onclick="${cb.replace('%',k)}">${v}</button>`).join('')}</div>`;
+  return `${topBar(L.settings)}<div class="content with-nav">
+  <div class="card"><div class="row"><div class="avatar">В</div><div class="grow"><b>${L.ppl.me}</b><div class="small muted">vlad@mail.kz</div></div></div></div>
+  <div class="card"><h3>${L.language}</h3>${seg('l',[['ru','Русский'],['kk','Қазақша']],S.lang,"setLang('%')")}</div>
+  <div class="card"><h3>${L.theme}</h3>${seg('t',[['light',L.light],['dark',L.dark],['system',L.system]],S.theme,"setTheme('%')")}</div>
+  <div class="card"><h3>${L.mode}</h3>${seg('m',[['0',L.personal],['1',L.familyMode]],S.family?'1':'0',"S.family=('%'==='1');syncPanel();render()")}</div>
+  <div class="card" onclick="go('S37')"><div class="row"><div class="grow"><h3 style="margin:0">${L.currentPlan}</h3><div>${S.pro?L.proPlan+' · до 22.09.2027':L.freePlan}</div></div>${S.pro?pro():`<span class="link">${L.buyPro} ›</span>`}</div></div>
+  <div class="card list menu" style="padding:4px 16px">${[['S32','🔐',L.security],['S33','🏷',L.categories],['S34','🔔','Уведомления'],['S35','☁️',L.data],['S36','🗑',L.trash]].map(([id,ic,n])=>`<div class="item" onclick="go('${id}')"><div class="cat">${ic}</div><div class="grow">${n}</div><span class="muted">›</span></div>`).join('')}</div>
+  </div>${nav()}`; };
+SCREENS.S37 = () => { const L=t(); return `${topBar(L.tariff)}<div class="content with-nav">
+  <div class="card" style="background:var(--primary);color:var(--on-primary)"><div class="row"><div class="grow"><div style="font-family:Manrope;font-size:22px;font-weight:800">${L.proTitle}</div><div style="opacity:.85;font-size:13px">${L.proSub}</div></div><div style="font-family:Manrope;font-size:20px;font-weight:800">${L.proPrice}</div></div></div>
+  <div class="card">${['f_accounts','f_limits','f_fast','f_reports','f_ai','f_early'].map(k=>`<div class="kv"><span>${L[k]}</span><span class="pill ok">✓</span></div>`).join('')}</div>
+  <div class="card"><div class="kv"><span>${L.freePlan}</span><span class="small muted">1 ${L.account.toLowerCase()} · 2 ${L.limits.toLowerCase()} · ${L.all.toLowerCase()} ${L.ops.toLowerCase()}</span></div></div>
+  <div class="small muted" style="margin:0 0 12px">${L.proNote}</div>
+  ${S.pro?`<button class="btn ghost">Управление подпиской</button>`:`<button class="btn accent" onclick="S.pro=true;syncPanel();back()">${L.buyPro} · ${L.proPrice}</button><button class="btn text">${L.restore}</button>`}
+  </div>${nav()}`; };
+SCREENS.S32 = () => { const L=t(); return `${topBar(L.security)}<div class="content with-nav"><div class="card">${[['PIN-код','✓'],['Face ID','✓'],['Автоблокировка','1 мин'],['Скрывать суммы в переключателе','✓']].map(([n,v])=>`<div class="kv"><span>${n}</span><span class="muted">${v}</span></div>`).join('')}</div><div class="card"><h3>Сессии</h3><div class="kv"><span>iPhone 15 · это устройство</span><span class="pill ok">активна</span></div><div class="kv"><span>Pixel 8</span><button class="link">Завершить</button></div></div><button class="btn ghost">Сменить пароль</button></div>${nav()}`; };
+SCREENS.S33 = () => { const L=t(); return `${topBar(L.categories)}<div class="content with-nav"><div class="card list" style="padding:4px 16px">${['food','cafe','transport','health','kids','home','phone','household','fun','clothes'].map(c=>`<div class="item"><div class="cat">${CAT_ICON[c]}</div><div class="grow">${catName(c)}</div><span class="muted">›</span></div>`).join('')}</div><div class="grid2"><button class="btn ghost">＋ ${L.category}</button><button class="btn ghost">Объединить</button></div></div>${nav()}`; };
+SCREENS.S34 = () => `${topBar('Уведомления')}<div class="content with-nav"><div class="card">${[['Платежи за 2 дня','✓'],['Лимит 80% / 100%','✓'],['Напоминание о вводе','20:00'],['Тихие часы','22:00–08:00']].map(([n,v])=>`<div class="kv"><span>${n}</span><span class="muted">${v}</span></div>`).join('')}</div></div>${nav()}`;
+SCREENS.S35 = () => { const L=t(); return `${topBar(L.data)}<div class="content with-nav"><div class="card"><div class="kv"><span>Синхронизация</span><span class="pill ok">22.09 14:35</span></div><div class="kv"><span>Ожидают отправки</span><span>0</span></div><div class="kv"><span>Конфликты</span><span>0</span></div></div><div class="grid2"><button class="btn ghost">Экспорт CSV</button><button class="btn ghost">Бэкап</button></div><button class="btn text" style="color:var(--expense);margin-top:20px">Удалить аккаунт</button></div>${nav()}`; };
+SCREENS.S36 = () => { const L=t(); return `${topBar(L.trash)}<div class="content with-nav"><div class="card list" style="padding:4px 16px"><div class="item"><div class="cat">☕</div><div class="grow"><div>${L.cats.cafe} · 950 ₸</div><div class="small muted">удалено 19.09 · 29 дней</div></div><button class="link">Восстановить</button></div></div></div>${nav()}`; };
+SCREENS.S41 = () => { const L=t(); return `${topBar(L.dict)}<div class="content with-nav"><div class="card list" style="padding:4px 16px">${[['нан / хлеб','food'],['сүт / молоко','food'],['такси / Yandex Go','transport'],['Magnum','food'],['Coffee Boom','cafe'],['дәріхана / аптека','health']].map(([w,c])=>`<div class="item"><div class="grow">${w}</div><span class="small">${CAT_ICON[c]} ${catName(c)}</span></div>`).join('')}</div><button class="btn ghost">＋</button></div>${nav()}`; };
+SCREENS.S42 = () => { const L=t(); return `${topBar(L.help)}<div class="content with-nav">${[['Что такое дневной ориентир','fingramota.kz · 22.09.2026'],['Лавина и снежный ком','CFPB · 22.09.2026'],['Подушка безопасности','CFPB · 22.09.2026'],['КДН: что это значит для семьи','АРРФР · 22.09.2026']].map(([n,s])=>`<div class="card"><div>${n}</div><div class="small muted">${s}</div></div>`).join('')}</div>${nav()}`; };
+
+/* =========================== Рендер =========================== */
+function render(){
+  const phone=document.getElementById('phone');
+  phone.className='phone'+(S.theme==='dark'?' dark':'');
+  const fn=SCREENS[S.screen]||SCREENS.S07;
+  let sheet='';
+  if(S.sheet==='guide') sheet=guideSheet();
+  else if(S.sheet==='split') sheet=splitSheet();
+  else if(S.sheet==='filters') sheet=filtersSheet();
+  else if(S.sheet&&S.sheet.startsWith('gate:')) sheet=gateSheet(S.sheet.slice(5));
+  phone.innerHTML = statusBar() + `<div class="screen">${fn()}</div>` + sheet;
+  document.querySelectorAll('#jump button').forEach(b=>b.classList.toggle('on', b.dataset.id===S.screen));
+}
+function setLang(l){ S.lang=l; document.documentElement.lang=l; syncPanel(); render(); }
+function setTheme(th){ S.theme = th==='system' ? (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : th; syncPanel(); render(); }
+function syncPanel(){
+  const set=(id,v)=>document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on', b.dataset.v===String(v)));
+  set('segLang',S.lang); set('segTheme',S.theme); set('segPro',S.pro?1:0); set('segFam',S.family?1:0);
+}
+const JUMP=[['S01','Приветствие'],['S03','Вход + блокировка'],['S06','Анкета (9 шагов)'],['S07','Главная'],['Q02','Добавить операцию'],['S10','Журнал'],['S11','Карточка операции'],['S08','Счета'],['S12','Бюджет'],['S13','Лимиты'],['S14','Метод бюджета'],['S15','Календарь платежей'],['S16','Цели'],['S18','Долги и кредиты'],['S19','Рассрочка'],['S21','Досрочное (Pro)'],['S22','Стратегия (Pro)'],['S23','Аналитика'],['S27','ИИ-консультант (Pro)'],['S28','Месячный разбор (Pro)'],['S38','Голос (Pro)'],['S39','Чек (Pro)'],['S30','Семья'],['S29','Ещё'],['S31','Настройки'],['S37','Pro и тариф']];
+document.getElementById('jump').innerHTML = JUMP.map(([id,n])=>`<button data-id="${id}" onclick="S.stack=[];go('${id}')"><span class="id">${id}</span>${n}</button>`).join('');
+document.getElementById('segLang').onclick=e=>{ if(e.target.dataset.v) setLang(e.target.dataset.v); };
+document.getElementById('segTheme').onclick=e=>{ if(e.target.dataset.v) setTheme(e.target.dataset.v); };
+document.getElementById('segPro').onclick=e=>{ if(e.target.dataset.v){ S.pro=e.target.dataset.v==='1'; syncPanel(); render(); } };
+document.getElementById('segFam').onclick=e=>{ if(e.target.dataset.v){ S.family=e.target.dataset.v==='1'; syncPanel(); render(); } };
+syncPanel(); render();
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+import 'package:flutter/material.dart';
+
+import 'l10n/app_localizations.dart';
+import 'state/api_client.dart';
+import 'state/app_scope.dart';
+import 'state/app_state.dart';
+import 'state/settings.dart';
+import 'theme/app_theme.dart';
+import 'ui/auth/login_screen.dart';
+import 'ui/onboarding/onboarding_screen.dart';
+import 'ui/shell.dart';
+import 'ui/widgets/common.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final settings = await Settings.load();
+  runApp(FamCoinApp(settings: settings));
+}
+
+class FamCoinApp extends StatefulWidget {
+  const FamCoinApp({super.key, required this.settings});
+  final Settings settings;
+
+  @override
+  State<FamCoinApp> createState() => _FamCoinAppState();
+}
+
+class _FamCoinAppState extends State<FamCoinApp> {
+  AppState? _state;
+
+  Settings get settings => widget.settings;
+
+  @override
+  void initState() {
+    super.initState();
+    settings.addListener(_syncSession);
+    _syncSession();
+  }
+
+  @override
+  void dispose() {
+    settings.removeListener(_syncSession);
+    _state?.dispose();
+    super.dispose();
+  }
+
+  /// Данные владельца создаются при входе и сбрасываются при выходе.
+  void _syncSession() {
+    final token = settings.token;
+    if (token == null) {
+      if (_state != null) {
+        _state!.dispose();
+        setState(() => _state = null);
+      }
+      return;
+    }
+    if (_state?.token == token) return;
+    _state?.dispose();
+    final state = AppState(api: settings.api, token: token);
+    setState(() => _state = state);
+    state.load().then((_) {
+      final e = state.loadError;
+      if (e is ApiException && e.code == 'unauthorized') settings.dropSession();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: settings,
+      builder: (context, _) {
+        final season = resolveSeason(settings.season, DateTime.now());
+        return AppScope(
+          settings: settings,
+          stateOrNull: _state,
+          child: MaterialApp(
+            title: 'FamCoin',
+            debugShowCheckedModeBanner: false,
+            locale: settings.locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            theme: buildTheme(Brightness.light, season: season),
+            darkTheme: buildTheme(Brightness.dark, season: season),
+            themeMode: settings.themeMode,
+            navigatorObservers: [routeObserver],
+            home: _state == null ? const LoginScreen() : _Home(state: _state!),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _Home extends StatelessWidget {
+  const _Home({required this.state});
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: state,
+      builder: (context, _) {
+        final l = context.l10n;
+        if (!state.loaded) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        if (state.loadError != null) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_off_outlined, size: 40),
+                    const SizedBox(height: 12),
+                    Text(l.loadFailed, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton(onPressed: state.load, child: Text(l.retry)),
+                    TextButton(
+                      onPressed: () => AppScope.of(context).settings.signOut(),
+                      child: Text(l.signOut),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return state.onboarded ? const Shell() : const OnboardingScreen();
+      },
+    );
+  }
+}

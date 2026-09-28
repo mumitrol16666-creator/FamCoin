@@ -1,0 +1,37 @@
+# iOS-сборка в облаке (D52): у владельца нет Xcode, поэтому .ipa собирает
+# macOS-машина GitHub. Подпись не делается — файл ставится на iPhone
+# через Sideloadly с Apple ID владельца (бесплатно, 7 дней) или позже
+# подписывается аккаунтом Apple Developer.
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths: ['app/**', 'packages/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Зависимости
+        run: cd app && flutter pub get
+      - name: Сборка без подписи
+        run: cd app && flutter build ios --release --no-codesign --dart-define=API_URL=https://coin.edudev.kz/api
+      - name: Упаковка .ipa
+        run: |
+          cd app/build/ios/iphoneos
+          mkdir Payload && cp -R Runner.app Payload/
+          zip -qr FamCoin.ipa Payload
+          ls -la FamCoin.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FamCoin-ios
+          path: app/build/ios/iphoneos/FamCoin.ipa
+          retention-days: 14

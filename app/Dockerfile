@@ -1,0 +1,32 @@
+# Веб-сборка приложения и раздача статики nginx.
+# Контекст сборки — корень репозитория: приложению нужен пакет famcoin_core.
+FROM ghcr.io/cirruslabs/flutter:stable AS build
+WORKDIR /src
+
+# Зависимости кешируются отдельно от кода: правка экранов не тянет pub get.
+COPY packages/famcoin_core/pubspec.yaml packages/famcoin_core/
+COPY app/pubspec.* app/
+RUN cd app && flutter pub get
+
+COPY packages/famcoin_core packages/famcoin_core
+COPY app app
+
+# Адрес API подставляется на сборке: браузер обращается к нему напрямую.
+ARG API_URL=http://localhost:8080
+# Без service worker: обновления видны сразу после перезагрузки страницы,
+# а не после закрытия всех вкладок (кеш отдаёт nginx через ETag).
+# --wasm: движок skwasm (WebAssembly) там, где браузер умеет (Safari 26,
+# Chrome), иначе загрузчик сам берёт main.dart.js с CanvasKit.
+RUN cd app && flutter build web --release --wasm --pwa-strategy=none --dart-define=API_URL=$API_URL
+# Версия в адресе загрузчика и main.dart.js/wasm: имена без хеша, и Safari
+# иначе держит старую копию в HTTP-кеше до истечения прежнего срока.
+RUN cd app/build/web && V=$(date +%s) \
+  && sed -i "s#flutter_bootstrap.js#flutter_bootstrap.js?v=$V#" index.html \
+  && sed -i "s#\"mainJsPath\":\"main.dart.js\"#\"mainJsPath\":\"main.dart.js?v=$V\"#" flutter_bootstrap.js \
+  && sed -i "s#\"mainWasmPath\":\"main.dart.wasm\"#\"mainWasmPath\":\"main.dart.wasm?v=$V\"#" flutter_bootstrap.js \
+  && grep -q "main.dart.js?v=$V" flutter_bootstrap.js && grep -q "main.dart.wasm?v=$V" flutter_bootstrap.js
+
+FROM nginx:1.27-alpine
+COPY app/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /src/app/build/web /usr/share/nginx/html
+EXPOSE 80

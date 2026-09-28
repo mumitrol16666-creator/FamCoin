@@ -1,0 +1,11 @@
+name: famcoin_core
+description: Финансовое ядро FamCoin — журнал двойной записи, события учёта и расчётные формулы. Чистый Dart, без Flutter.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.0

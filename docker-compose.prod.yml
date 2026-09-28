@@ -1,0 +1,55 @@
+# Продакшен-настройки поверх docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Секреты берутся из файла .env рядом (не хранится в git):
+#   POSTGRES_PASSWORD=...   PUBLIC_URL=https://coin.edudev.kz
+#   ADMIN_PASSWORD=...      (вход в админку /api/admin/)
+#   TELEGRAM_BOT_TOKEN=...  TELEGRAM_ADMIN_CHAT=...   (необязательно: копии и уведомления в Telegram)
+# Наружу смотрит только caddy (80/443): HTTPS, приложение, API по /api,
+# установочные файлы по /download.
+
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+    ports: !override []
+    restart: unless-stopped
+
+  api:
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CORS_ORIGIN: ${PUBLIC_URL:?задайте PUBLIC_URL в .env}
+      # Переключатель тарифа оставлен для проверки; выключить перед выпуском.
+      ALLOW_DEV_PLAN: ${ALLOW_DEV_PLAN:-1}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    ports: !override []
+    restart: unless-stopped
+
+  web:
+    build:
+      args:
+        API_URL: ${PUBLIC_URL}/api
+    ports: !override []
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - web
+    environment:
+      # Домен без схемы: https://coin.edudev.kz → coin.edudev.kz
+      DOMAIN: ${DOMAIN:-coin.edudev.kz}
+      SERVER_IP: ${SERVER_IP:-95.216.145.108}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./dist:/srv/dist:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
