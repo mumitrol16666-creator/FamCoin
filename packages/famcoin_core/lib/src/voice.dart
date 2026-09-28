@@ -117,6 +117,9 @@ const _thousandWords = ['тысяч', 'тысячи', 'тысяча', 'тыс', 
 const _millionWords = ['миллион', 'миллиона', 'миллионов', 'млн'];
 const _halfWords = ['полторы', 'полтора', 'бір жарым'];
 
+/// «Тысяча» в любой форме: тысячи, тысячу, тыщи, тыщу, тыс, к, мың.
+bool _isThousand(String w) => _thousandWords.contains(w) || w.startsWith('тысяч') || w.startsWith('тыщ');
+
 // ------------------------------------------------------------- разбор
 
 /// Граница слова для кириллицы: `\b` в Dart работает только с латиницей.
@@ -135,7 +138,7 @@ String _normalize(String s) => s
 (int?, String) _extractAmount(String text) {
   var t = ' $text ';
   // 1. Цифры с пробелами-разделителями: «1 200», «450 000», «1200».
-  final digitRe = RegExp(r'(?<!\d)(\d{1,3}(?: \d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(тысяч[аи]?|тыс|тыщ|к|k|мың|млн|миллион\w*)?(?=\s|$)');
+  final digitRe = RegExp(r'(?<!\d)(\d{1,3}(?: \d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(тысяч[а-яё]*|тыс|тыщ[а-яё]*|к|k|мың|млн|миллион[а-яё]*)?(?=\s|$)');
   final m = digitRe.firstMatch(t);
   if (m != null) {
     var units = double.parse(m.group(1)!.replaceAll(' ', '') + (m.group(2) != null ? '.${m.group(2)}' : ''));
@@ -167,9 +170,12 @@ String _normalize(String s) => s
       current += _numberWords[w]!;
       found = true;
       used.add(i);
-    } else if (_thousandWords.contains(w) && found) {
+    } else if (_isThousand(w) && (found || w.startsWith('тыс') || w.startsWith('тыщ'))) {
+      // «тысячу» без числа перед ним — одна тысяча; короткие «к»/«k» —
+      // только после числа, иначе «к обеду» стало бы суммой.
       total += (current == 0 ? 1 : current) * 1000;
       current = 0;
+      found = true;
       used.add(i);
     } else if (_millionWords.any((mw) => w.startsWith(mw)) && found) {
       total += (current == 0 ? 1 : current) * 1000000;
