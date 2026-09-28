@@ -119,6 +119,32 @@ void main() {
     expect(f.ledger.balance('cash'), kzt(100000));
   });
 
+  test('возврат уменьшает траты дня покупки, а не дня возврата; покупку с возвратом нельзя удалить', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await s.addExpense(amount: kzt(1590), category: 'cafe', account: 'cash', date: s.today);
+    expect(s.spentToday(), kzt(1590));
+    final coffee = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    await s.refund(coffee, category: 'cafe', amount: kzt(1590), account: 'cash');
+    expect(s.spentToday(), 0, reason: 'возврат сегодняшней покупки снимает её с дневного лимита');
+    expect(s.ledger.balance('cash'), kzt(100000));
+
+    // «Отменить» после возврата — отказ, иначе деньги вернулись бы дважды.
+    await expectLater(s.deleteTransaction(coffee.id), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'hasRefunds')));
+    expect(s.ledger.balance('cash'), kzt(100000));
+
+    // Вчерашняя покупка, возврат сегодня: сегодняшние траты не меняются, вчерашние уменьшаются.
+    final yesterday = s.today.subtract(const Duration(days: 1));
+    await s.addExpense(amount: kzt(940), category: 'transport', account: 'cash', date: yesterday);
+    await s.addExpense(amount: kzt(500), category: 'food', account: 'cash', date: s.today);
+    final taxi = s.userTransactions.firstWhere((t) => t.date == yesterday);
+    expect(s.dailyExpense(s.monthStart)[yesterday.day - 1], kzt(940));
+    await s.refund(taxi, category: 'transport', amount: kzt(940), account: 'cash');
+    expect(s.spentToday(), kzt(500));
+    expect(s.dailyExpense(s.monthStart)[yesterday.day - 1], 0);
+  });
+
   test('F03: удаление оплаты снова открывает срок планового платежа', () async {
     final f = FakeServer();
     await f.init();

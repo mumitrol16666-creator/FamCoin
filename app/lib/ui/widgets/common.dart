@@ -129,6 +129,7 @@ String? ledgerErrorText(AppLocalizations l, String? code) => switch (code) {
       'zeroRevaluation' => l.leZeroRevaluation,
       'restoreNotReversed' => l.leRestoreNotReversed,
       'alreadyRestored' => l.leAlreadyRestored,
+      'hasRefunds' => l.leHasRefunds,
       _ => null,
     };
 

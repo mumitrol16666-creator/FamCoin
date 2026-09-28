@@ -307,19 +307,40 @@ class AppState extends ChangeNotifier {
     return sum;
   }
 
-  /// Сегодняшние повседневные траты из дневного бюджета.
+  /// День, к которому относится трата. Возврат уменьшает траты того дня,
+  /// когда была покупка, а не дня возврата: вернули вчерашний кофе —
+  /// вчерашние расходы уменьшились, сегодняшний лимит не тронут.
+  DateTime _spendDay(Transaction t) {
+    if (t.type == EventType.refund) {
+      final of = t.meta['refundOf'];
+      if (of is String) {
+        final purchase = ledger.currentVersion(of) ?? ledger.byId(of);
+        if (purchase != null) return purchase.date;
+      }
+    }
+    return t.date;
+  }
+
+  /// Покупка — оплата планового платежа (или возврат по ней): в дневной
+  /// бюджет не входит, обязательство уже учтено отдельно (раздел 9.3, T33).
+  bool _isPlannedSpend(Transaction t) {
+    if (t.meta['planned'] != null) return true;
+    final of = t.meta['refundOf'];
+    return t.type == EventType.refund && of is String && (ledger.currentVersion(of) ?? ledger.byId(of))?.meta['planned'] != null;
+  }
+
+  /// Сегодняшние повседневные траты из дневного бюджета: покупки минус
+  /// возвраты по сегодняшним покупкам.
   int spentToday() {
     var sum = 0;
     for (final tx in ledger.transactions) {
-      if (tx.date != today || tx.type != EventType.expense || ledger.isReversed(tx.id)) continue;
-      // Оплата планового платежа уже учтена как обязательство C0 и не
-      // тратится из дневного бюджета второй раз (раздел 9.3, T33).
-      if (tx.meta['planned'] != null) continue;
+      if ((tx.type != EventType.expense && tx.type != EventType.refund) || ledger.isReversed(tx.id)) continue;
+      if (_spendDay(tx) != today || _isPlannedSpend(tx)) continue;
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind == LedgerKind.expense) sum += p.amount;
       }
     }
-    return sum;
+    return sum < 0 ? 0 : sum;
   }
 
   static DateTime _onDay(int year, int month, int day) {
@@ -441,9 +462,11 @@ class AppState extends ChangeNotifier {
     final out = List<int>.filled(days, 0);
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
     for (final tx in ledger.transactions) {
-      if (tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
+      if (ledger.isReversed(tx.id) || tx.type == EventType.reversal) continue;
+      final day = _spendDay(tx); // возврат — к дню покупки
+      if (day.isBefore(monthStart) || !day.isBefore(end)) continue;
       for (final p in tx.postings) {
-        if (ledger.account(p.accountId).kind == LedgerKind.expense) out[tx.date.day - 1] += p.amount;
+        if (ledger.account(p.accountId).kind == LedgerKind.expense) out[day.day - 1] += p.amount;
       }
     }
     return out;
@@ -576,6 +599,11 @@ class AppState extends ChangeNotifier {
   Future<void> deleteTransaction(String txId, {String? commandId}) {
     final reverse = {'type': 'reverse', 'txId': txId, 'id': newId()};
     final tx = ledger.byId(txId);
+    // Покупку с действующим возвратом удалять нельзя: деньги вернулись бы
+    // дважды. Сначала удаляется возврат.
+    if (tx != null && tx.type == EventType.expense && tx.postings.any((p) => p.accountId.startsWith('expense:') && ledger.refundedFor(txId, p.accountId) > 0)) {
+      return Future.error(LedgerException('Сначала удалите возврат по этой покупке', code: 'hasRefunds'));
+    }
     final plannedId = tx?.meta['planned'];
     if (tx != null && plannedId is String) {
       final p = planned.where((p) => p.id == plannedId).firstOrNull;

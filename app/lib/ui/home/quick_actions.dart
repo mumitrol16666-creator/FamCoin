@@ -91,9 +91,21 @@ class QuickActionsRow extends StatelessWidget {
     if (!ok) return;
     // Свежая запись — первая в журнале; «Отменить» проводит отмену, история остаётся.
     final tx = state.userTransactions.firstOrNull;
+    // Плашка живёт несколько секунд и не остаётся навсегда даже при
+    // включённых средствах доступности; «Отменить» срабатывает один раз.
     messenger.showSnackBar(SnackBar(
       content: Text('${q.name} · ${formatMoney(q.amount)}'),
-      action: tx == null ? null : SnackBarAction(label: l.undo, onPressed: () => state.deleteTransaction(tx.id)),
+      duration: const Duration(seconds: 6),
+      persist: false,
+      action: tx == null
+          ? null
+          : SnackBarAction(
+              label: l.undo,
+              onPressed: () {
+                messenger.hideCurrentSnackBar();
+                runAction(context, () => state.deleteTransaction(tx.id));
+              },
+            ),
     ));
   }
 }

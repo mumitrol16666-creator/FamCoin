@@ -127,8 +127,9 @@ void main() {
 
     final days = state.dailyExpense(state.monthStart);
     expect(days.length, 30);
-    expect(days[20], kzt(12340));
-    expect(days[21], -kzt(1500));
+    // Возврат уменьшает расходы дня покупки (21-го), день возврата не трогает.
+    expect(days[20], kzt(12340 - 1500));
+    expect(days[21], 0);
     expect(state.categoryTransactions('household', state.monthStart).length, 2);
     expect(state.expenseByWho(state.monthStart)['shared'], kzt(12340));
   });

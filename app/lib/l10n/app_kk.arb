@@ -674,5 +674,6 @@
   "leRestoreNotReversed": "Тек жойылған операцияны қалпына келтіруге болады",
   "leAlreadyRestored": "Операция бұрын қалпына келтірілген",
   "proPriceYear": "{amount} / жыл",
-  "proSubMonthly": "жылдық төлемде айына ≈ {amount}"
+  "proSubMonthly": "жылдық төлемде айына ≈ {amount}",
+  "leHasRefunds": "Алдымен осы сатып алу бойынша қайтарымды жойыңыз"
 }
