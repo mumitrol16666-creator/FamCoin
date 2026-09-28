@@ -25,8 +25,13 @@ jobs:
       - name: Сборка без подписи
         run: cd app && flutter build ios --release --no-codesign --dart-define=API_URL=https://coin.edudev.kz/api
       - name: Упаковка .ipa
+        # Ad-hoc подпись обязательна: совсем неподписанный бинарник Sideloadly
+        # отвергает как «Invalid file», а переподписать подписанное умеет.
         run: |
           cd app/build/ios/iphoneos
+          chmod -R u+rwX,go+rX Runner.app
+          codesign --force --deep --sign - Runner.app
+          codesign --verify --deep --strict Runner.app
           mkdir Payload && cp -R Runner.app Payload/
           zip -qr FamCoin.ipa Payload
           ls -la FamCoin.ipa
