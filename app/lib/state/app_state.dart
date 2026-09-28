@@ -310,13 +310,12 @@ class AppState extends ChangeNotifier {
   /// День, к которому относится трата. Возврат уменьшает траты того дня,
   /// когда была покупка, а не дня возврата: вернули вчерашний кофе —
   /// вчерашние расходы уменьшились, сегодняшний лимит не тронут.
-  DateTime _spendDay(Transaction t) {
+  /// `null` — возврат по удалённой покупке: в дневные траты не входит
+  /// (деньги на счёте он всё равно учитывает).
+  DateTime? _spendDay(Transaction t) {
     if (t.type == EventType.refund) {
       final of = t.meta['refundOf'];
-      if (of is String) {
-        final purchase = ledger.currentVersion(of) ?? ledger.byId(of);
-        if (purchase != null) return purchase.date;
-      }
+      if (of is String) return ledger.currentVersion(of)?.date;
     }
     return t.date;
   }
@@ -336,6 +335,7 @@ class AppState extends ChangeNotifier {
     for (final tx in ledger.transactions) {
       if ((tx.type != EventType.expense && tx.type != EventType.refund) || ledger.isReversed(tx.id)) continue;
       if (_spendDay(tx) != today || _isPlannedSpend(tx)) continue;
+      // (возврат по удалённой покупке даёт null и сюда не попадает)
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind == LedgerKind.expense) sum += p.amount;
       }
@@ -464,7 +464,7 @@ class AppState extends ChangeNotifier {
     for (final tx in ledger.transactions) {
       if (ledger.isReversed(tx.id) || tx.type == EventType.reversal) continue;
       final day = _spendDay(tx); // возврат — к дню покупки
-      if (day.isBefore(monthStart) || !day.isBefore(end)) continue;
+      if (day == null || day.isBefore(monthStart) || !day.isBefore(end)) continue;
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind == LedgerKind.expense) out[day.day - 1] += p.amount;
       }

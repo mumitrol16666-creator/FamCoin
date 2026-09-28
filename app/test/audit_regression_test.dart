@@ -143,6 +143,13 @@ void main() {
     await s.refund(taxi, category: 'transport', amount: kzt(940), account: 'cash');
     expect(s.spentToday(), kzt(500));
     expect(s.dailyExpense(s.monthStart)[yesterday.day - 1], 0);
+
+    // Возврат по удалённой покупке (старые данные) не вычитается из трат дня.
+    await s.addExpense(amount: kzt(1000), category: 'cafe', account: 'cash', date: s.today);
+    final latte = s.userTransactions.firstWhere((t) => t.type == EventType.expense && t.amountOn('expense:cafe') == kzt(1000));
+    await s.refund(latte, category: 'cafe', amount: kzt(1000), account: 'cash');
+    await s.send({'type': 'reverse', 'txId': latte.id, 'id': 'latte-rev'}); // мимо защиты, как в старых данных
+    expect(s.spentToday(), kzt(500));
   });
 
   test('F03: удаление оплаты снова открывает срок планового платежа', () async {
