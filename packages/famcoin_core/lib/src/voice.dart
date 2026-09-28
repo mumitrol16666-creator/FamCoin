@@ -137,6 +137,22 @@ String _normalize(String s) => s
 /// Извлекает сумму из фразы; возвращает тиыны и текст без суммы.
 (int?, String) _extractAmount(String text) {
   var t = ' $text ';
+  // 0. Смешанная форма «тыща 590», «две тыщи 300»: слово-тысяча и цифры
+  // сотен — склеиваем в одно число, дальше его разберёт цифровая ветка.
+  final mixed = RegExp(r'(?:([а-яё]+)\s+)?(тысяч[а-яё]*|тыщ[а-яё]*)\s+(\d{1,3})(?![\s\d]*\d)');
+  final mm = mixed.firstMatch(t);
+  if (mm != null) {
+    final prefix = mm.group(1);
+    final thousands = prefix == null
+        ? 1.0
+        : _halfWords.contains(prefix)
+            ? 1.5
+            : _numberWords[prefix]?.toDouble();
+    // Перед «тыща» не число («кофе тыща 590») — слово остаётся в тексте.
+    final start = thousands == null ? mm.start + prefix!.length + 1 : mm.start;
+    final value = ((thousands ?? 1.0) * 1000 + int.parse(mm.group(3)!)).round();
+    t = t.replaceRange(start, mm.end, ' $value ');
+  }
   // 1. Цифры с пробелами-разделителями: «1 200», «450 000», «1200».
   final digitRe = RegExp(r'(?<!\d)(\d{1,3}(?: \d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(тысяч[а-яё]*|тыс|тыщ[а-яё]*|к|k|мың|млн|миллион[а-яё]*)?(?=\s|$)');
   final m = digitRe.firstMatch(t);

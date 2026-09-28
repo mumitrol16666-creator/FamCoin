@@ -71,6 +71,11 @@ void main() {
     expect(p('продукты тысячу').amount, kzt(1000));
     expect(p('такси 1,5 тыщи').amount, kzt(1500));
     expect(p('такси 3 тысячи').amount, kzt(3000));
+    // Слово-тысяча плюс цифры: «тыща 590» = 1 590.
+    expect(p('кофе тыща 590').amount, kzt(1590));
+    expect(p('кофе тыща 590').category, 'cafe');
+    expect(p('такси две тыщи 300').amount, kzt(2300));
+    expect(p('обед полторы тыщи 200').amount, kzt(1700));
     expect(p('продукты две тысячи триста').amount, kzt(2300));
   });
 
