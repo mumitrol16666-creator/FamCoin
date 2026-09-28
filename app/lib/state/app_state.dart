@@ -32,7 +32,15 @@ class AppState extends ChangeNotifier {
   // Анкета «О вас» (D50): имя, фамилия, дата рождения — в профиле.
   String get firstName => profile['firstName'] as String? ?? '';
   String get lastName => profile['lastName'] as String? ?? '';
-  DateTime? get birthDate => profile['birthDate'] == null ? null : dateFromJson(profile['birthDate']);
+  /// Дата рождения — не дата операции: правило «не раньше 2000 года» из
+  /// ядра к ней не относится, иначе экран настроек падал у всех, кто
+  /// родился раньше.
+  DateTime? get birthDate {
+    final v = profile['birthDate'];
+    if (v is! String) return null;
+    final d = DateTime.tryParse(v);
+    return d == null ? null : DateTime(d.year, d.month, d.day);
+  }
 
   Future<void> setAbout({required String firstName, required String lastName, DateTime? birthDate}) => send({
         'type': 'updateProfile',

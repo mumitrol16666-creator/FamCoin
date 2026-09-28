@@ -12,6 +12,7 @@ import 'package:famcoin/state/settings.dart';
 import 'package:famcoin/theme/app_theme.dart';
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
 import 'package:famcoin/ui/more/more_screen.dart';
+import 'package:famcoin/ui/more/settings_screen.dart';
 import 'package:famcoin/ui/ops/add_transaction_sheet.dart';
 import 'package:famcoin/ui/shell.dart';
 import 'package:famcoin_core/famcoin_core.dart';
@@ -128,6 +129,16 @@ void main() {
     expect(find.text('Записать операцию'), findsNothing);
     expect(f.state.ledger.balance('cash'), kzt(97500));
     expect(f.state.userTransactions.where((t) => t.type == EventType.expense).length, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('настройки открываются с датой рождения раньше 2000 года', (tester) async {
+    final f = await pumpApp(tester, home: const SettingsScreen(), size: const Size(390, 844));
+    await f.state.setAbout(firstName: 'Владислав', lastName: 'Сидоров', birthDate: DateTime(1999, 3, 24));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Владислав Сидоров'), findsOneWidget);
+    expect(find.textContaining('1999'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
