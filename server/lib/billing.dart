@@ -30,10 +30,11 @@ class BillingService {
   final Telegram telegram;
   final NotificationService notifications;
 
-  /// Цена в звёздах и срок в днях. Ориентир в тенге — только подпись.
+  /// Цена в звёздах и срок в днях. Ориентир в тенге — только подпись:
+  /// 950 ⭐ ≈ 10 000 ₸, для другой цены (например, тестовой) — пропорционально.
   final int proStars;
   final int proDays;
-  static const priceTenge = 10000;
+  int get priceTenge => (proStars * 10000 / 950).round();
   static const remindDays = 14;
 
   Timer? _timer;

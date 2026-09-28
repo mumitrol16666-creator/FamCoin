@@ -565,7 +565,7 @@
   "proRenew": "Тағы бір жылға ұзарту",
   "proUntilLabel": "Pro {date} дейін",
   "proForever": "Pro мерзімсіз",
-  "proStarsPrice": "{stars} ⭐ · жылына ≈ {tenge} ₸",
+  "proStarsPrice": "{stars} ⭐ · жылына ≈ {tenge}",
   "proHow": "Telegram жұлдыздарымен төлеу: «Төлеу» түймесі бар бот ашылады. Бір жылға бір реттік төлем, автоұзартусыз және қолданбада карта енгізусіз.",
   "proWaitingTitle": "Төлемді күтеміз",
   "proWaiting": "Telegram-ды ашып, «Төлеу» түймесін басыңыз. Төлем өткен бойда Pro өзі қосылады.",
@@ -672,5 +672,7 @@
   "leNoPaymentAccount": "Төлем шоты көрсетілмеген",
   "leZeroRevaluation": "Нөлдік қайта бағалау",
   "leRestoreNotReversed": "Тек жойылған операцияны қалпына келтіруге болады",
-  "leAlreadyRestored": "Операция бұрын қалпына келтірілген"
+  "leAlreadyRestored": "Операция бұрын қалпына келтірілген",
+  "proPriceYear": "{amount} / жыл",
+  "proSubMonthly": "жылдық төлемде айына ≈ {amount}"
 }

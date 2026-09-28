@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:famcoin_core/famcoin_core.dart' show formatMoney;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -163,6 +164,8 @@ class _TariffScreenState extends State<TariffScreen> {
     ];
 
     final stars = _billing?['stars'] as int?;
+    // Ориентир в тенге приходит с сервера вместе с ценой в звёздах.
+    final priceTenge = _billing?['priceTenge'] as int?;
     final available = _billing == null ? true : _billing!['available'] == true;
     final payments = (_billing?['payments'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
 
@@ -186,10 +189,10 @@ class _TariffScreenState extends State<TariffScreen> {
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text('FamCoin Pro', style: Theme.of(context).textTheme.headlineSmall!.copyWith(color: context.scheme.onPrimary)),
-                        Text(l.proSub, style: const TextStyle(fontSize: 13)),
+                        Text(priceTenge == null ? l.proSub : l.proSubMonthly(formatMoney((priceTenge / 12).round() * 100)), style: const TextStyle(fontSize: 13)),
                       ]),
                     ),
-                    Text(l.proPrice, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    Text(priceTenge == null ? l.proPrice : l.proPriceYear(formatMoney(priceTenge * 100)), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                   ]),
                 ),
               ),
@@ -224,7 +227,7 @@ class _TariffScreenState extends State<TariffScreen> {
                       Text(l.proUnavailable, style: TextStyle(fontSize: 12, color: fam.text2))
                     else ...[
                       if (stars != null)
-                        Text(l.proStarsPrice(stars, '10 000'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.scheme.primary)),
+                        Text(l.proStarsPrice(stars, formatMoney((priceTenge ?? 10000) * 100)), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.scheme.primary)),
                       const SizedBox(height: 4),
                       Text(l.proHow, style: TextStyle(fontSize: 12, color: fam.text2)),
                     ],

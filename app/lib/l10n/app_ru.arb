@@ -572,7 +572,7 @@
     }
   },
   "proForever": "Pro без ограничения срока",
-  "proStarsPrice": "{stars} ⭐ · ≈ {tenge} ₸ за год",
+  "proStarsPrice": "{stars} ⭐ · ≈ {tenge} за год",
   "@proStarsPrice": {
     "placeholders": {
       "stars": {
@@ -699,5 +699,21 @@
   "leNoPaymentAccount": "Не указан счёт оплаты",
   "leZeroRevaluation": "Нулевая переоценка",
   "leRestoreNotReversed": "Восстановить можно только удалённую операцию",
-  "leAlreadyRestored": "Операция уже восстановлена"
+  "leAlreadyRestored": "Операция уже восстановлена",
+  "proPriceYear": "{amount} / год",
+  "@proPriceYear": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "proSubMonthly": "≈ {amount} в месяц при оплате за год",
+  "@proSubMonthly": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  }
 }
