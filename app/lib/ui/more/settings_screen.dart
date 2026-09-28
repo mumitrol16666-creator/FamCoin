@@ -48,16 +48,18 @@ class SettingsScreen extends StatelessWidget {
                   const Icon(Icons.person_outline),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(state.displayName),
-                      Text(
-                        [
-                          if (state.birthDate != null) DateFormat.yMMMMd(Localizations.localeOf(context).toString()).format(state.birthDate!),
-                          if (!state.email.endsWith('@telegram.local')) state.email,
-                        ].join(' · '),
-                        style: TextStyle(fontSize: 12, color: fam.text2),
-                      ),
-                    ]),
+                    child: Builder(builder: (context) {
+                      final subtitle = [
+                        if (state.birthDate != null) DateFormat.yMMMMd(Localizations.localeOf(context).toString()).format(state.birthDate!),
+                        if (!state.email.endsWith('@telegram.local')) state.email,
+                      ].join(' · ');
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(state.displayName),
+                        // Пустая строка тоже занимает высоту и сдвигает иконку
+                        // выше центра — показываем подпись, только если есть что.
+                        if (subtitle.isNotEmpty) Text(subtitle, style: TextStyle(fontSize: 12, color: fam.text2)),
+                      ]);
+                    }),
                   ),
                   const Icon(Icons.chevron_right),
                 ]),
