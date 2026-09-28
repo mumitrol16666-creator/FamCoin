@@ -271,6 +271,7 @@ Future<void> addAccountFlow(BuildContext context) async {
   final name = TextEditingController();
   final balance = TextEditingController();
   var type = 'card';
+  String? owner;
   await showFormSheet<void>(
     context,
     title: l.addAccount,
@@ -284,13 +285,17 @@ Future<void> addAccountFlow(BuildContext context) async {
         ]),
         const SizedBox(height: 12),
         AmountField(controller: balance, label: l.openingBalance),
+        if (state.familyMode) ...[
+          const SizedBox(height: 12),
+          AccountOwnerPicker(value: owner, onChanged: (v) => set(() => owner = v)),
+        ],
         const SizedBox(height: 20),
         SubmitButton(
           label: l.save,
           onSubmit: () async {
             final b = parseAmount(balance.text, allowZero: true);
             if (name.text.trim().isEmpty || b == null) return false;
-            return runAction(ctx, () => state.sendBatch(state.newAccountCommands(name: name.text.trim(), type: type, balance: b)));
+            return runAction(ctx, () => state.sendBatch(state.newAccountCommands(name: name.text.trim(), type: type, balance: b, owner: owner)));
           },
         ),
       ]),

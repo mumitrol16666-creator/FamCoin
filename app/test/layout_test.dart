@@ -142,6 +142,50 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('счёт подставляет «для кого» по владельцу, ручной выбор не сбрасывается', (tester) async {
+    final f = await pumpApp(
+      tester,
+      size: const Size(360, 732),
+      home: Scaffold(body: Builder(builder: (context) => Center(child: FilledButton(onPressed: () => showAddTransactionSheet(context), child: const Text('open'))))),
+    );
+    await f.state.send({'type': 'updateProfile', 'profile': {'mode': 'family'}});
+    await f.state.upsert('member', 'wife', {'name': 'Дильнора', 'role': 'spouse'});
+    await f.state.sendBatch(f.state.newAccountCommands(name: 'Kaspi Дильноры', type: 'card', balance: kzt(10000), owner: 'wife'));
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    // «Для кого» — ниже видимой области длинной формы, форма прокручивается.
+    Future<void> revealForWhom() async {
+      for (var i = 0; i < 10 && find.text('Для кого').evaluate().isEmpty; i++) {
+        await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+        await tester.pump();
+      }
+    }
+
+    // По умолчанию — общий счёт без владельца, «для кого» = «Я».
+    await revealForWhom();
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Я')).selected, isTrue);
+
+    // Выбрали счёт Дильноры — «для кого» подстроилось само.
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kaspi Дильноры').last);
+    await tester.pumpAndSettle();
+    await revealForWhom();
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Дильнора')).selected, isTrue);
+
+    // Тронули «для кого» руками — дальше счёт больше не переопределяет её.
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Общее'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kaspi Gold').last);
+    await tester.pumpAndSettle();
+    await revealForWhom();
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Общее')).selected, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('«Ещё»: без пункта «Чек», ИИ подписан «скоро», а не Pro', (tester) async {
     await pumpApp(tester, home: const MoreScreen(), size: const Size(360, 732));
     expect(find.text('Чек'), findsNothing);

@@ -52,8 +52,11 @@ class AccountsScreen extends StatelessWidget {
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          Text('${accountTypeName(l, a.type)}${a.archived ? ' · ${l.archived}' : ''}${state.ledger.reserved(accountId: a.id) > 0 ? ' · ${l.reserve} ${formatMoney(state.ledger.reserved(accountId: a.id))}' : ''}',
-                              style: TextStyle(fontSize: 12, color: fam.text2)),
+                          Text(
+                            '${accountTypeName(l, a.type)}${a.archived ? ' · ${l.archived}' : ''}${state.ledger.reserved(accountId: a.id) > 0 ? ' · ${l.reserve} ${formatMoney(state.ledger.reserved(accountId: a.id))}' : ''}'
+                            '${state.familyMode && a.owner != null ? ' · ${ownerName(l, state, a.owner)}' : ''}',
+                            style: TextStyle(fontSize: 12, color: fam.text2),
+                          ),
                         ]),
                       ),
                       Padding(padding: const EdgeInsets.only(right: 16), child: MoneyText(state.ledger.balance(a.id))),
@@ -118,6 +121,12 @@ class AccountScreen extends StatelessWidget {
                   label: Text(l.adjustBalance),
                   onPressed: () => showAdjustBalanceSheet(context, accountId),
                 ),
+              if (!info.archived && state.familyMode) ...[
+                const SizedBox(height: 8),
+                AppCard(
+                  child: AccountOwnerPicker(value: info.owner, onChanged: (v) => runAction(context, () => state.setAccountOwner(accountId, v))),
+                ),
+              ],
               const SizedBox(height: 8),
               if (txs.isEmpty)
                 EmptyHint(l.noOperations)

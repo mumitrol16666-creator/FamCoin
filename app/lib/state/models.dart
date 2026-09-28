@@ -90,13 +90,18 @@ const piggyType = 'piggy';
 const accountPalette = [0xFFD62F2F, 0xFF1F8A4C, 0xFF2C6FB2, 0xFF8A7A55, 0xFF6B4FBB, 0xFFE0A43A];
 
 class AccountInfo {
-  const AccountInfo({required this.id, required this.name, required this.type, required this.color, required this.liquid, required this.archived});
+  const AccountInfo({required this.id, required this.name, required this.type, required this.color, required this.liquid, required this.archived, this.owner});
   final String id;
   final String name;
   final String type;
   final Color color;
   final bool liquid;
   final bool archived;
+
+  /// Чей это счёт для семейного режима: `me`, `shared`, id члена семьи —
+  /// или `null`, если не привязан (при выборе счёта «для кого» не меняется
+  /// сама). Не путать со `shared`, которое привязывает явно.
+  final String? owner;
 }
 
 class Member {

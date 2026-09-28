@@ -119,6 +119,10 @@ class _TransactionFieldsState extends State<TransactionFields> {
   String? _to;
   String _who = 'me';
 
+  /// Пользователь сам тронул «для кого» — счёт больше не подставляет
+  /// значение за него.
+  bool _whoTouched = false;
+
   /// lendOut, borrow, repaymentReceived, repaymentMade.
   String _debtKind = 'lendOut';
   DateTime? _dateOverride;
@@ -147,6 +151,14 @@ class _TransactionFieldsState extends State<TransactionFields> {
 
   void _markDirty() {
     widget.dirty?.value = _amount.text.isNotEmpty || _note.text.isNotEmpty || _person.text.isNotEmpty;
+  }
+
+  /// Выбор счёта для расхода/дохода: если владелец счёта задан и «для кого»
+  /// ещё не трогали руками — подставляет его, чтобы не выбирать дважды.
+  void _selectAccount(String id) {
+    _account = id;
+    final owner = AppScope.of(context).state.accountInfo(id)?.owner;
+    if (!_whoTouched && owner != null) _who = owner;
   }
 
   void _applyDraft(VoiceDraft d) {
@@ -258,7 +270,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
       _prefilled = true;
       _applyDraft(widget.draft!);
     }
-    _account ??= (accounts.where((a) => a.liquid).firstOrNull ?? accounts.first).id;
+    if (_account == null) _selectAccount((accounts.where((a) => a.liquid).firstOrNull ?? accounts.first).id);
     final others = [...accounts, ...state.piggyAccounts].where((a) => a.id != _account).toList();
     if (_to == null || _to == _account) _to = others.firstOrNull?.id;
 
@@ -387,14 +399,14 @@ class _TransactionFieldsState extends State<TransactionFields> {
             },
           ),
         const SizedBox(height: 14),
-        AccountPicker(accounts: accounts, value: _account, onChanged: (v) => setState(() { _account = v; _accountMissing = false; })),
+        AccountPicker(accounts: accounts, value: _account, onChanged: (v) => setState(() { _selectAccount(v); _accountMissing = false; })),
         if (state.familyMode && _kind == FieldsKind.expense) ...[
           label(l.forWhom),
           Wrap(spacing: 8, runSpacing: 4, children: [
-            ChoiceChip(label: Text(l.me), selected: _who == 'me', onSelected: (_) => setState(() => _who = 'me')),
-            ChoiceChip(label: Text(l.shared), selected: _who == 'shared', onSelected: (_) => setState(() => _who = 'shared')),
+            ChoiceChip(label: Text(l.me), selected: _who == 'me', onSelected: (_) => setState(() { _who = 'me'; _whoTouched = true; })),
+            ChoiceChip(label: Text(l.shared), selected: _who == 'shared', onSelected: (_) => setState(() { _who = 'shared'; _whoTouched = true; })),
             for (final m in state.members)
-              ChoiceChip(label: Text(m.name), selected: _who == m.id, onSelected: (_) => setState(() => _who = m.id)),
+              ChoiceChip(label: Text(m.name), selected: _who == m.id, onSelected: (_) => setState(() { _who = m.id; _whoTouched = true; })),
           ]),
         ],
       ],

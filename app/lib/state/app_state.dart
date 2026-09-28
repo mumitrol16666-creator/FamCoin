@@ -213,10 +213,24 @@ class AppState extends ChangeNotifier {
         color: Color((meta['color'] as num?)?.toInt() ?? accountPalette[i % accountPalette.length]),
         liquid: a.liquid,
         archived: a.archived,
+        owner: meta['owner'] as String?,
       ));
       i++;
     }
     return list;
+  }
+
+  /// Кому принадлежит счёт (D08 продолжение): `me`, `shared` или id члена
+  /// семьи; `null` снимает привязку. Форма операции подставляет «для кого»
+  /// по счёту, чтобы не задавать одно и то же дважды.
+  Future<void> setAccountOwner(String accountId, String? owner) {
+    final data = Map<String, dynamic>.from(_kind('account')[accountId] ?? const {});
+    if (owner == null) {
+      data.remove('owner');
+    } else {
+      data['owner'] = owner;
+    }
+    return upsert('account', accountId, data);
   }
 
   /// Счета для трат и переводов — без архивных и без копилок целей.
@@ -707,11 +721,16 @@ class AppState extends ChangeNotifier {
   Future<void> setIncomeDay(int? day) => send({'type': 'updateProfile', 'profile': {'incomeDay': day}});
 
   /// Команды нового денежного счёта с начальным остатком.
-  List<Map<String, dynamic>> newAccountCommands({required String name, required String type, required int balance, int? color}) {
+  List<Map<String, dynamic>> newAccountCommands({required String name, required String type, required int balance, int? color, String? owner}) {
     final id = newId();
     return [
       {'type': 'addMoneyAccount', 'accountId': id, 'liquid': type != 'deposit'},
-      {'type': 'upsertEntity', 'kind': 'account', 'entityId': id, 'data': {'name': name, 'type': type, 'color': color ?? accountPalette[moneyAccounts.length % accountPalette.length]}},
+      {
+        'type': 'upsertEntity',
+        'kind': 'account',
+        'entityId': id,
+        'data': {'name': name, 'type': type, 'color': color ?? accountPalette[moneyAccounts.length % accountPalette.length], if (owner != null) 'owner': owner},
+      },
       if (balance != 0) {'type': 'opening', 'id': newId(), 'date': _date(today), 'account': id, 'amount': balance.toString()},
     ];
   }

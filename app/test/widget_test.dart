@@ -211,4 +211,20 @@ void main() {
     expect(state.categoryInUse(id), isFalse);
     customCategories.clear();
   });
+
+  test('владелец счёта: назначается, снимается и виден в moneyAccounts', () async {
+    final state = stateWithFakeServer(now: DateTime(2026, 9, 27));
+    await state.load();
+    await state.sendBatch(state.newAccountCommands(name: 'Kaspi Дильноры', type: 'card', balance: kzt(10000), owner: 'wife'));
+    final acc = state.moneyAccounts.single;
+    expect(acc.owner, 'wife');
+
+    await state.setAccountOwner(acc.id, 'me');
+    expect(state.moneyAccounts.single.owner, 'me');
+    // Остальные поля счёта (название, тип) не теряются при смене владельца.
+    expect(state.moneyAccounts.single.name, 'Kaspi Дильноры');
+
+    await state.setAccountOwner(acc.id, null);
+    expect(state.moneyAccounts.single.owner, isNull);
+  });
 }

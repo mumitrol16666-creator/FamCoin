@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../state/api_client.dart';
+import '../../state/app_scope.dart';
+import '../../state/app_state.dart';
 import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../more/tariff_screen.dart';
@@ -562,6 +564,42 @@ class AccountPicker extends StatelessWidget {
       items: [for (final a in accounts) DropdownMenuItem(value: a.id, child: Text(a.name))],
       onChanged: (v) => v == null ? null : onChanged(v),
     );
+  }
+}
+
+/// Имя владельца счёта для показа: «Я», «Общее» или имя члена семьи.
+String? ownerName(AppLocalizations l, AppState state, String? owner) => switch (owner) {
+      null => null,
+      'me' => l.me,
+      'shared' => l.shared,
+      _ => state.members.where((m) => m.id == owner).firstOrNull?.name,
+    };
+
+/// Чей счёт (семейный режим): «Я», «Общее», член семьи — или без привязки.
+/// Форма операции подставляет это значение в «для кого», не заставляя
+/// выбирать его на каждой записи заново.
+class AccountOwnerPicker extends StatelessWidget {
+  const AccountOwnerPicker({super.key, required this.value, required this.onChanged});
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final state = AppScope.of(context).state;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Text(l.accountOwner, style: TextStyle(fontSize: 12, color: context.fam.text2))),
+        InfoTip(l.accountOwnerNote, title: l.accountOwner),
+      ]),
+      const SizedBox(height: 6),
+      Wrap(spacing: 8, runSpacing: 4, children: [
+        ChoiceChip(label: Text(l.unassigned), selected: value == null, onSelected: (_) => onChanged(null)),
+        ChoiceChip(label: Text(l.me), selected: value == 'me', onSelected: (_) => onChanged('me')),
+        ChoiceChip(label: Text(l.shared), selected: value == 'shared', onSelected: (_) => onChanged('shared')),
+        for (final m in state.members) ChoiceChip(label: Text(m.name), selected: value == m.id, onSelected: (_) => onChanged(m.id)),
+      ]),
+    ]);
   }
 }
 
