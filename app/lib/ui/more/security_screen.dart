@@ -120,8 +120,52 @@ class _SecurityScreenState extends State<SecurityScreen> {
           ),
           InfoBanner(l.lockPolicy, icon: Icons.lock_clock_outlined),
           InfoBanner(l.pinSoon, icon: Icons.fingerprint, color: fam.warnBg),
+          const SizedBox(height: 16),
+          AppCard(
+            onTap: _deleteAccount,
+            child: Row(children: [
+              Icon(Icons.delete_forever_outlined, color: fam.expense),
+              const SizedBox(width: 12),
+              Expanded(child: Text(l.deleteAccount, style: TextStyle(color: fam.expense))),
+              const Icon(Icons.chevron_right),
+            ]),
+          ),
         ],
       ),
     );
+  }
+
+  /// Удаление аккаунта самим пользователем: подтверждение словом, затем
+  /// сервер стирает все данные, сессия закрывается — открывается экран входа.
+  Future<void> _deleteAccount() async {
+    final l = context.l10n;
+    final scope = AppScope.of(context);
+    final word = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: Text(l.deleteAccount),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(l.deleteAccountNote),
+            const SizedBox(height: 12),
+            TextField(controller: word, autofocus: true, onChanged: (_) => set(() {}), decoration: InputDecoration(hintText: l.deleteAccountWord)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l.cancel)),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: ctx.fam.expense),
+              onPressed: word.text.trim().toUpperCase() == l.deleteAccountWord ? () => Navigator.pop(ctx, true) : null,
+              child: Text(l.delete),
+            ),
+          ],
+        ),
+      ),
+    );
+    word.dispose();
+    if (ok != true || !mounted) return;
+    if (await runAction(context, () => scope.state.api.deleteAccount(scope.state.token))) {
+      await scope.settings.dropSession();
+    }
   }
 }

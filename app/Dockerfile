@@ -1,6 +1,8 @@
 # Веб-сборка приложения и раздача статики nginx.
 # Контекст сборки — корень репозитория: приложению нужен пакет famcoin_core.
-FROM ghcr.io/cirruslabs/flutter:stable AS build
+# Версия SDK закреплена: плавающий тег `stable` менял версии зависимостей
+# от сборки к сборке. Обновлять вместе с локальным Flutter (см. README).
+FROM ghcr.io/cirruslabs/flutter:3.44.0 AS build
 WORKDIR /src
 
 # Зависимости кешируются отдельно от кода: правка экранов не тянет pub get.

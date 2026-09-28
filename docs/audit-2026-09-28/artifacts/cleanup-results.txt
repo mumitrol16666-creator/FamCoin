@@ -1,0 +1,3 @@
+Admin delete endpoint: HTTP 500 for all 3 audit users; server ForeignKeyViolationException. Accounts still present after failed calls.
+Scoped cleanup in local PostgreSQL transaction: expected 3 audit account IDs; deleted 20028 postings, 0 reservations, 3 users. Remaining audit accounts: 0.
+No application source files changed by audit. Other in-progress working-tree changes were preserved.

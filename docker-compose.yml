@@ -35,8 +35,8 @@ services:
       DB_USER: famcoin
       DB_PASSWORD: famcoin
       PORT: "8080"
-      # Переключатель тарифа без магазина — только для разработки.
-      ALLOW_DEV_PLAN: "1"
+      # Pro локально включается из админки («Дать Pro»); оплата звёздами
+      # требует TELEGRAM_BOT_TOKEN.
       # Админка локально: http://localhost:8080/admin/
       ADMIN_PASSWORD: admin-local-dev
     ports:

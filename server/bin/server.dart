@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:famcoin_server/admin.dart';
 import 'package:famcoin_server/api.dart';
 import 'package:famcoin_server/auth_service.dart';
+import 'package:famcoin_server/billing.dart';
 import 'package:famcoin_server/ledger_service.dart';
 import 'package:famcoin_server/notifications.dart';
 import 'package:famcoin_server/telegram.dart';
@@ -27,18 +28,25 @@ Future<void> main() async {
   await _migrate(db);
 
   final auth = AuthService(db);
-  final ledger = LedgerService(db, allowDevPlan: env['ALLOW_DEV_PLAN'] == '1');
+  final ledger = LedgerService(db);
   final telegram = Telegram(db, token: env['TELEGRAM_BOT_TOKEN']);
   final notifications = NotificationService(db, ledger, telegram)..start();
+  final billing = BillingService(
+    db,
+    telegram,
+    notifications,
+    stars: int.tryParse(env['PRO_STARS'] ?? ''),
+    days: int.tryParse(env['PRO_DAYS'] ?? ''),
+  )..start();
   final admin = AdminService(db, password: env['ADMIN_PASSWORD']);
-  final handler = buildHandler(auth, ledger, notifications, admin, telegram: telegram, allowedOrigin: env['CORS_ORIGIN'] ?? '*');
+  final handler = buildHandler(auth, ledger, notifications, admin, telegram: telegram, billing: billing, allowedOrigin: env['CORS_ORIGIN'] ?? '*');
 
-  // Бот слушает «/start <код>» только при заданном токене.
+  // Бот слушает «/start <код>» и платежи только при заданном токене.
   if (telegram.enabled) {
     telegram.pollForever();
-    print('telegram: бот включён');
+    print('telegram: бот включён, Pro — ${billing.proStars} ⭐ на ${billing.proDays} дней');
   } else {
-    print('telegram: TELEGRAM_BOT_TOKEN не задан, доставка в Telegram выключена');
+    print('telegram: TELEGRAM_BOT_TOKEN не задан, доставка в Telegram и оплата выключены');
   }
   print(admin.enabled ? 'admin: /api/admin/' : 'admin: ADMIN_PASSWORD не задан (мин. 8 символов), админка выключена');
 

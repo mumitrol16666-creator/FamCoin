@@ -33,14 +33,16 @@ class _Cached {
 }
 
 class LedgerService {
-  LedgerService(this.db, {this.allowDevPlan = false});
+  LedgerService(this.db);
 
   final Pool db;
-  final bool allowDevPlan;
 
   /// Журналы в памяти по ревизии владельца: без повторного чтения всей
   /// истории на каждую команду.
   final Map<String, _Cached> _cache = {};
+
+  /// Забыть журнал владельца (после удаления аккаунта).
+  void forget(String userId) => _cache.remove(userId);
 
   // --------------------------------------------------------------- чтение
 
@@ -89,7 +91,7 @@ class LedgerService {
   Future<Map<String, Object?>> state(String userId) async {
     return db.runTx((s) async {
       final u = await s.execute(
-        Sql.named('SELECT email, locale, plan, profile, revision, display_name FROM users WHERE id = @u'),
+        Sql.named('SELECT email, locale, plan, profile, revision, display_name, pro_until FROM users WHERE id = @u'),
         parameters: {'u': userId},
       );
       if (u.isEmpty) throw ApiError(401, 'unauthorized');
@@ -104,6 +106,7 @@ class LedgerService {
         'name': u.first[5],
         'locale': u.first[1],
         'plan': u.first[2],
+        'proUntil': (u.first[6] as DateTime?)?.toIso8601String(),
         'profile': u.first[3],
         'revision': revision,
         'accounts': [for (final a in ledger.accounts) accountToJson(a)],
@@ -118,8 +121,9 @@ class LedgerService {
 
   // ------------------------------------------------------------ команды
 
-  /// Применяет команду владельца. Возвращает новую ревизию.
-  Future<int> command(String userId, Map<String, dynamic> cmd) async {
+  /// Применяет команду владельца. Возвращает новую ревизию и признак повтора:
+  /// команда с тем же `commandId` уже принята и второй раз не применяется.
+  Future<({int revision, bool repeated})> command(String userId, Map<String, dynamic> cmd) async {
     final commandId = cmd['commandId'];
     if (commandId is! String || commandId.isEmpty || commandId.length > maxIdLength) {
       throw ApiError(400, 'bad_request');
@@ -138,7 +142,7 @@ class LedgerService {
           Sql.named('SELECT revision FROM commands WHERE user_id = @u AND id = @id'),
           parameters: {'u': userId, 'id': commandId},
         );
-        if (seen.isNotEmpty) return revision; // повтор уже принятой команды
+        if (seen.isNotEmpty) return (revision: revision, repeated: true); // повтор уже принятой команды
 
         final ledger = await _loadLedger(s, userId, revision);
         final before = _Snapshot.of(ledger);
@@ -159,7 +163,7 @@ class LedgerService {
           parameters: {'u': userId, 'id': commandId, 'r': next},
         );
         _cache[userId] = _Cached(next, ledger);
-        return next;
+        return (revision: next, repeated: false);
       });
     } catch (e) {
       // Журнал в памяти мог измениться до отказа — перечитываем из базы.
@@ -284,16 +288,6 @@ class LedgerService {
     }
   }
 
-  /// Тариф для проверки в локальной разработке (без магазина приложений).
-  Future<void> setPlanDev(String userId, String plan) async {
-    if (!allowDevPlan) throw ApiError(403, 'forbidden');
-    if (plan != 'free' && plan != 'pro') throw ApiError(400, 'bad_request');
-    await db.execute(
-      Sql.named('UPDATE users SET plan = @p, revision = revision + 1 WHERE id = @u'),
-      parameters: {'p': plan, 'u': userId},
-    );
-    _cache.remove(userId);
-  }
 }
 
 class _Ctx {

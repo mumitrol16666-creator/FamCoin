@@ -1,0 +1,30 @@
+{
+  "dataset": {
+    "expenses": 10000,
+    "opening_entries": 1,
+    "distribution": "5 purchases/day from 2021-01-01"
+  },
+  "desktop_chromium_mobile_viewport": {
+    "journal_open_ms": 297,
+    "type_search_and_two_frames_ms": 89,
+    "startup_long_tasks_ms": [
+      429,
+      132,
+      778,
+      177
+    ]
+  },
+  "same_browser_cpu_throttled_4x": {
+    "journal_open_ms": 268,
+    "type_search_and_two_frames_ms": 512,
+    "search_long_tasks_ms": [
+      75,
+      63,
+      157,
+      103,
+      99,
+      92
+    ]
+  },
+  "caveat": "Single warm-run diagnostic including automation overhead; not a real-phone benchmark or latency SLA. API uncompressed snapshot bytes and server timing are in api-results.json."
+}

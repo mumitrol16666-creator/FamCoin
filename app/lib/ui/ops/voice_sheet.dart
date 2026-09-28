@@ -35,6 +35,9 @@ class _VoiceSheetState extends State<_VoiceSheet> {
   bool _ready = false;
   bool _listening = false;
   String? _localeId;
+
+  /// Нужен казахский, но устройство умеет только русский.
+  bool _kkFallback = false;
   String _text = '';
   String? _error;
   VoiceDraft? _draft;
@@ -79,6 +82,8 @@ class _VoiceSheetState extends State<_VoiceSheet> {
             locales.where((l) => l.localeId.toLowerCase().startsWith('ru')).firstOrNull;
         // Браузер список не отдаёт — иначе он слушал бы на языке системы.
         _localeId = match?.localeId ?? (locales.isEmpty ? (want == 'kk' ? 'kk-KZ' : 'ru-RU') : null);
+        // Честно сказать, что казахского распознавания здесь нет.
+        _kkFallback = want == 'kk' && locales.isNotEmpty && !(match?.localeId.toLowerCase().startsWith('kk') ?? false);
       }
       setState(() => _ready = ok);
     } catch (_) {
@@ -171,7 +176,11 @@ class _VoiceSheetState extends State<_VoiceSheet> {
 
           // Микрофон
           Center(
-            child: GestureDetector(
+            child: Semantics(
+              button: true,
+              enabled: _ready,
+              label: _listening ? l.tipMicStop : l.tipMic,
+              child: GestureDetector(
               onTap: _ready ? _toggle : null,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -184,10 +193,12 @@ class _VoiceSheetState extends State<_VoiceSheet> {
                 ),
                 child: Icon(_listening ? Icons.stop : Icons.mic, size: 40, color: _ready ? context.scheme.onPrimary : fam.text2),
               ),
+              ),
             ),
           ),
           const SizedBox(height: 10),
           Center(child: Text(!_ready ? l.voiceUnavailable : _listening ? l.voiceListening : l.voiceTapToSpeak, style: TextStyle(color: fam.text2, fontSize: 13))),
+          if (_ready && _kkFallback) Padding(padding: const EdgeInsets.only(top: 8), child: InfoBanner(l.voiceKkFallback, icon: Icons.translate)),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: InfoBanner(_errorText(_error!), color: fam.warnBg, icon: Icons.mic_off)),
 
           // Распознанный текст
@@ -226,7 +237,7 @@ class _VoiceSheetState extends State<_VoiceSheet> {
             // Без микрофона фразу можно набрать — разбор тот же.
             TextField(
               controller: _manual,
-              decoration: InputDecoration(labelText: l.voiceTypeInstead, suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: () {
+              decoration: InputDecoration(labelText: l.voiceTypeInstead, suffixIcon: IconButton(tooltip: l.tipParse, icon: const Icon(Icons.arrow_forward), onPressed: () {
                 if (_manual.text.trim().isEmpty) return;
                 setState(() => _text = _manual.text.trim());
                 _parse(_text);

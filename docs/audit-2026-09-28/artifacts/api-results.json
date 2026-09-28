@@ -1,0 +1,59 @@
+{
+  "unauthenticated_state": 401,
+  "first_account": 200,
+  "second_account_free": [
+    402,
+    {
+      "error": "plan_limit"
+    }
+  ],
+  "limits": [
+    200,
+    200,
+    402
+  ],
+  "rollback_error": 400,
+  "rollback_state_unchanged": true,
+  "idempotent_status": [
+    200,
+    200
+  ],
+  "idempotent_count": 1,
+  "password_attempts": [
+    [
+      401,
+      {
+        "error": "invalid_credentials",
+        "attemptsLeft": 2
+      }
+    ],
+    [
+      401,
+      {
+        "error": "invalid_credentials",
+        "attemptsLeft": 1
+      }
+    ],
+    [
+      423,
+      {
+        "error": "locked",
+        "retryAfterSeconds": 900
+      }
+    ]
+  ],
+  "correct_password_while_locked": [
+    423,
+    {
+      "error": "locked",
+      "retryAfterSeconds": 900
+    }
+  ],
+  "perf_seed_seconds": 8.668,
+  "perf_snapshot": {
+    "status": 200,
+    "transactions": 10001,
+    "bytes": 1978584,
+    "seconds": 0.091
+  }
+}

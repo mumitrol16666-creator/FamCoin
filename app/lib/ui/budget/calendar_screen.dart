@@ -56,9 +56,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
             children: [
               Row(children: [
-                IconButton(onPressed: _offset <= -12 ? null : () => setState(() => _offset--), icon: const Icon(Icons.chevron_left)),
+                IconButton(tooltip: l.prevMonth, onPressed: _offset <= -12 ? null : () => setState(() => _offset--), icon: const Icon(Icons.chevron_left)),
                 Expanded(child: Text(toBeginningOfSentenceCase(DateFormat.yMMMM(locale).format(month)), textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge)),
-                IconButton(onPressed: _offset >= 12 ? null : () => setState(() => _offset++), icon: const Icon(Icons.chevron_right)),
+                IconButton(tooltip: l.nextMonth, onPressed: _offset >= 12 ? null : () => setState(() => _offset++), icon: const Icon(Icons.chevron_right)),
               ]),
               AppCard(
                 child: Column(children: [

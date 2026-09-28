@@ -129,7 +129,7 @@ class _EditSheetState extends State<_EditSheet> {
               const SizedBox(width: 8),
               SizedBox(width: 130, child: AmountField(controller: p.amount, label: l.amount, onChanged: (_) => setState(() {}))),
               if (_parts.length > 1)
-                IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _parts.removeAt(i).amount.dispose())),
+                IconButton(tooltip: l.tipRemove, icon: const Icon(Icons.close), onPressed: () => setState(() => _parts.removeAt(i).amount.dispose())),
             ]),
             const SizedBox(height: 10),
           ],

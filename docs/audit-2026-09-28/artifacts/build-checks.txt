@@ -1,0 +1,15 @@
+2026-09-28
+HEAD 711f276; existing iOS workflow and Info.plist modifications preserved.
+Local Flutter 3.47.5 / Dart 3.13.4.
+Docker Flutter 3.44.0 / Dart 3.12.0.
+Core: 70 tests PASS; dart analyze PASS.
+App: 9 state tests PASS; flutter analyze PASS.
+Server: dart analyze PASS; no server test directory.
+Web: docker compose up -d --build --no-deps web PASS.
+Runtime: GET /main.dart.mjs -> application/octet-stream, Chromium rejects dynamic module, blank page. Browser-only MIME override used for UI audit.
+New audit regression probes: 4 FAIL, see regression-results.log.
+iOS: not built locally: full Xcode and CocoaPods unavailable, no iOS simulator.
+Android: see android-build.log; full Android project copied into isolated builder.
+Additional widget layout test: Home at 320 logical pixels / text scale 2.0 PASS. See layout-results.log.
+Android full project: FAILED at configureCMakeRelease[arm64-v8a], Rosetta cannot open /lib64/ld-linux-x86-64.so.2, CMake exit 133. Environmental architecture mismatch; no APK built.
+During audit, unrelated ongoing Telegram Stars billing changes appeared in working tree. Runtime conclusions describe baseline commit and web container created at 2026-09-28T07:22:21.893358375Z; new payment work not validated.

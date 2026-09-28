@@ -23,11 +23,12 @@ button.b.p{background:var(--primary);color:#fff;border-color:var(--primary)}butt
 .muted{color:var(--muted)}.bars{display:flex;gap:3px;align-items:flex-end;height:80px}.bars div{flex:1;background:var(--primary);border-radius:3px 3px 0 0;min-height:2px}
 #login{max-width:360px;margin:80px auto}#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;display:none}
 </style></head><body>
-<header><h1>FamCoin · админка</h1><nav id="nav" hidden><button data-v="stats" class="on">Сводка</button><button data-v="users">Пользователи</button><button data-v="audit">Журнал</button><button id="logout">Выйти</button></nav></header>
+<header><h1>FamCoin · админка</h1><nav id="nav" hidden><button data-v="stats" class="on">Сводка</button><button data-v="users">Пользователи</button><button data-v="payments">Платежи</button><button data-v="audit">Журнал</button><button id="logout">Выйти</button></nav></header>
 <main>
 <div id="login" class="card"><h2>Вход</h2><p class="muted">Пароль администратора из .env на сервере.</p><input id="pw" type="password" placeholder="Пароль" autofocus><br><br><button class="b p" id="loginBtn">Войти</button><p id="loginErr" class="muted"></p></div>
 <div id="stats" hidden></div>
 <div id="users" hidden><div class="card"><input id="q" placeholder="Поиск по email"></div><div class="card" id="usersList"></div></div>
+<div id="payments" hidden><div class="card" id="paymentsList"></div></div>
 <div id="audit" hidden><div class="card" id="auditList"></div></div>
 </main>
 <div id="toast"></div>
@@ -36,14 +37,17 @@ const $=s=>document.querySelector(s);let token=sessionStorage.getItem('adm');
 const api=async(p,o={})=>{const r=await fetch('/api/admin'+p,{...o,headers:{'content-type':'application/json','authorization':'Bearer '+token,...(o.headers||{})}});const d=await r.json().catch(()=>({}));if(r.status===401&&p!=='/login'){sessionStorage.removeItem('adm');location.reload()}if(!r.ok)throw new Error(d.error||r.status);return d};
 const toast=t=>{const e=$('#toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',3500)};
 const fmt=d=>d?new Date(d).toLocaleString('ru-RU',{dateStyle:'short',timeStyle:'short'}):'—';
-async function show(v){document.querySelectorAll('#nav button[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));for(const s of['stats','users','audit'])$('#'+s).hidden=s!==v;if(v==='stats')await stats();if(v==='users')await users();if(v==='audit')await audit()}
+async function show(v){document.querySelectorAll('#nav button[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));for(const s of['stats','users','payments','audit'])$('#'+s).hidden=s!==v;if(v==='stats')await stats();if(v==='users')await users();if(v==='payments')await payments();if(v==='audit')await audit()}
+const fmtD=d=>d?new Date(d).toLocaleDateString('ru-RU'):'—';
+async function payments(){const l=await api('/payments');$('#paymentsList').innerHTML=l.length?`<table><tr><th>Когда</th><th>Пользователь</th><th>Звёзд</th><th>Срок</th><th>Pro до</th><th>Статус</th><th></th></tr>${l.map(p=>`<tr><td>${fmt(p.createdAt)}</td><td>${p.email}</td><td>${p.stars} ⭐</td><td>${p.days} дн.</td><td>${fmtD(p.proUntil)}</td><td>${p.status==='refunded'?`<span class="tag bad">возврат ${fmtD(p.refundedAt)}</span>`:'<span class="tag ok">оплачен</span>'}</td><td>${p.status==='paid'?`<button class="b d" onclick="refund('${p.id}','${p.email}')">Вернуть звёзды</button>`:''}</td></tr>`).join('')}</table>`:'<p class="muted">Платежей пока не было</p>'}
+async function refund(id,email){if(!confirm(`Вернуть звёзды пользователю ${email}? Срок Pro уменьшится на оплаченный период.`))return;try{await api(`/payments/${id}/refund`,{method:'POST',body:'{}'});toast('Возврат выполнен');payments()}catch(e){toast('Ошибка: '+e.message)}}
 async function stats(){const s=await api('/stats');const max=Math.max(1,...s.byDay.map(d=>d.commands));$('#stats').innerHTML=`<div class="card grid">
 ${[['Пользователей',s.users],['Новых за неделю',s.newWeek],['Активных за сутки',s.activeDay],['Pro',s.pro],['Операций всего',s.transactions],['Команд за сутки',s.commandsDay],['Привязан Telegram',s.telegram],['Размер базы',s.dbSize]].map(([k,v])=>`<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('')}</div>
 <div class="card"><b>Активность за 14 дней</b> <span class="muted">(команд в день; регистрации подписаны)</span><div class="bars" style="margin-top:10px">${s.byDay.map(d=>`<div title="${d.date}: команд ${d.commands}, регистраций ${d.signups}" style="height:${Math.round(d.commands/max*100)}%"></div>`).join('')}</div>
 <div class="muted" style="display:flex;justify-content:space-between;font-size:11px"><span>${s.byDay[0].date}</span><span>${s.byDay.at(-1).date}</span></div></div>`}
 async function users(){const q=$('#q').value;const list=await api('/users?q='+encodeURIComponent(q));$('#usersList').innerHTML=list.length?`<table><tr><th>Email</th><th>Тариф</th><th>Регистрация</th><th>Был</th><th>Операций</th><th>Статус</th><th></th></tr>${list.map(u=>`<tr>
 <td>${u.email}<br><span class="muted">${u.locale} · ${u.onboarded?'анкета пройдена':'анкета не пройдена'}${u.telegram?' · TG':''}</span></td>
-<td>${u.plan==='pro'?'<span class="tag pro">Pro</span>':'обычный'}</td><td>${fmt(u.createdAt)}</td><td>${fmt(u.lastSeenAt)}</td><td>${u.transactions}</td>
+<td>${u.plan==='pro'?`<span class="tag pro">Pro</span><br><span class="muted">${u.proUntil?'до '+fmtD(u.proUntil):'бессрочно'}</span>`:'обычный'}</td><td>${fmt(u.createdAt)}</td><td>${fmt(u.lastSeenAt)}</td><td>${u.transactions}</td>
 <td>${u.locked?'<span class="tag bad">заблокирован</span>':u.failedAttempts?`<span class="muted">ошибок: ${u.failedAttempts}</span>`:'<span class="tag ok">ок</span>'}</td>
 <td><button class="b" onclick="act('${u.id}','plan',{plan:'${u.plan==='pro'?'free':'pro'}'})">${u.plan==='pro'?'Снять Pro':'Дать Pro'}</button>${u.locked||u.failedAttempts?`<button class="b" onclick="act('${u.id}','unlock')">Разблокировать</button>`:''}<button class="b" onclick="reset('${u.id}','${u.email}')">Сбросить пароль</button><button class="b d" onclick="del('${u.id}','${u.email}')">Удалить</button></td></tr>`).join('')}</table>`:'<p class="muted">Никого не найдено</p>'}
 async function act(id,a,body){try{await api(`/users/${id}/${a}`,{method:'POST',body:JSON.stringify(body||{})});toast('Готово');users()}catch(e){toast('Ошибка: '+e.message)}}

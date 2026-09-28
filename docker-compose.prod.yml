@@ -3,7 +3,8 @@
 # Секреты берутся из файла .env рядом (не хранится в git):
 #   POSTGRES_PASSWORD=...   PUBLIC_URL=https://coin.edudev.kz
 #   ADMIN_PASSWORD=...      (вход в админку /api/admin/)
-#   TELEGRAM_BOT_TOKEN=...  TELEGRAM_ADMIN_CHAT=...   (необязательно: копии и уведомления в Telegram)
+#   TELEGRAM_BOT_TOKEN=...  TELEGRAM_ADMIN_CHAT=...   (бот: вход, уведомления, оплата Pro звёздами, копии базы)
+#   PRO_STARS=950  PRO_DAYS=365                         (необязательно: цена и срок Pro)
 # Наружу смотрит только caddy (80/443): HTTPS, приложение, API по /api,
 # установочные файлы по /download.
 
@@ -18,8 +19,9 @@ services:
     environment:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       CORS_ORIGIN: ${PUBLIC_URL:?задайте PUBLIC_URL в .env}
-      # Переключатель тарифа оставлен для проверки; выключить перед выпуском.
-      ALLOW_DEV_PLAN: ${ALLOW_DEV_PLAN:-1}
+      # Оплата Pro звёздами Telegram: цена и срок (по умолчанию 950 ⭐ на 365 дней).
+      PRO_STARS: ${PRO_STARS:-950}
+      PRO_DAYS: ${PRO_DAYS:-365}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     ports: !override []

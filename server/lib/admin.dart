@@ -43,6 +43,10 @@ class AdminService {
         parameters: {'a': action, 't': target, 'd': details},
       );
 
+  /// Запись в журнал действий для операций, выполненных другими сервисами (возврат платежа).
+  Future<void> audit_(String action, {String? target, Map<String, Object?> details = const {}}) =>
+      _audit(action, target: target, details: details);
+
   Future<Map<String, Object?>> stats() async {
     final r = await db.execute('''
       SELECT
@@ -72,7 +76,7 @@ class AdminService {
         SELECT u.id, u.email, u.locale, u.plan, u.created_at, u.last_seen_at,
                u.locked_until > now(), u.failed_attempts, u.telegram_chat_id IS NOT NULL,
                (SELECT count(*) FROM transactions t WHERE t.user_id = u.id),
-               (u.profile->>'onboarded') = 'true'
+               (u.profile->>'onboarded') = 'true', u.pro_until
         FROM users u
         WHERE @q = '' OR u.email ILIKE '%' || @q || '%'
         ORDER BY u.created_at DESC LIMIT 200'''),
@@ -86,6 +90,7 @@ class AdminService {
           'lastSeenAt': (r[5] as DateTime?)?.toIso8601String(),
           'locked': r[6] == true, 'failedAttempts': r[7], 'telegram': r[8] == true,
           'transactions': r[9], 'onboarded': r[10] == true,
+          'proUntil': (r[11] as DateTime?)?.toIso8601String(),
         },
     ];
   }
@@ -95,9 +100,13 @@ class AdminService {
     await _audit('unlock', target: userId);
   }
 
+  /// Ручной тариф: «Дать Pro» — бессрочно (pro_until пустой), «Снять» — сразу.
   Future<void> setPlan(String userId, String plan) async {
     if (plan != 'free' && plan != 'pro') throw ApiError(400, 'bad_request');
-    await db.execute(Sql.named('UPDATE users SET plan = @p, revision = revision + 1 WHERE id = @u'), parameters: {'p': plan, 'u': userId});
+    await db.execute(
+      Sql.named('UPDATE users SET plan = @p, pro_until = NULL, revision = revision + 1 WHERE id = @u'),
+      parameters: {'p': plan, 'u': userId},
+    );
     await _audit('plan', target: userId, details: {'plan': plan});
   }
 
@@ -118,12 +127,15 @@ class AdminService {
     return temp;
   }
 
+  /// Удаление аккаунта с подтверждением email; журнал и остальные данные —
+  /// той же процедурой, что и удаление самим пользователем.
   Future<void> deleteUser(String userId, String email) async {
     final r = await db.execute(
-      Sql.named('DELETE FROM users WHERE id = @u AND lower(email) = lower(@e)'),
+      Sql.named('SELECT 1 FROM users WHERE id = @u AND lower(email) = lower(@e)'),
       parameters: {'u': userId, 'e': email},
     );
-    if (r.affectedRows == 0) throw ApiError(400, 'bad_request');
+    if (r.isEmpty) throw ApiError(400, 'bad_request');
+    await deleteUserData(db, userId);
     await _audit('delete_user', target: userId, details: {'email': email});
   }
 

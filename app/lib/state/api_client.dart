@@ -110,9 +110,19 @@ class ApiClient {
 
   Future<Map<String, dynamic>> state(String token) => _send('GET', '/state', token: token);
 
-  /// Отправляет команду; возвращает новую ревизию данных владельца.
-  Future<int> command(String token, Map<String, Object?> command) async =>
-      (await _send('POST', '/command', body: command, token: token))['revision'] as int;
+  /// Отправляет команду; возвращает ревизию данных владельца и признак, что
+  /// команда с таким `commandId` уже была принята раньше (повтор после
+  /// обрыва связи — сервер её не применял второй раз).
+  Future<({int revision, bool repeated})> command(String token, Map<String, Object?> command) async {
+    final r = await _send('POST', '/command', body: command, token: token);
+    return (revision: r['revision'] as int, repeated: r['repeated'] == true);
+  }
+
+  /// Язык интерфейса — на сервер, чтобы сводки в Telegram приходили на нём же.
+  Future<void> setLocale(String token, String locale) => _send('POST', '/auth/locale', body: {'locale': locale}, token: token);
+
+  /// Удаление аккаунта со всеми записями; сессия перестаёт действовать.
+  Future<void> deleteAccount(String token) => _send('POST', '/auth/delete', token: token);
 
   Future<void> changePassword(String token, String current, String next) =>
       _send('POST', '/auth/password', body: {'current': current, 'next': next}, token: token);
@@ -139,5 +149,9 @@ class ApiClient {
 
   Future<void> telegramUnlink(String token) => _send('POST', '/telegram/unlink', token: token);
 
-  Future<void> devPlan(String token, String plan) => _send('POST', '/dev/plan', body: {'plan': plan}, token: token);
+  /// Тариф: цена в звёздах, срок, история платежей.
+  Future<Map<String, dynamic>> billing(String token) => _send('GET', '/billing', token: token);
+
+  /// Ссылка на счёт в Telegram; открывается сразу с кнопкой «Оплатить».
+  Future<String> billingInvoice(String token) async => (await _send('POST', '/billing/invoice', token: token))['url'] as String;
 }

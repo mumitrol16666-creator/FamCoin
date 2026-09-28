@@ -31,3 +31,6 @@ app/lib/l10n/app_localizations*.dart
 keys/
 app/android/key.properties
 dist/
+
+# Локальные артефакты браузерной автоматизации
+.playwright-cli/

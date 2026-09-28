@@ -55,12 +55,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             children: [
               Row(children: [
-                IconButton(onPressed: () => setState(() { _offset--; _selectedDay = null; }), icon: const Icon(Icons.chevron_left)),
+                IconButton(tooltip: l.prevMonth, onPressed: () => setState(() { _offset--; _selectedDay = null; }), icon: const Icon(Icons.chevron_left)),
                 Expanded(
                   child: Text(toBeginningOfSentenceCase(DateFormat.yMMMM(locale).format(month)),
                       textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
                 ),
-                IconButton(onPressed: _offset >= 0 ? null : () => setState(() { _offset++; _selectedDay = null; }), icon: const Icon(Icons.chevron_right)),
+                IconButton(tooltip: l.nextMonth, onPressed: _offset >= 0 ? null : () => setState(() { _offset++; _selectedDay = null; }), icon: const Icon(Icons.chevron_right)),
               ]),
               AppCard(
                 child: Column(children: [
@@ -83,22 +83,34 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   SizedBox(
                     height: 120,
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    // Область нажатия — вся колонка дня во всю высоту графика,
+                    // а не столбик высотой 2 px у пустого дня; для экранного
+                    // диктора каждый день — кнопка с датой и суммой.
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       for (var i = 0; i < days.length; i++)
                         Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedDay = _selectedDay == i ? null : i),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 1),
-                              child: Container(
-                                height: maxDay == 0 ? 2 : (days[i] <= 0 ? 2 : 4 + 112 * days[i] / maxDay),
-                                decoration: BoxDecoration(
-                                  color: _selectedDay == i
-                                      ? fam.accent
-                                      : (_offset == 0 && i == state.today.day - 1)
-                                          ? context.scheme.primary
-                                          : context.scheme.primary.withValues(alpha: .45),
-                                  borderRadius: BorderRadius.circular(3),
+                          child: Semantics(
+                            button: true,
+                            selected: _selectedDay == i,
+                            label: l.dayTotal(DateFormat.MMMMd(locale).format(DateTime(month.year, month.month, i + 1)), formatMoney(days[i])),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => setState(() => _selectedDay = _selectedDay == i ? null : i),
+                              child: Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 1),
+                                  child: Container(
+                                    height: maxDay == 0 ? 2 : (days[i] <= 0 ? 2 : 4 + 112 * days[i] / maxDay),
+                                    decoration: BoxDecoration(
+                                      color: _selectedDay == i
+                                          ? fam.accent
+                                          : (_offset == 0 && i == state.today.day - 1)
+                                              ? context.scheme.primary
+                                              : context.scheme.primary.withValues(alpha: .45),
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -113,12 +125,32 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     Text('${days.length}', style: TextStyle(fontSize: 11, color: fam.text2)),
                   ]),
                   const SizedBox(height: 6),
-                  Text(
-                    _selectedDay == null
-                        ? l.tapDayHint
-                        : '${DateFormat.MMMMd(locale).format(DateTime(month.year, month.month, _selectedDay! + 1))}: ${formatMoney(days[_selectedDay!])}',
-                    style: TextStyle(fontSize: 12, color: fam.text2),
-                  ),
+                  Row(children: [
+                    Expanded(
+                      child: Text(
+                        _selectedDay == null
+                            ? l.tapDayHint
+                            : l.dayTotal(DateFormat.MMMMd(locale).format(DateTime(month.year, month.month, _selectedDay! + 1)), formatMoney(days[_selectedDay!])),
+                        style: TextStyle(fontSize: 12, color: fam.text2),
+                      ),
+                    ),
+                    // Пальцем узкий столбик выбрать трудно — есть календарь.
+                    ActionChip(
+                      avatar: const Icon(Icons.calendar_month_outlined, size: 16),
+                      label: Text(l.pickDay),
+                      onPressed: () async {
+                        final last = DateTime(month.year, month.month, days.length);
+                        final lastAllowed = last.isAfter(state.today) ? state.today : last;
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDay == null ? lastAllowed : DateTime(month.year, month.month, _selectedDay! + 1),
+                          firstDate: month,
+                          lastDate: lastAllowed,
+                        );
+                        if (picked != null) setState(() => _selectedDay = picked.day - 1);
+                      },
+                    ),
+                  ]),
                 ]),
               ),
               if (_selectedDay != null) ...[

@@ -21,6 +21,9 @@ class AppState extends ChangeNotifier {
 
   Ledger ledger = Ledger();
   String plan = 'free';
+
+  /// До какого момента действует оплаченный Pro; пусто — бессрочно или тариф обычный.
+  DateTime? proUntil;
   String email = '';
 
   /// Имя из Telegram; у обычных аккаунтов пусто.
@@ -103,6 +106,7 @@ class AppState extends ChangeNotifier {
       reservations: (s['reservations'] as List).cast(),
     );
     plan = s['plan'] as String? ?? 'free';
+    proUntil = s['proUntil'] == null ? null : DateTime.parse(s['proUntil'] as String).toLocal();
     email = s['email'] as String? ?? '';
     name = s['name'] as String?;
     profile = Map<String, dynamic>.from(s['profile'] as Map? ?? const {});
@@ -120,42 +124,42 @@ class AppState extends ChangeNotifier {
       ..addEntries([for (final e in _kind('category').entries) MapEntry(e.key, customCategoryFromJson(e.key, e.value))]);
   }
 
-  /// Команд применено локально, но сервер ещё не подтвердил.
+  /// Команд отправлено, ответа сервера ещё нет.
   int _ahead = 0;
 
   /// Есть запрос в полёте — для полоски загрузки.
   bool get busy => _ahead > 0;
 
-  /// Применяет команду сразу (ядро проверит её мгновенно, без сети), экран
-  /// обновляется тут же; сервер подтверждает в фоне. Отказ сервера или
-  /// расхождение ревизий — берём состояние сервера, ошибка уходит вызвавшему.
-  Future<void> send(Map<String, dynamic> command) async {
-    try {
-      _applyLocal(command);
-    } catch (_) {
-      await _reload();
-      notifyListeners();
-      rethrow;
-    }
+  /// Сервер — источник правды (D24): команда сначала принимается сервером
+  /// и только потом применяется к локальному журналу. Без ответа сервера
+  /// экран не меняется — при обрыве связи не появляется «призрачный»
+  /// остаток. [commandId] задаёт форма и повторяет при повторной отправке:
+  /// сервер не применит команду дважды, а клиент перечитает состояние.
+  Future<void> send(Map<String, dynamic> command, {String? commandId}) async {
     _ahead++;
-    final expected = revision + _ahead;
     notifyListeners();
     try {
-      final rev = await api.command(token, {...command, 'commandId': newId()});
-      revision = rev;
-      // Данные менялись с другого устройства — берём состояние сервера.
-      if (rev != expected) await _reload();
-    } catch (_) {
-      await _reload();
-      rethrow;
+      final r = await api.command(token, {...command, 'commandId': commandId ?? newId()});
+      if (r.repeated || r.revision != revision + 1) {
+        // Повтор уже принятой команды или изменения с другого устройства —
+        // берём состояние сервера целиком.
+        await _reload();
+      } else {
+        try {
+          _applyLocal(command);
+          revision = r.revision;
+        } catch (_) {
+          await _reload();
+        }
+      }
     } finally {
       _ahead--;
       notifyListeners();
     }
   }
 
-  Future<void> sendBatch(List<Map<String, dynamic>> commands) =>
-      send({'type': 'batch', 'commands': commands});
+  Future<void> sendBatch(List<Map<String, dynamic>> commands, {String? commandId}) =>
+      send({'type': 'batch', 'commands': commands}, commandId: commandId);
 
   Future<void> _reload() async => applySnapshot(await api.state(token));
 
@@ -178,8 +182,8 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> setPlanDev(bool pro) async {
-    await api.devPlan(token, pro ? 'pro' : 'free');
+  /// Перечитать состояние с сервера (после оплаты Pro и т.п.).
+  Future<void> refresh() async {
     await _reload();
     notifyListeners();
   }
@@ -329,13 +333,19 @@ class AppState extends ChangeNotifier {
 
   bool get hasPayDay => profile['incomeDay'] != null;
 
-  /// Неоплаченные сроки: прошлые в этом месяце и будущие до [until].
+  /// Неоплаченные сроки: все прошлые с даты добавления платежа (просрочка не
+  /// исчезает при смене месяца, пока срок не оплачен или не отмечен) и
+  /// будущие до [until].
   List<DueItem> dueItems(DateTime until) {
     final items = <DueItem>[];
+    final todayIdx = today.year * 12 + today.month - 1;
     for (final p in planned) {
-      for (var m = 0; m <= 2; m++) {
-        final date = _onDay(today.year, today.month + m, p.day);
-        if (date.isAfter(until)) continue;
+      final from = p.start ?? monthStart;
+      // Не раньше 10 лет назад и не дальше двух месяцев вперёд.
+      final startIdx = (from.year * 12 + from.month - 1).clamp(todayIdx - 120, todayIdx + 2);
+      for (var i = startIdx; i <= todayIdx + 2; i++) {
+        final date = _onDay(i ~/ 12, i % 12 + 1, p.day);
+        if (date.isAfter(until)) break;
         if (p.start != null && date.isBefore(p.start!)) continue;
         final period = _period(date);
         if (p.paid.contains(period)) continue;
@@ -466,43 +476,48 @@ class AppState extends ChangeNotifier {
 
   /// [time] — часы:минуты «HH:mm», когда операция произошла на самом деле;
   /// на дневной бюджет и отчёты не влияет, только показывается и правится.
-  Future<void> addExpense({required int amount, required String category, required String account, required DateTime date, String who = 'me', String note = '', String? time}) =>
-      send({'type': 'expense', 'id': newId(), 'date': _date(date), 'account': account, 'splits': {category: amount.toString()}, 'meta': {'who': who, if (note.isNotEmpty) 'note': note, if (time != null) 'time': time}});
+  /// [id] и [commandId] форма создаёт один раз на попытку сохранения и
+  /// повторяет при ошибке сети — повтор не создаёт вторую запись.
+  Future<void> addExpense({required int amount, required String category, required String account, required DateTime date, String who = 'me', String note = '', String? time, String? id, String? commandId}) =>
+      send({'type': 'expense', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'splits': {category: amount.toString()}, 'meta': {'who': who, if (note.isNotEmpty) 'note': note, if (time != null) 'time': time}}, commandId: commandId);
 
-  Future<void> addIncome({required int amount, required String source, required String account, required DateTime date, String note = '', String? time}) =>
-      send({'type': 'income', 'id': newId(), 'date': _date(date), 'account': account, 'source': source, 'amount': amount.toString(), 'meta': {if (note.isNotEmpty) 'note': note, if (time != null) 'time': time}});
+  Future<void> addIncome({required int amount, required String source, required String account, required DateTime date, String note = '', String? time, String? id, String? commandId}) =>
+      send({'type': 'income', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'source': source, 'amount': amount.toString(), 'meta': {if (note.isNotEmpty) 'note': note, if (time != null) 'time': time}}, commandId: commandId);
 
-  Future<void> addTransfer({required int amount, required String from, required String to, required DateTime date, String? time}) =>
-      send({'type': 'transfer', 'id': newId(), 'date': _date(date), 'from': from, 'to': to, 'amount': amount.toString(), if (time != null) 'meta': {'time': time}});
+  Future<void> addTransfer({required int amount, required String from, required String to, required DateTime date, String? time, String? id, String? commandId}) =>
+      send({'type': 'transfer', 'id': id ?? newId(), 'date': _date(date), 'from': from, 'to': to, 'amount': amount.toString(), if (time != null) 'meta': {'time': time}}, commandId: commandId);
 
   /// `kind`: lendOut, borrow, repaymentReceived, repaymentMade.
-  Future<void> addPersonDebt({required String kind, required int amount, required String person, required String account, required DateTime date, String? time}) {
+  Future<void> addPersonDebt({required String kind, required int amount, required String person, required String account, required DateTime date, String? time, String? id, String? commandId}) {
     final isRepayment = kind == 'repaymentReceived' || kind == 'repaymentMade';
     return send({
       'type': kind,
-      'id': newId(),
+      'id': id ?? newId(),
       'date': _date(date),
       'account': account,
       'person': person,
       if (isRepayment) 'principal': amount.toString() else 'amount': amount.toString(),
       if (time != null) 'meta': {'time': time},
-    });
+    }, commandId: commandId);
   }
 
   Future<void> payDebt({required String debtId, required String account, required int principal, int interest = 0, DateTime? date}) =>
       send({'type': 'loanPayment', 'id': newId(), 'date': _date(date ?? today), 'account': account, 'debtId': debtId, 'principal': principal.toString(), 'interest': interest.toString()});
 
-  /// Оплата срока планового платежа: факт и отметка «оплачено» — одной командой.
-  Future<void> payDue(DueItem due, {required String account, required int amount, int interest = 0, DateTime? date}) {
+  /// Оплата срока планового платежа: факт и отметка «оплачено» — одной
+  /// командой. Запись помнит платёж и период (`meta.planned`, `meta.period`),
+  /// чтобы её удаление снова открыло срок.
+  Future<void> payDue(DueItem due, {required String account, required int amount, int interest = 0, DateTime? date, String? commandId}) {
     final p = due.planned;
     final d = _date(date ?? today);
+    final link = {'planned': p.id, 'period': due.period};
     final fact = p.debtId != null
-        ? {'type': 'loanPayment', 'id': newId(), 'date': d, 'account': account, 'debtId': p.debtId, 'principal': (amount - interest).toString(), 'interest': interest.toString()}
-        : {'type': 'expense', 'id': newId(), 'date': d, 'account': account, 'splits': {p.category: amount.toString()}, 'meta': {'who': 'shared', 'note': p.name, 'planned': p.id}};
+        ? {'type': 'loanPayment', 'id': newId(), 'date': d, 'account': account, 'debtId': p.debtId, 'principal': (amount - interest).toString(), 'interest': interest.toString(), 'meta': link}
+        : {'type': 'expense', 'id': newId(), 'date': d, 'account': account, 'splits': {p.category: amount.toString()}, 'meta': {'who': 'shared', 'note': p.name, ...link}};
     return sendBatch([
       fact,
       {'type': 'upsertEntity', 'kind': 'planned', 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, due.period})},
-    ]);
+    ], commandId: commandId);
   }
 
   /// Исправление покупки: старая версия отменяется, новая проводится —
@@ -526,19 +541,14 @@ class AppState extends ChangeNotifier {
         {'type': 'income', 'id': newId(), 'date': _date(date), 'account': account, 'source': source, 'amount': amount.toString(), 'meta': {if (note.isNotEmpty) 'note': note, if (time != null) 'time': time, 'edited': old.id}},
       ]);
 
-  /// Возврат покупки на счёт (F028): уменьшает расход категории в дату возврата.
-  Future<void> refund(Transaction purchase, {required String category, required int amount, required String account, DateTime? date}) =>
-      send({'type': 'refund', 'id': newId(), 'date': _date(date ?? today), 'category': category, 'amount': amount.toString(), 'toAccount': account, 'meta': {'refundOf': purchase.id}});
+  /// Возврат покупки на счёт (F028): уменьшает расход категории в дату
+  /// возврата. Привязывается к исходной версии покупки, поэтому правка
+  /// покупки не открывает возврат заново; лимит проверяет ядро и сервер.
+  Future<void> refund(Transaction purchase, {required String category, required int amount, required String account, DateTime? date, String? commandId}) =>
+      send({'type': 'refund', 'id': newId(), 'date': _date(date ?? today), 'category': category, 'amount': amount.toString(), 'toAccount': account, 'meta': {'refundOf': ledger.purchaseRoot(purchase.id)}}, commandId: commandId);
 
-  /// Сколько по покупке уже возвращено в категории.
-  int refundedFor(String purchaseId, String category) {
-    var sum = 0;
-    for (final t in ledger.transactions) {
-      if (t.type != EventType.refund || t.meta['refundOf'] != purchaseId || ledger.isReversed(t.id)) continue;
-      sum -= t.amountOn(expenseAccount(category));
-    }
-    return sum;
-  }
+  /// Сколько по покупке уже возвращено в категории — по всем версиям покупки.
+  int refundedFor(String purchaseId, String category) => ledger.refundedFor(purchaseId, expenseAccount(category));
 
   /// Сверка остатка (O21): разница между фактическим остатком и остатком в
   /// приложении проводится отдельной записью с причиной.
@@ -553,7 +563,24 @@ class AppState extends ChangeNotifier {
 
   Future<void> changePassword(String current, String next) => api.changePassword(token, current, next);
 
-  Future<void> deleteTransaction(String txId) => send({'type': 'reverse', 'txId': txId, 'id': newId()});
+  /// Удаление — отменяющая запись, история сохраняется. Если удаляется
+  /// оплата планового платежа, её срок снова становится неоплаченным.
+  Future<void> deleteTransaction(String txId, {String? commandId}) {
+    final reverse = {'type': 'reverse', 'txId': txId, 'id': newId()};
+    final tx = ledger.byId(txId);
+    final plannedId = tx?.meta['planned'];
+    if (tx != null && plannedId is String) {
+      final p = planned.where((p) => p.id == plannedId).firstOrNull;
+      final period = tx.meta['period'] as String? ?? _period(tx.date);
+      if (p != null && p.paid.contains(period)) {
+        return sendBatch([
+          reverse,
+          {'type': 'upsertEntity', 'kind': 'planned', 'entityId': p.id, 'data': p.toJson(paid: {...p.paid}..remove(period))},
+        ], commandId: commandId);
+      }
+    }
+    return send(reverse, commandId: commandId);
+  }
 
   Future<void> reserve(String goalId, String account, int amount) =>
       send({'type': 'reserve', 'goalId': goalId, 'accountId': account, 'amount': amount.toString()});

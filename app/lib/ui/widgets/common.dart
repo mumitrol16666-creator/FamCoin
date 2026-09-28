@@ -9,6 +9,7 @@ import '../../l10n/app_localizations.dart';
 import '../../state/api_client.dart';
 import '../../state/models.dart';
 import '../../theme/app_theme.dart';
+import '../more/tariff_screen.dart';
 
 extension L10nX on BuildContext {
   AppLocalizations get l10n => AppLocalizations.of(this);
@@ -574,9 +575,21 @@ Future<void> showProGate(BuildContext context, String message) {
               Text(l.proPrice, style: const TextStyle(fontWeight: FontWeight.w700)),
             ]),
           ),
-          Text(l.proStoreNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
-          const SizedBox(height: 8),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.later)),
+          Text(l.proHow, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const TariffScreen()));
+                },
+                child: Text(l.proBuy),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.later)),
+          ]),
         ],
       ),
     ),

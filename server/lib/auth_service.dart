@@ -248,4 +248,22 @@ class AuthService {
         Sql.named('DELETE FROM sessions WHERE token_hash = @h'),
         parameters: {'h': sha256Hex(token)},
       );
+
+  /// Язык интерфейса: на нём же формируются сводки в Telegram.
+  Future<void> setLocale(String userId, String locale) async {
+    if (locale != 'ru' && locale != 'kk') throw ApiError(400, 'bad_request');
+    await db.execute(Sql.named('UPDATE users SET locale = @l WHERE id = @u'), parameters: {'l': locale, 'u': userId});
+  }
 }
+
+/// Полное удаление аккаунта со всеми данными — одной транзакцией.
+/// Проводки ссылаются на счета журнала, а операции — друг на друга, поэтому
+/// каскад от `users` их не удаляет: журнал очищается явно по порядку, остальное
+/// (справочники, команды, сессии, уведомления, платежи) — каскадом.
+Future<void> deleteUserData(Pool db, String userId) => db.runTx((tx) async {
+      for (final table in ['postings', 'reservations', 'transactions', 'ledger_accounts']) {
+        await tx.execute(Sql.named('DELETE FROM $table WHERE user_id = @u'), parameters: {'u': userId});
+      }
+      final r = await tx.execute(Sql.named('DELETE FROM users WHERE id = @u'), parameters: {'u': userId});
+      if (r.affectedRows == 0) throw ApiError(404, 'not_found');
+    });

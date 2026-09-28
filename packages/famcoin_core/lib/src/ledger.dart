@@ -283,6 +283,43 @@ class Ledger {
   Transaction? byId(String id) => _byId[id];
   bool isReversed(String id) => _reversed.contains(id);
 
+  /// Исходная версия покупки. Правка отменяет старую запись и создаёт новую
+  /// с `meta.edited` → id старой; возвраты и лимит возврата считаются по
+  /// всей цепочке версий, поэтому не теряются после правки.
+  String purchaseRoot(String txId) {
+    var id = txId;
+    for (var i = 0; i < 1000; i++) {
+      final prev = _byId[id]?.meta['edited'];
+      if (prev is! String || prev.isEmpty || !_byId.containsKey(prev)) break;
+      id = prev;
+    }
+    return id;
+  }
+
+  /// Действующая (не отменённая) версия покупки из цепочки правок [txId].
+  Transaction? currentVersion(String txId) {
+    final root = purchaseRoot(txId);
+    for (final t in _transactions.reversed) {
+      if (t.type == EventType.reversal || t.type == EventType.refund || _reversed.contains(t.id)) continue;
+      if (purchaseRoot(t.id) == root) return t;
+    }
+    return null;
+  }
+
+  /// Сколько по покупке уже возвращено по счёту категории [expenseAccountId]
+  /// — по всем версиям покупки, отменённые возвраты не считаются.
+  int refundedFor(String purchaseId, String expenseAccountId) {
+    final root = purchaseRoot(purchaseId);
+    var sum = 0;
+    for (final t in _transactions) {
+      if (t.type != EventType.refund || _reversed.contains(t.id)) continue;
+      final of = t.meta['refundOf'];
+      if (of is! String || purchaseRoot(of) != root) continue;
+      sum -= t.amountOn(expenseAccountId);
+    }
+    return sum;
+  }
+
   /// Исправление через отменяющую запись: исходная операция остаётся в
   /// истории, её эффект снимается. Повторная отмена — ошибка.
   Transaction reverse(String txId, {required String newId, DateTime? date}) {

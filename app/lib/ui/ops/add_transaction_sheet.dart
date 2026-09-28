@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../state/api_client.dart' show ApiException;
 import '../../state/app_scope.dart';
+import '../../state/models.dart' show newId;
 import '../../theme/app_theme.dart';
 import '../budget/sheets.dart';
 import '../more/categories_screen.dart';
@@ -12,8 +14,8 @@ import '../widgets/common.dart';
 
 enum FieldsKind { expense, income, transfer, debt }
 
-/// Q02 — ручная операция. Одна заметная кнопка «Сохранить» внизу;
-/// голос, чек и шаблоны — явные кнопки рядом с полями (Pro).
+/// Q02 — ручная операция. Кнопка «Сохранить» закреплена внизу и видна без
+/// прокрутки; заполненная форма не закрывается без подтверждения.
 Future<void> showAddTransactionSheet(BuildContext context, {VoiceDraft? draft}) {
   final state = AppScope.of(context).state;
   if (state.activeAccounts.isEmpty) return addAccountFlow(context);
@@ -21,32 +23,65 @@ Future<void> showAddTransactionSheet(BuildContext context, {VoiceDraft? draft}) 
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    showDragHandle: true,
+    // Смахивание вниз закрывало бы форму мимо проверки черновика — закрытие
+    // только крестиком, кнопкой «назад» или нажатием на затемнение.
+    enableDrag: false,
     builder: (_) => _AddSheet(draft: draft),
   );
 }
 
-class _AddSheet extends StatelessWidget {
+class _AddSheet extends StatefulWidget {
   const _AddSheet({this.draft});
   final VoiceDraft? draft;
 
   @override
+  State<_AddSheet> createState() => _AddSheetState();
+}
+
+class _AddSheetState extends State<_AddSheet> {
+  /// Есть введённые данные — закрытие требует подтверждения.
+  final _dirty = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _dirty.dispose();
+    super.dispose();
+  }
+
+  Future<void> _close() async {
+    final l = context.l10n;
+    if (_dirty.value && !await confirm(context, title: l.discardDraftTitle, message: l.discardDraftMessage, action: l.discardDraft)) return;
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: .92,
-      maxChildSize: .95,
-      builder: (context, controller) => Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
-          child: Row(children: [
-            Expanded(child: Text(l.addOperation, style: Theme.of(context).textTheme.headlineSmall)),
-            IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
-          ]),
-        ),
-        Expanded(child: TransactionFields(draft: draft, scrollController: controller)),
-      ]),
+    return ValueListenableBuilder<bool>(
+      valueListenable: _dirty,
+      builder: (context, dirty, child) => PopScope(
+        canPop: !dirty,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _close();
+        },
+        child: child!,
+      ),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: .92,
+        minChildSize: .5,
+        maxChildSize: .95,
+        builder: (context, controller) => Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
+            child: Row(children: [
+              Expanded(child: Text(l.addOperation, style: Theme.of(context).textTheme.headlineSmall)),
+              IconButton(tooltip: l.tipClose, onPressed: _close, icon: const Icon(Icons.close)),
+            ]),
+          ),
+          Expanded(child: TransactionFields(draft: widget.draft, scrollController: controller, dirty: _dirty)),
+        ]),
+      ),
     );
   }
 }
@@ -55,7 +90,7 @@ class _AddSheet extends StatelessWidget {
 /// и как самостоятельная форма (Q02), и как редактируемый черновик после
 /// голоса (S38): один и тот же код правки, чтобы не расходились два места.
 class TransactionFields extends StatefulWidget {
-  const TransactionFields({super.key, this.draft, this.scrollController, this.showVoiceChip = true});
+  const TransactionFields({super.key, this.draft, this.scrollController, this.showVoiceChip = true, this.dirty});
 
   /// Черновик из голосового ввода: поля заполняются, но не сохраняются
   /// до нажатия «Сохранить».
@@ -65,6 +100,9 @@ class TransactionFields extends StatefulWidget {
   /// встроена в чужой скролл (черновик внутри голосового экрана).
   final ScrollController? scrollController;
   final bool showVoiceChip;
+
+  /// Сообщает владельцу формы, что в ней есть несохранённые данные.
+  final ValueNotifier<bool>? dirty;
 
   @override
   State<TransactionFields> createState() => _TransactionFieldsState();
@@ -87,6 +125,16 @@ class _TransactionFieldsState extends State<TransactionFields> {
   TimeOfDay _time = TimeOfDay.now();
   bool _busy = false;
 
+  /// Ошибка последней попытки сохранить — показывается прямо в форме:
+  /// снэкбар под открытой панелью на телефоне не виден.
+  String? _error;
+
+  /// Идентификаторы записи и команды создаются один раз на форму: повтор
+  /// «Сохранить» после обрыва связи отправляет ту же команду, и сервер не
+  /// заводит вторую запись.
+  final _txId = newId();
+  final _commandId = newId();
+
   /// Категория/счёт/человек не распознаны голосом — не блокирует сохранение,
   /// только подсказывает проверить поле (раздел 10 карты: черновик всегда
   /// можно поправить перед записью).
@@ -96,6 +144,10 @@ class _TransactionFieldsState extends State<TransactionFields> {
 
   DateTime get _date => _dateOverride ?? AppScope.of(context).state.today;
   bool _prefilled = false;
+
+  void _markDirty() {
+    widget.dirty?.value = _amount.text.isNotEmpty || _note.text.isNotEmpty || _person.text.isNotEmpty;
+  }
 
   void _applyDraft(VoiceDraft d) {
     final today = AppScope.of(context).state.today;
@@ -135,6 +187,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
     }
     if (d.note.isNotEmpty) _note.text = d.note;
     if (d.date != null && d.date != 0) _dateOverride = today.add(Duration(days: d.date!));
+    _markDirty();
   }
 
   @override
@@ -152,31 +205,39 @@ class _TransactionFieldsState extends State<TransactionFields> {
     final messenger = ScaffoldMessenger.of(context);
     final amount = parseAmount(_amount.text);
     if (amount == null) {
-      messenger.showSnackBar(SnackBar(content: Text(l.enterAmount)));
+      setState(() => _error = l.enterAmount);
       return;
     }
     final account = _account!;
     final note = _note.text.trim();
     final time = timeToField(_time);
-    setState(() => _busy = true);
-    final ok = await runAction(context, () {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
       switch (_kind) {
         case FieldsKind.expense:
-          return state.addExpense(amount: amount, category: _category, account: account, date: _date, who: state.familyMode ? _who : 'me', note: note, time: time);
+          await state.addExpense(amount: amount, category: _category, account: account, date: _date, who: state.familyMode ? _who : 'me', note: note, time: time, id: _txId, commandId: _commandId);
         case FieldsKind.income:
-          return state.addIncome(amount: amount, source: _source, account: account, date: _date, note: note, time: time);
+          await state.addIncome(amount: amount, source: _source, account: account, date: _date, note: note, time: time, id: _txId, commandId: _commandId);
         case FieldsKind.transfer:
-          return state.addTransfer(amount: amount, from: account, to: _to!, date: _date, time: time);
+          await state.addTransfer(amount: amount, from: account, to: _to!, date: _date, time: time, id: _txId, commandId: _commandId);
         case FieldsKind.debt:
-          return state.addPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), account: account, date: _date, time: time);
+          await state.addPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), account: account, date: _date, time: time, id: _txId, commandId: _commandId);
       }
-    });
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (ok) {
-      Navigator.pop(context);
-      messenger.showSnackBar(SnackBar(content: Text(l.saved)));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e is ApiException && e.isNetwork ? l.retrySave : errorText(l, e);
+      });
+      return;
     }
+    if (!mounted) return;
+    widget.dirty?.value = false;
+    Navigator.pop(context);
+    messenger.showSnackBar(SnackBar(content: Text(l.saved)));
   }
 
   bool get _valid {
@@ -203,23 +264,6 @@ class _TransactionFieldsState extends State<TransactionFields> {
 
     Widget label(String text) => Padding(padding: const EdgeInsets.only(top: 14, bottom: 6), child: Text(text, style: TextStyle(fontSize: 12, color: fam.text2)));
 
-    Widget proChip(IconData icon, String text) => ActionChip(
-          avatar: Icon(icon, size: 16),
-          label: Row(mainAxisSize: MainAxisSize.min, children: [Text(text), const SizedBox(width: 6), const ProBadge()]),
-          // Диалог, а не SnackBar: снэкбар рисуется под открытой формой и на
-          // телефоне не виден вовсе.
-          onPressed: () => state.pro
-              ? showDialog<void>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(l.receipt),
-                    content: Text(l.receiptsSoon),
-                    actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: Text(l.later))],
-                  ),
-                )
-              : showProGate(context, l.proGateFast),
-        );
-
     final missingHints = [
       if (_accountMissing) l.account,
       if (_categoryMissing) l.category,
@@ -229,11 +273,14 @@ class _TransactionFieldsState extends State<TransactionFields> {
     final children = <Widget>[
       SegmentedButton<FieldsKind>(
         showSelectedIcon: false,
+        // Четыре подписи на узком экране: без переносов посреди слова.
+        style: const ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 4)),
+        ),
         segments: [
-          ButtonSegment(value: FieldsKind.expense, label: Text(l.expense)),
-          ButtonSegment(value: FieldsKind.income, label: Text(l.income)),
-          ButtonSegment(value: FieldsKind.transfer, label: Text(l.transfer)),
-          ButtonSegment(value: FieldsKind.debt, label: Text(l.debt)),
+          for (final (k, t) in [(FieldsKind.expense, l.expense), (FieldsKind.income, l.income), (FieldsKind.transfer, l.transfer), (FieldsKind.debt, l.debt)])
+            ButtonSegment(value: k, label: Text(t, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
         ],
         selected: {_kind},
         onSelectionChanged: (s) => setState(() => _kind = s.first),
@@ -252,7 +299,10 @@ class _TransactionFieldsState extends State<TransactionFields> {
             textAlign: TextAlign.center,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9\s.,]'))],
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) {
+              _markDirty();
+              setState(() => _error = null);
+            },
             style: Theme.of(context).textTheme.displayMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
             decoration: const InputDecoration(border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false, hintText: '0'),
           ),
@@ -265,11 +315,11 @@ class _TransactionFieldsState extends State<TransactionFields> {
             avatar: const Icon(Icons.mic_none, size: 16),
             label: Text(l.voice),
             onPressed: () {
+              widget.dirty?.value = false;
               Navigator.pop(context);
               showVoiceSheet(context);
             },
           ),
-          proChip(Icons.qr_code_scanner, l.receipt),
         ]),
       if (_kind == FieldsKind.transfer) ...[
         const SizedBox(height: 14),
@@ -288,11 +338,26 @@ class _TransactionFieldsState extends State<TransactionFields> {
             ChoiceChip(label: Text(t), selected: _debtKind == k, onSelected: (_) => setState(() => _debtKind = k)),
         ]),
         label(l.person),
-        TextField(controller: _person, onChanged: (_) => setState(() => _personMissing = false), decoration: InputDecoration(hintText: l.personHint)),
+        TextField(
+          controller: _person,
+          onChanged: (_) {
+            _markDirty();
+            setState(() => _personMissing = false);
+          },
+          decoration: InputDecoration(hintText: l.personHint),
+        ),
         if (state.knownPeople.isNotEmpty) ...[
           const SizedBox(height: 6),
           Wrap(spacing: 8, children: [
-            for (final p in state.knownPeople) ActionChip(label: Text(p), onPressed: () => setState(() { _person.text = p; _personMissing = false; })),
+            for (final p in state.knownPeople)
+              ActionChip(
+                label: Text(p),
+                onPressed: () => setState(() {
+                  _person.text = p;
+                  _personMissing = false;
+                  _markDirty();
+                }),
+              ),
           ]),
         ],
         const SizedBox(height: 14),
@@ -360,19 +425,29 @@ class _TransactionFieldsState extends State<TransactionFields> {
       ]),
       if (_kind == FieldsKind.expense || _kind == FieldsKind.income) ...[
         label(l.note),
-        TextField(controller: _note, maxLength: 120, decoration: InputDecoration(hintText: l.noteHint, counterText: '')),
+        TextField(controller: _note, maxLength: 120, onChanged: (_) => _markDirty(), decoration: InputDecoration(hintText: l.noteHint, counterText: '')),
       ],
-      const SizedBox(height: 20),
-      FilledButton(
-        onPressed: _valid && !_busy ? _save : null,
-        child: _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : Text(l.save),
-      ),
     ];
 
     final controller = widget.scrollController;
+    // Кнопка сохранения закреплена под полями и видна без прокрутки; при
+    // открытой клавиатуре поднимается над ней.
+    final footer = Padding(
+      padding: EdgeInsets.fromLTRB(controller != null ? 20 : 0, 8, controller != null ? 20 : 0, controller != null ? 12 + MediaQuery.of(context).viewInsets.bottom : 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+        if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: InfoBanner(_error!, color: fam.warnBg, icon: Icons.error_outline)),
+        FilledButton(
+          onPressed: _valid && !_busy ? _save : null,
+          child: _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : Text(l.save),
+        ),
+      ]),
+    );
     if (controller != null) {
-      return ListView(controller: controller, padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom), children: children);
+      return Column(children: [
+        Expanded(child: ListView(controller: controller, padding: const EdgeInsets.fromLTRB(20, 0, 20, 12), children: children)),
+        footer,
+      ]);
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...children, const SizedBox(height: 12), footer]);
   }
 }

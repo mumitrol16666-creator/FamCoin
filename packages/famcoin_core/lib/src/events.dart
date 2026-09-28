@@ -437,6 +437,18 @@ extension LedgerEvents on Ledger {
     if ((toAccount == null) == (reduceDebtId == null)) {
       throw LedgerException('Укажите ровно один способ возврата');
     }
+    // Возврат привязан к покупке (meta.refundOf): нельзя вернуть больше, чем
+    // потрачено в категории, с учётом прежних возвратов и правок покупки.
+    final of = meta['refundOf'];
+    if (of is String && byId(of) != null) {
+      final purchase = currentVersion(of);
+      if (purchase == null) throw LedgerException('Покупка отменена — возврат по ней невозможен');
+      final bought = purchase.amountOn(_exp(category));
+      final already = refundedFor(of, _exp(category));
+      if (amount + already > bought) {
+        throw LedgerException('Возврат больше суммы покупки в этой категории');
+      }
+    }
     return _post(Transaction(
       id: id,
       date: date,

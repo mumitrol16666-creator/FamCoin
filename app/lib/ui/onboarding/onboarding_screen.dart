@@ -179,7 +179,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l.obStep(_step + 1, steps)),
-        leading: _step == 0 ? null : IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => setState(() => _step--)),
+        leading: _step == 0 ? null : IconButton(tooltip: l.tipBack, icon: const Icon(Icons.arrow_back), onPressed: () => setState(() => _step--)),
         actions: [
           if (canSkip) TextButton(onPressed: () => setState(() => _step++), child: Text(l.skip)),
           const SizedBox(width: 4),
@@ -261,7 +261,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               CircleAvatar(child: Text(m.name.characters.first.toUpperCase())),
               const SizedBox(width: 12),
               Expanded(child: Text('${m.name} · ${roleName(l, m.role)}')),
-              IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _members.remove(m))),
+              IconButton(tooltip: l.tipRemove, icon: const Icon(Icons.close), onPressed: () => setState(() => _members.remove(m))),
             ]),
           ),
         OutlinedButton.icon(onPressed: _addMember, icon: const Icon(Icons.person_add_alt), label: Text(l.addMember)),
@@ -323,7 +323,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         AppCard(
           child: Row(children: [
             Expanded(child: row(i)),
-            IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => items.remove(i))),
+            IconButton(tooltip: context.l10n.tipRemove, icon: const Icon(Icons.close), onPressed: () => setState(() => items.remove(i))),
           ]),
         ),
       OutlinedButton.icon(onPressed: onAdd, icon: const Icon(Icons.add), label: Text(addLabel)),
@@ -425,7 +425,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             const SizedBox(width: 12),
             Expanded(child: Text(categoryName(l, lim.category))),
             MoneyText(lim.amount),
-            IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _limits.remove(lim))),
+            IconButton(tooltip: l.tipRemove, icon: const Icon(Icons.close), onPressed: () => setState(() => _limits.remove(lim))),
           ]),
         ),
       if (_limits.length < maxLimits)

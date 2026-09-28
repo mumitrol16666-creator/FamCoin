@@ -1,0 +1,44 @@
+00:00 +0: loading /Users/vladislav/Finance 2/docs/audit-2026-09-28/artifacts/audit_regression_test.dart
+00:00 +0: F02: editing a refunded purchase must preserve its refunded amount
+00:00 +0 -1: F02: editing a refunded purchase must preserve its refunded amount [E]
+  Expected: <250000>
+    Actual: <0>
+  
+  package:matcher                                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18                  expect
+  ../docs/audit-2026-09-28/artifacts/audit_regression_test.dart 46:5  main.<fn>
+  
+00:00 +0 -1: F03: reversing a scheduled payment must reopen the unpaid occurrence
+00:00 +0 -2: F03: reversing a scheduled payment must reopen the unpaid occurrence [E]
+  Expected: false
+    Actual: <true>
+  
+  package:matcher                                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18                  expect
+  ../docs/audit-2026-09-28/artifacts/audit_regression_test.dart 55:5  main.<fn>
+  
+00:00 +0 -2: F04: unpaid September bill must remain overdue in October
+00:00 +0 -3: F04: unpaid September bill must remain overdue in October [E]
+  Expected: true
+    Actual: <false>
+  
+  package:matcher                                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18                  expect
+  ../docs/audit-2026-09-28/artifacts/audit_regression_test.dart 62:5  main.<fn>
+  
+00:00 +0 -3: F05: network failure must not leave a confirmed-looking phantom balance
+00:00 +0 -4: F05: network failure must not leave a confirmed-looking phantom balance [E]
+  Expected: <10000000>
+    Actual: <10077700>
+  
+  package:matcher                                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18                  expect
+  ../docs/audit-2026-09-28/artifacts/audit_regression_test.dart 70:5  main.<fn>
+  
+00:00 +0 -4: Some tests failed.
+
+Failing tests:
+  /Users/vladislav/Finance 2/docs/audit-2026-09-28/artifacts/audit_regression_test.dart: F02: editing a refunded purchase must preserve its refunded amount
+  /Users/vladislav/Finance 2/docs/audit-2026-09-28/artifacts/audit_regression_test.dart: F03: reversing a scheduled payment must reopen the unpaid occurrence
+  /Users/vladislav/Finance 2/docs/audit-2026-09-28/artifacts/audit_regression_test.dart: F04: unpaid September bill must remain overdue in October
+  /Users/vladislav/Finance 2/docs/audit-2026-09-28/artifacts/audit_regression_test.dart: F05: network failure must not leave a confirmed-looking phantom balance

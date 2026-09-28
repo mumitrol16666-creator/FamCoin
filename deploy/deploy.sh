@@ -55,6 +55,14 @@ URL="${URL:-http://$HOST}"
 echo "→ проверяю $URL"
 for i in $(seq 1 60); do
   if curl -sf -o /dev/null "$URL/" && curl -sf "$URL/api/health" >/dev/null; then
+    # Wasm-сборка не запустится, если main.dart.mjs отдаётся не как JavaScript.
+    if curl -sfI -o /dev/null "$URL/main.dart.mjs"; then
+      CT="$(curl -sI "$URL/main.dart.mjs" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print $2}')"
+      case "$CT" in
+        *javascript*) ;;
+        *) echo "ОШИБКА: main.dart.mjs отдаётся как '$CT' — проверьте app/nginx.conf" >&2; exit 1 ;;
+      esac
+    fi
     echo "готово: $URL"
     exit 0
   fi

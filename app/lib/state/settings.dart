@@ -23,6 +23,10 @@ class Settings extends ChangeNotifier {
   Locale get locale => Locale(_prefs.getString('lang') ?? 'ru');
   set locale(Locale value) {
     _prefs.setString('lang', value.languageCode);
+    // На сервере тот же язык — сводки в Telegram приходят на нём. Без сети
+    // обновится при следующем переключении; экран не ждёт ответа.
+    final t = token;
+    if (t != null) api.setLocale(t, value.languageCode).catchError((_) {});
     notifyListeners();
   }
 

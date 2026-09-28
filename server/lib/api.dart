@@ -9,6 +9,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'admin.dart';
 import 'admin_page.dart';
 import 'auth_service.dart';
+import 'billing.dart';
 import 'ledger_service.dart';
 import 'notifications.dart';
 import 'telegram.dart';
@@ -46,6 +47,7 @@ Handler buildHandler(
   NotificationService notifications,
   AdminService admin, {
   required Telegram telegram,
+  required BillingService billing,
   String allowedOrigin = '*',
 }) {
   Future<String> user(Request req) async {
@@ -101,16 +103,24 @@ Handler buildHandler(
     })
     ..post('/command', (Request req) async {
       final id = await user(req);
-      final revision = await ledger.command(id, await _body(req));
+      final r = await ledger.command(id, await _body(req));
       await auth.touch(id);
-      return _json(200, {'revision': revision});
+      return _json(200, {'revision': r.revision, 'repeated': r.repeated});
     })
-    ..post('/dev/plan', (Request req) async {
+    ..post('/auth/locale', (Request req) async {
       final id = await user(req);
-      final b = await _body(req);
-      await ledger.setPlanDev(id, '${b['plan']}');
-      return _json(200, {'plan': b['plan']});
+      await auth.setLocale(id, '${(await _body(req))['locale'] ?? ''}');
+      return _json(200, {'status': 'ok'});
     })
+    ..post('/auth/delete', (Request req) async {
+      final id = await user(req);
+      await deleteUserData(auth.db, id);
+      ledger.forget(id);
+      return _json(200, {'status': 'ok'});
+    })
+    // Тариф: оплата Pro звёздами Telegram (D52)
+    ..get('/billing', (Request req) async => _json(200, await billing.info(await user(req))))
+    ..post('/billing/invoice', (Request req) async => _json(200, await billing.invoice(await user(req))))
 
     // Уведомления
     ..get('/notifications', (Request req) async => _json(200, {'items': await notifications.list(await user(req))}))
@@ -176,6 +186,16 @@ Handler buildHandler(
     ..post('/admin/users/<id>/delete', (Request req, String id) async {
       admin.require(_bearer(req));
       await admin.deleteUser(id, '${(await _body(req))['email'] ?? ''}');
+      return _json(200, {'status': 'ok'});
+    })
+    ..get('/admin/payments', (Request req) async {
+      admin.require(_bearer(req));
+      return _json(200, await billing.all());
+    })
+    ..post('/admin/payments/<id>/refund', (Request req, String id) async {
+      admin.require(_bearer(req));
+      await billing.refund(id);
+      await admin.audit_('refund', target: null, details: {'payment': id});
       return _json(200, {'status': 'ok'});
     });
 
