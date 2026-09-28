@@ -54,7 +54,7 @@ class _LimitDraft {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const steps = 8;
+  static const steps = 9;
   int _step = 0;
   bool _busy = false;
 
@@ -173,6 +173,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       4 => (l.ob4Title, l.ob4Hint, l.tipPlanned, _plannedStep()),
       5 => (l.ob6Title, l.ob6Hint, l.tipPeople, _peopleStep()),
       6 => (l.ob7Title, l.ob7Hint, l.tipLimits, _limitsStep()),
+      7 => (l.obGoalTitle, l.obGoalHint, l.tipGoal, _goalStep()),
       _ => (l.ob8Title, l.ob8Hint, l.tipSummary, _summaryStep(state)),
     };
 
@@ -437,9 +438,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           icon: const Icon(Icons.add),
           label: Text(l.addLimit),
         ),
-      SectionHeader(l.firstGoal),
+    ]);
+  }
+
+  Widget _goalStep() {
+    final l = context.l10n;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Text(l.piggyNote, style: TextStyle(fontSize: 12, color: context.fam.text2)),
-      const SizedBox(height: 8),
+      const SizedBox(height: 12),
       TextField(controller: _goalName, decoration: InputDecoration(labelText: l.goalName, hintText: l.goalNameHint)),
       const SizedBox(height: 12),
       AmountField(controller: _goalTarget, label: l.goalTarget),

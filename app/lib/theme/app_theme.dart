@@ -219,6 +219,10 @@ ThemeData buildTheme(Brightness brightness, {Season season = Season.none}) {
       // Подсказка-пример заметно бледнее введённого текста — иначе кажется,
       // что поле уже заполнено (замечание владельца 28.09.2026).
       hintStyle: TextStyle(color: fam.text2.withValues(alpha: .55)),
+      // Название поля (labelText) без своего стиля наследует основной цвет
+      // текста и выглядит как уже введённое значение, а не как подпись.
+      labelStyle: TextStyle(color: fam.text2),
+      floatingLabelStyle: TextStyle(color: fam.text2),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: fam.line),
