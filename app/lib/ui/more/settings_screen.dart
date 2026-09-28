@@ -138,6 +138,15 @@ class SettingsScreen extends StatelessWidget {
                 l.dataSection,
                 Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(foregroundColor: fam.expense),
+                    icon: const Icon(Icons.restart_alt),
+                    label: Text(l.resetAll),
+                    onPressed: () => _resetAll(context),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(l.resetAllNote, style: TextStyle(fontSize: 12, color: fam.text2)),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
                     icon: const Icon(Icons.table_chart_outlined),
                     label: Text(l.exportCsv),
                     onPressed: () => exportData(context, format: 'csv'),
@@ -165,6 +174,44 @@ class SettingsScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// «Начать всё заново»: подтверждение словом, сервер стирает журнал,
+  /// счета, планы и анкету; аккаунт и вход остаются, открывается анкета.
+  Future<void> _resetAll(BuildContext context) async {
+    final l = context.l10n;
+    final state = AppScope.of(context).state;
+    final nav = Navigator.of(context);
+    final word = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: Text(l.resetAll),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(l.resetAllConfirm),
+            const SizedBox(height: 12),
+            TextField(controller: word, autofocus: true, onChanged: (_) => set(() {}), decoration: InputDecoration(hintText: l.deleteAccountWord)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l.cancel)),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: ctx.fam.expense),
+              onPressed: word.text.trim().toUpperCase() == l.deleteAccountWord ? () => Navigator.pop(ctx, true) : null,
+              child: Text(l.resetAllAction),
+            ),
+          ],
+        ),
+      ),
+    );
+    word.dispose();
+    if (ok != true || !context.mounted) return;
+    if (await runAction(context, () async {
+      await state.api.resetData(state.token);
+      await state.refresh();
+    })) {
+      nav.popUntil((r) => r.isFirst);
+    }
   }
 
   /// Имя, фамилия, дата рождения (D50).

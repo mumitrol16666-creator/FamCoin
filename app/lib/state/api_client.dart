@@ -125,6 +125,9 @@ class ApiClient {
   /// Язык интерфейса — на сервер, чтобы сводки в Telegram приходили на нём же.
   Future<void> setLocale(String token, String locale) => _send('POST', '/auth/locale', body: {'locale': locale}, token: token);
 
+  /// «Начать всё заново»: данные стираются, аккаунт и сессия остаются.
+  Future<void> resetData(String token) => _send('POST', '/auth/reset', token: token);
+
   /// Удаление аккаунта со всеми записями; сессия перестаёт действовать.
   Future<void> deleteAccount(String token) => _send('POST', '/auth/delete', token: token);
 

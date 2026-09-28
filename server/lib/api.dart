@@ -115,6 +115,12 @@ Handler buildHandler(
       await auth.setLocale(id, '${(await _body(req))['locale'] ?? ''}');
       return _json(200, {'status': 'ok'});
     })
+    ..post('/auth/reset', (Request req) async {
+      final id = await user(req);
+      await resetUserData(auth.db, id);
+      ledger.forget(id);
+      return _json(200, {'status': 'ok'});
+    })
     ..post('/auth/delete', (Request req) async {
       final id = await user(req);
       await deleteUserData(auth.db, id);

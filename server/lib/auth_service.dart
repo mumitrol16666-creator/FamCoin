@@ -260,6 +260,19 @@ class AuthService {
   }
 }
 
+/// «Начать всё заново»: стереть журнал, справочники, планы, уведомления и
+/// анкету, оставив аккаунт, вход, тариф и настройки Telegram.
+Future<void> resetUserData(Pool db, String userId) => db.runTx((tx) async {
+      for (final table in ['postings', 'reservations', 'transactions', 'ledger_accounts', 'entities', 'commands', 'notifications']) {
+        await tx.execute(Sql.named('DELETE FROM $table WHERE user_id = @u'), parameters: {'u': userId});
+      }
+      final r = await tx.execute(
+        Sql.named("UPDATE users SET profile = '{}'::jsonb, revision = revision + 1 WHERE id = @u"),
+        parameters: {'u': userId},
+      );
+      if (r.affectedRows == 0) throw ApiError(404, 'not_found');
+    });
+
 /// Полное удаление аккаунта со всеми данными — одной транзакцией.
 /// Проводки ссылаются на счета журнала, а операции — друг на друга, поэтому
 /// каскад от `users` их не удаляет: журнал очищается явно по порядку, остальное
