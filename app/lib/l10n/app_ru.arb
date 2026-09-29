@@ -743,5 +743,216 @@
       }
     }
   },
-  "carryReset": "Начать перенос заново"
+  "carryReset": "Начать перенос заново",
+  "tabOverview": "Обзор",
+  "tabExpenses": "Расходы",
+  "tabBudget": "Бюджет",
+  "tabCapital": "Капитал",
+  "tabHistory": "История",
+  "freeCashFlow": "Свободный денежный поток",
+  "moneyFlow": "Движение денег",
+  "runningBalance": "Накоплено за месяц",
+  "dayFlow": "{date}: доход {income}, расход {expense}",
+  "@dayFlow": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "income": {
+        "type": "String"
+      },
+      "expense": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetShort": "Бюджет месяца",
+  "details": "Подробнее",
+  "whereMoneyGoes": "Куда уходят деньги",
+  "forecastTitle": "Прогноз до конца месяца",
+  "netCapital": "Чистый капитал",
+  "observations": "Наблюдения",
+  "noLimitsShort": "Лимиты не заданы",
+  "budgetUsedVsElapsed": "Потрачено {used}% бюджета · месяц прошёл {elapsed}%",
+  "@budgetUsedVsElapsed": {
+    "placeholders": {
+      "used": {
+        "type": "int"
+      },
+      "elapsed": {
+        "type": "int"
+      }
+    }
+  },
+  "forecastEstimate": "Ожидаемый остаток",
+  "forecastRange": "Вероятный диапазон: {low} – {high}",
+  "@forecastRange": {
+    "placeholders": {
+      "low": {
+        "type": "String"
+      },
+      "high": {
+        "type": "String"
+      }
+    }
+  },
+  "forecastObligations": "Обязательные платежи",
+  "forecastSpend": "Обычные и свободные траты",
+  "forecastIncome": "Ожидаемый доход",
+  "expenseVsPrev": "Расходы {arrow} {pct}% к прошлому месяцу",
+  "@expenseVsPrev": {
+    "placeholders": {
+      "arrow": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "incomeVsPrev": "Доходы {arrow} {pct}%",
+  "@incomeVsPrev": {
+    "placeholders": {
+      "arrow": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "freeCashVsPrev": "Свободных денег {sign}{amount} к прошлому месяцу",
+  "@freeCashVsPrev": {
+    "placeholders": {
+      "sign": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "obsEveningShare": "{pct}% свободных расходов — после 20:00",
+  "@obsEveningShare": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "obsUnplanned": "{count, plural, one{Была {count} крупная покупка, не входящая ни в один лимит} few{Было {count} крупные покупки, не входящие ни в один лимит} many{Было {count} крупных покупок, не входящих ни в один лимит} other{Было {count} крупной покупки, не входящей ни в один лимит}}",
+  "@obsUnplanned": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "obsPayday": "В дни поступления дохода расходы в среднем в {ratio} раза выше обычных",
+  "@obsPayday": {
+    "placeholders": {
+      "ratio": {
+        "type": "String"
+      }
+    }
+  },
+  "obsRecurringShare": "{pct}% дохода уже распределено на постоянные платежи",
+  "@obsRecurringShare": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "obsCategoryChange": "«{category}» {arrow} {pct}% к прошлому месяцу",
+  "@obsCategoryChange": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      },
+      "arrow": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "byThreeTypes": "Три типа трат",
+  "typeMandatory": "Обязательные",
+  "typeRegular": "Обычные",
+  "typeDiscretionary": "Свободные",
+  "budgetProgress": "Бюджет месяца",
+  "budgetFaster": "Трачу быстрее, чем идёт месяц",
+  "planVsFact": "План / факт",
+  "manage": "Управлять",
+  "plan": "План",
+  "fact": "Факт",
+  "recurringExpenses": "Постоянные расходы",
+  "total": "Всего",
+  "recurringShareOfIncome": "{pct}% среднего дохода уже распределено до начала месяца",
+  "@recurringShareOfIncome": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "recurringShareUnknown": "Доля от дохода появится, когда в журнале будет доход",
+  "assets": "Активы",
+  "capitalChanged": "{arrow} {amount} за последние 6 месяцев",
+  "@capitalChanged": {
+    "placeholders": {
+      "arrow": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "capitalTrend": "Капитал по месяцам",
+  "now": "сейчас",
+  "monthsShort": "мес",
+  "debtLoad": "Долговая нагрузка",
+  "totalDebt": "Общий долг",
+  "incomeShareShort": "{pct}% дохода на платежи",
+  "@incomeShareShort": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "monthsCompare": "Сравнение месяцев",
+  "monthlyPayments": "Платежи в месяц",
+  "incomeShare": "Доля от дохода",
+  "debtProgress": "Прогресс погашения",
+  "debtPaidPercent": "Погашено {pct}%",
+  "@debtPaidPercent": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "payoffForecast": "При каком темпе — сколько",
+  "currentPace": "При текущем темпе",
+  "extraPerMonth": "+{amount}/мес",
+  "@extraPerMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payoffUnknown": "не укладывается в разумный срок",
+  "monthsCount": "{n, plural, one{{n} месяц} few{{n} месяца} many{{n} месяцев} other{{n} месяца}}",
+  "@monthsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

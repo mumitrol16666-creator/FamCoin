@@ -532,6 +532,22 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
+  /// Доход месяца по дням — для графика «доход/расход по дням» (индекс 0 —
+  /// первое число).
+  List<int> dailyIncome(DateTime monthStart) {
+    final days = DateTime(monthStart.year, monthStart.month + 1, 0).day;
+    final out = List<int>.filled(days, 0);
+    final end = DateTime(monthStart.year, monthStart.month + 1, 1);
+    for (final tx in ledger.transactions) {
+      if (ledger.isReversed(tx.id) || tx.type != EventType.income) continue;
+      if (tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
+      for (final p in tx.postings) {
+        if (ledger.account(p.accountId).kind == LedgerKind.income) out[tx.date.day - 1] += p.amount;
+      }
+    }
+    return out;
+  }
+
   /// Расход месяца по отметке «для кого».
   Map<String, int> expenseByWho(DateTime monthStart) {
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
@@ -651,6 +667,191 @@ class AppState extends ChangeNotifier {
 
   int adjustmentsFor(DateTime monthStart) => ledger.adjustmentsFor(monthStart, DateTime(monthStart.year, monthStart.month + 1, 1));
   int get monthAdjustments => adjustmentsFor(monthStart);
+
+  // ------------------------------------------------------- аналитика (D66)
+
+  /// Расход месяца по трём типам вместо десятков категорий (раздел 9.8):
+  /// обязательные (аренда, коммуналка, связь, кредиты), обычные (еда,
+  /// транспорт, бытовое) и свободные (кафе, развлечения, подарки). Своя
+  /// категория — свободные по умолчанию, смысл по названию не определить.
+  ExpenseTypeSplit expenseTypeSplit(DateTime monthStart) => splitExpenseTypes({for (final e in categoriesFor(monthStart)) e.key: e.value});
+
+  /// Чистый капитал на конец каждого из последних [months] месяцев, самый
+  /// новый — сегодня (месяц ещё не закончился). Ничего не хранится отдельно:
+  /// журнал уже весь на устройстве (D63), это просто снимок на разные даты.
+  List<NetWorth> netWorthHistory(int months) => [
+        for (var k = months - 1; k >= 0; k--) ledger.netWorth(asOf: k == 0 ? today : monthOf(1 - k).subtract(const Duration(days: 1))),
+      ];
+
+  /// Постоянные ежемесячные обязательства (раздел 9.11): плановые платежи,
+  /// включая платежи по кредитам — они заводятся как планы со ссылкой на долг.
+  int get recurringMonthly => planned.fold(0, (s, p) => s + p.amount);
+
+  /// Средний доход за последние [months] уже закончившихся месяцев (без
+  /// текущего — он не закончился); `0`, если дохода не было.
+  int avgMonthlyIncome({int months = 3}) {
+    if (months <= 0) return 0;
+    var sum = 0;
+    for (var k = 1; k <= months; k++) {
+      sum += reportFor(monthOf(-k)).income;
+    }
+    return sum ~/ months;
+  }
+
+  /// Доля постоянных обязательств от среднего дохода; `null` — доход неизвестен.
+  double? get recurringShareOfIncome {
+    final income = avgMonthlyIncome();
+    return income > 0 ? recurringMonthly * 100 / income : null;
+  }
+
+  /// Прогноз остатка до конца календарного месяца (раздел 9.9; не до
+  /// зарплаты — дата дохода из продукта убрана, D50). Точка отсчёта —
+  /// свободные деньги сейчас минус ещё не оплаченные обязательства и
+  /// ожидаемые повседневные траты по уже сложившемуся среднему, плюс
+  /// ожидаемый остаток дохода месяца.
+  MonthForecast get monthEndForecast {
+    final remaining = dueItems(monthEnd.subtract(const Duration(days: 1))).fold(0, (s, d) => s + d.planned.amount);
+    final elapsed = today.day;
+    final avgDaily = elapsed <= 0 ? 0 : spentBetween(monthStart, today) ~/ elapsed;
+    final daysLeft = monthEnd.difference(today).inDays - 1;
+    final expectedIncome = avgMonthlyIncome() - monthReport.income;
+    return forecastMonthEnd(
+      current: ledger.freeLiquid(),
+      remainingObligations: remaining,
+      avgDailySpend: avgDaily,
+      daysLeft: daysLeft < 0 ? 0 : daysLeft,
+      expectedIncome: expectedIncome < 0 ? 0 : expectedIncome,
+    );
+  }
+
+  /// Использовано от суммы всех лимитов, %; `null` — лимитов нет или их сумма 0.
+  double? get budgetUsedPercent {
+    final totalLimit = limits.fold(0, (s, l) => s + l.amount);
+    if (totalLimit == 0) return null;
+    final totalSpent = limits.fold(0, (s, l) => s + spentInCategory(l.category));
+    return totalSpent * 100 / totalLimit;
+  }
+
+  double get monthElapsedPercent => today.day * 100 / daysInMonth;
+
+  /// Долговая нагрузка по банковским долгам (раздел 9.10). Личные долги сюда
+  /// не входят — это не регулярный ежемесячный платёж.
+  DebtLoadStatus get debtLoadStatus {
+    final income = avgMonthlyIncome();
+    return debtLoad(
+      [for (final d in bankDebts) _debtLoadInput(d)],
+      monthlyIncome: income > 0 ? income : null,
+    );
+  }
+
+  DebtLoadInput _debtLoadInput(DebtInfo d) => DebtLoadInput(
+        id: d.id,
+        currentBalance: debtBalance(d.id),
+        monthlyPayment: plannedForDebt(d.id)?.amount ?? 0,
+        annualRatePercent: d.rate,
+        // Кредитка — револьверный долг: баланс растёт от новых покупок,
+        // «доля погашения» для неё не имеет смысла.
+        initialBalance: d.kind == 'creditCard' ? null : _debtInitialBalance(d.id),
+      );
+
+  /// Месяцев до полного погашения всех банковских долгов при сумме
+  /// минимальных платежей плюс [extraPerMonth] (сценарий «а если платить
+  /// больше»); `0` без долгов, `null` — не укладывается в разумный срок.
+  int? monthsToPayoffAt({int extraPerMonth = 0}) {
+    final inputs = [for (final d in bankDebts) _debtLoadInput(d)];
+    if (inputs.isEmpty) return 0;
+    final budget = inputs.fold(0, (s, d) => s + d.monthlyPayment) + extraPerMonth;
+    return monthsToPayoff(inputs, monthlyBudget: budget);
+  }
+
+  /// Остаток долга на дату его открытия — ищет самую первую запись,
+  /// затронувшую этот долг (`openingDebt` использует тот же `EventType.opening`,
+  /// что и начальный остаток денежного счёта).
+  int? _debtInitialBalance(String debtId) {
+    final acc = liabilityAccount(debtId);
+    for (final tx in ledger.transactions) {
+      if (tx.type != EventType.opening) continue;
+      for (final p in tx.postings) {
+        if (p.accountId == acc) return p.amount;
+      }
+    }
+    return null;
+  }
+
+  /// Час операции из `meta.time` («09:14» → 9); `null`, если время не указано.
+  int? _hourOf(Transaction t) {
+    final m = RegExp(r'^(\d{1,2}):').firstMatch('${t.meta['time']}');
+    return m == null ? null : int.tryParse(m[1]!);
+  }
+
+  /// Доля свободных трат после 20:00 среди операций с указанным временем
+  /// (раздел 9.12); `null`, если время не указано ни у одной такой операции —
+  /// не показываем наблюдение, которое на самом деле ничего не измеряет.
+  double? eveningDiscretionaryShare(DateTime monthStart) {
+    final end = DateTime(monthStart.year, monthStart.month + 1, 1);
+    var total = 0, evening = 0;
+    for (final tx in ledger.transactions) {
+      if (tx.type != EventType.expense || ledger.isReversed(tx.id) || _isPlannedSpend(tx)) continue;
+      if (tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
+      final hour = _hourOf(tx);
+      if (hour == null) continue;
+      for (final p in tx.postings) {
+        if (ledger.account(p.accountId).kind != LedgerKind.expense) continue;
+        if (expenseTypeOf(p.accountId.substring(8)) != ExpenseType.discretionary) continue;
+        total += p.amount;
+        if (hour >= 20) evening += p.amount;
+      }
+    }
+    return total == 0 ? null : evening * 100 / total;
+  }
+
+  /// Крупные покупки в категориях без лимита — «не было в плане месяца»:
+  /// лимит на категорию и есть тот самый план (раздел 9.12).
+  List<Transaction> unplannedLargeExpenses(DateTime monthStart, {int threshold = 2000000}) {
+    final end = DateTime(monthStart.year, monthStart.month + 1, 1);
+    final planned = {for (final l in limits) l.category};
+    return userTransactions.where((t) {
+      if (t.type != EventType.expense || t.date.isBefore(monthStart) || !t.date.isBefore(end)) return false;
+      for (final p in t.postings) {
+        if (ledger.account(p.accountId).kind != LedgerKind.expense) continue;
+        if (p.amount >= threshold && !planned.contains(p.accountId.substring(8))) return true;
+      }
+      return false;
+    }).toList();
+  }
+
+  /// Во сколько раз траты в дни поступления дохода выше обычных за последние
+  /// [months] месяцев; `null` без доходных дней или без дней для сравнения.
+  double? paydaySpendRatio({int months = 3}) {
+    final start = monthOf(-(months - 1));
+    final end = monthEnd;
+    final incomeDays = <DateTime>{};
+    final spendByDay = <DateTime, int>{};
+    for (final tx in ledger.transactions) {
+      if (ledger.isReversed(tx.id)) continue;
+      if (tx.date.isBefore(start) || !tx.date.isBefore(end)) continue;
+      if (tx.type == EventType.income) incomeDays.add(tx.date);
+      if (tx.type == EventType.expense && !_isPlannedSpend(tx)) {
+        final amt = tx.postings.where((p) => ledger.account(p.accountId).kind == LedgerKind.expense).fold(0, (s, p) => s + p.amount);
+        spendByDay.update(tx.date, (v) => v + amt, ifAbsent: () => amt);
+      }
+    }
+    if (incomeDays.isEmpty) return null;
+    var onIncome = 0, onIncomeDays = 0, other = 0, otherDays = 0;
+    spendByDay.forEach((d, v) {
+      if (incomeDays.contains(d)) {
+        onIncome += v;
+        onIncomeDays++;
+      } else {
+        other += v;
+        otherDays++;
+      }
+    });
+    if (onIncomeDays == 0 || otherDays == 0) return null;
+    final avgIncome = onIncome / onIncomeDays;
+    final avgOther = other / otherDays;
+    return avgOther == 0 ? null : avgIncome / avgOther;
+  }
 
   Future<void> changePassword(String current, String next) => api.changePassword(token, current, next);
 

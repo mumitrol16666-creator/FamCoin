@@ -688,5 +688,216 @@
   "tipGoal": "Мақсат — бөлек жинақ қорабы: оған ақша жинайсыз, бұл ақша бос болып саналмайды.",
   "carryPositive": "{amount} ауысты",
   "carryNegative": "{amount} артық жұмсалды",
-  "carryReset": "Ауысымды қайта бастау"
+  "carryReset": "Ауысымды қайта бастау",
+  "tabOverview": "Шолу",
+  "tabExpenses": "Шығыстар",
+  "tabBudget": "Бюджет",
+  "tabCapital": "Капитал",
+  "tabHistory": "Тарих",
+  "freeCashFlow": "Бос ақша ағыны",
+  "moneyFlow": "Ақша қозғалысы",
+  "runningBalance": "Ай бойы жиналған",
+  "dayFlow": "{date}: кіріс {income}, шығыс {expense}",
+  "@dayFlow": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "income": {
+        "type": "String"
+      },
+      "expense": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetShort": "Ай бюджеті",
+  "details": "Толығырақ",
+  "whereMoneyGoes": "Ақша қайда кетті",
+  "forecastTitle": "Ай соңына дейінгі болжам",
+  "netCapital": "Таза капитал",
+  "observations": "Байқаулар",
+  "noLimitsShort": "Лимиттер қойылмаған",
+  "budgetUsedVsElapsed": "Бюджеттің {used}% жұмсалды · айдың {elapsed}% өтті",
+  "@budgetUsedVsElapsed": {
+    "placeholders": {
+      "used": {
+        "type": "int"
+      },
+      "elapsed": {
+        "type": "int"
+      }
+    }
+  },
+  "forecastEstimate": "Күтілетін қалдық",
+  "forecastRange": "Ықтимал аралық: {low} – {high}",
+  "@forecastRange": {
+    "placeholders": {
+      "low": {
+        "type": "String"
+      },
+      "high": {
+        "type": "String"
+      }
+    }
+  },
+  "forecastObligations": "Міндетті төлемдер",
+  "forecastSpend": "Күнделікті және бос шығындар",
+  "forecastIncome": "Күтілетін кіріс",
+  "expenseVsPrev": "Шығыстар өткен айға қарағанда {arrow} {pct}%",
+  "@expenseVsPrev": {
+    "placeholders": {
+      "arrow": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "incomeVsPrev": "Кірістер {arrow} {pct}%",
+  "@incomeVsPrev": {
+    "placeholders": {
+      "arrow": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "freeCashVsPrev": "Бос ақша өткен айға қарағанда {sign}{amount}",
+  "@freeCashVsPrev": {
+    "placeholders": {
+      "sign": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "obsEveningShare": "Бос шығындардың {pct}% — 20:00-ден кейін",
+  "@obsEveningShare": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "obsUnplanned": "{count, plural, other{Ешбір лимитке кірмейтін {count} ірі сатып алу болды}}",
+  "@obsUnplanned": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "obsPayday": "Кіріс түскен күндері шығын әдеттегіден орта есеппен {ratio} есе жоғары",
+  "@obsPayday": {
+    "placeholders": {
+      "ratio": {
+        "type": "String"
+      }
+    }
+  },
+  "obsRecurringShare": "Кірістің {pct}% тұрақты төлемдерге бөлінген",
+  "@obsRecurringShare": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "obsCategoryChange": "«{category}» өткен айға қарағанда {arrow} {pct}%",
+  "@obsCategoryChange": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      },
+      "arrow": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "byThreeTypes": "Үш түрлі шығын",
+  "typeMandatory": "Міндетті",
+  "typeRegular": "Күнделікті",
+  "typeDiscretionary": "Бос",
+  "budgetProgress": "Ай бюджеті",
+  "budgetFaster": "Ай өткеннен жылдамырақ жұмсап жатырмын",
+  "planVsFact": "Жоспар / факт",
+  "manage": "Басқару",
+  "plan": "Жоспар",
+  "fact": "Факт",
+  "recurringExpenses": "Тұрақты шығындар",
+  "total": "Барлығы",
+  "recurringShareOfIncome": "Орташа кірістің {pct}% ай басталмай тұрып бөлінген",
+  "@recurringShareOfIncome": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "recurringShareUnknown": "Кірістен үлесі журналда кіріс пайда болғанда көрінеді",
+  "assets": "Активтер",
+  "capitalChanged": "Соңғы 6 айда {arrow} {amount}",
+  "@capitalChanged": {
+    "placeholders": {
+      "arrow": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "capitalTrend": "Айлар бойынша капитал",
+  "now": "қазір",
+  "monthsShort": "ай",
+  "debtLoad": "Қарыз жүктемесі",
+  "totalDebt": "Жалпы қарыз",
+  "incomeShareShort": "Кірістің {pct}% төлемдерге кетеді",
+  "@incomeShareShort": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "monthsCompare": "Айларды салыстыру",
+  "monthlyPayments": "Айына төлемдер",
+  "incomeShare": "Кірістен үлесі",
+  "debtProgress": "Өтеу барысы",
+  "debtPaidPercent": "{pct}% өтелді",
+  "@debtPaidPercent": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "payoffForecast": "Қандай қарқында — қанша уақыт",
+  "currentPace": "Қазіргі қарқында",
+  "extraPerMonth": "+{amount}/ай",
+  "@extraPerMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payoffUnknown": "орынды мерзімге сыймайды",
+  "monthsCount": "{n, plural, other{{n} ай}}",
+  "@monthsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }
