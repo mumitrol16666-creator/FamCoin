@@ -191,6 +191,47 @@ void main() {
     expect(f.ledger.balance('cash'), kzt(90000), reason: 'сервер применил ту же команду');
   });
 
+  test('D64: неизрасходованный дневной лимит переносится на следующий день', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await s.setDailyLimit(kzt(4000));
+    expect(s.dailyLimitSince, s.today);
+    expect(s.dailyLimitAvailable, kzt(4000));
+    expect(s.dailyLimitCarry, 0);
+
+    // Потратили 1500 из 4000 — на завтра должно перейти 2500.
+    await s.addExpense(amount: kzt(1500), category: 'cafe', account: 'cash', date: s.today);
+    expect(s.dailyLimitAvailable, kzt(2500));
+
+    f.now = f.now.add(const Duration(days: 1));
+    expect(s.dailyLimitAvailable, kzt(4000 + 2500), reason: 'вчерашний остаток 2500 добавился к сегодняшним 4000');
+    expect(s.dailyLimitCarry, kzt(2500));
+    expect(s.spentToday(), 0);
+
+    // Перерасход сегодня уменьшает доступное на будущее.
+    await s.addExpense(amount: kzt(8000), category: 'cafe', account: 'cash', date: s.today);
+    expect(s.dailyLimitAvailable, kzt(4000 + 2500 - 8000));
+
+    f.now = f.now.add(const Duration(days: 1));
+    expect(s.dailyLimitAvailable, kzt(4000 * 3 - 1500 - 8000), reason: 'перерасход вчера уменьшил доступное и сегодня');
+
+    // Сброс переноса — считаем заново с сегодняшнего дня, сумма лимита та же.
+    await s.resetDailyLimitCarry();
+    expect(s.dailyLimitSince, s.today);
+    expect(s.dailyLimitAvailable, kzt(4000));
+    expect(s.dailyLimitCarry, 0);
+
+    // Смена суммы лимита не сбрасывает перенос; удаление лимита — сбрасывает.
+    await s.addExpense(amount: kzt(1000), category: 'cafe', account: 'cash', date: s.today);
+    final sinceBefore = s.dailyLimitSince;
+    await s.setDailyLimit(kzt(5000));
+    expect(s.dailyLimitSince, sinceBefore);
+    expect(s.dailyLimitAvailable, kzt(5000 - 1000));
+    await s.setDailyLimit(null);
+    expect(s.dailyLimitSince, isNull);
+  });
+
   test('F04: неоплаченный сентябрьский срок остаётся просроченным в октябре', () async {
     final f = FakeServer();
     await f.init();

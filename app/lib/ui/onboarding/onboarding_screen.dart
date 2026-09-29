@@ -651,7 +651,10 @@ class LimitResult {
 
 Future<LimitResult?> showLimitSheet(BuildContext context, {Set<String> exclude = const {}, LimitInfo? initial}) {
   final l = context.l10n;
-  final options = expenseCategories.where((c) => !exclude.contains(c.id) || c.id == initial?.category).toList();
+  final state = AppScope.of(context).state;
+  // Видимые встроенные плюс уже созданные свои категории (D41) — лимит
+  // можно поставить и на свою категорию, не только на встроенную.
+  final options = state.visibleExpenseCategories.where((c) => !exclude.contains(c.id) || c.id == initial?.category).toList();
   var category = initial?.category ?? options.first.id;
   final amount = TextEditingController(text: initial == null ? '' : amountToField(initial.amount));
   return showFormSheet<LimitResult>(
@@ -659,7 +662,17 @@ Future<LimitResult?> showLimitSheet(BuildContext context, {Set<String> exclude =
     title: initial == null ? l.addLimit : l.editLimit,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        CategoryPicker(options: options, value: category, onChanged: (c) => set(() => category = c)),
+        CategoryPicker(
+          options: ensureIncluded(options, category),
+          value: category,
+          onChanged: (c) => set(() => category = c),
+          // Нужной категории может не быть в списке — создать её прямо тут,
+          // не выходя из лимита (иначе не всем очевидно, что это вообще можно).
+          onAdd: () async {
+            final id = await showCategorySheet(context);
+            if (id != null) set(() => category = id);
+          },
+        ),
         const SizedBox(height: 12),
         AmountField(controller: amount, label: l.limitAmount),
         const SizedBox(height: 20),

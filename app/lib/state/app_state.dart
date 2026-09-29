@@ -78,7 +78,25 @@ class AppState extends ChangeNotifier {
   /// Дневной лимит повседневных трат, тиыны; задаёт сам владелец (D48).
   /// `null` — не задан. Расчёт по формуле 9.3 — только подсказка.
   int? get dailyLimit => profile['dailyLimit'] == null ? null : parseMinor(profile['dailyLimit']);
-  Future<void> setDailyLimit(int? minor) => send({'type': 'updateProfile', 'profile': {'dailyLimit': minor?.toString()}});
+
+  /// С какого дня копится перенос неизрасходованного лимита (D64). Задаётся
+  /// один раз при включении лимита и не двигается при смене суммы — так
+  /// перенос не сбрасывается, если владелец просто поправил число.
+  DateTime? get dailyLimitSince => profile['dailyLimitSince'] == null ? null : dateFromJson(profile['dailyLimitSince']);
+
+  /// Меняет сумму лимита. Включение лимита (был не задан) запускает перенос
+  /// с сегодняшнего дня; выключение — снимает перенос совсем.
+  Future<void> setDailyLimit(int? minor) => send({
+        'type': 'updateProfile',
+        'profile': {
+          'dailyLimit': minor?.toString(),
+          if (minor == null) 'dailyLimitSince': null else if (dailyLimit == null) 'dailyLimitSince': _date(today),
+        },
+      });
+
+  /// Обнулить перенос: начать копить заново с сегодняшнего дня, сумму
+  /// лимита не трогая. Для «слишком большой минус, хочу начать с нуля».
+  Future<void> resetDailyLimitCarry() => send({'type': 'updateProfile', 'profile': {'dailyLimitSince': _date(today)}});
 
   /// Встроенные категории, скрытые из выбора (свои удаляются иначе — см. D41).
   Set<String> get hiddenCategories => {...((profile['hiddenCategories'] as List?) ?? const []).cast<String>()};
@@ -342,19 +360,47 @@ class AppState extends ChangeNotifier {
     return t.type == EventType.refund && of is String && (ledger.currentVersion(of) ?? ledger.byId(of))?.meta['planned'] != null;
   }
 
-  /// Сегодняшние повседневные траты из дневного бюджета: покупки минус
-  /// возвраты по сегодняшним покупкам.
-  int spentToday() {
+  /// Повседневные траты из дневного бюджета за [from]–[to] включительно:
+  /// покупки минус возвраты по покупкам этих дней (возврат считается по дню
+  /// покупки, не по дню самого возврата — см. `_spendDay`).
+  int spentBetween(DateTime from, DateTime to) {
     var sum = 0;
     for (final tx in ledger.transactions) {
       if ((tx.type != EventType.expense && tx.type != EventType.refund) || ledger.isReversed(tx.id)) continue;
-      if (_spendDay(tx) != today || _isPlannedSpend(tx)) continue;
-      // (возврат по удалённой покупке даёт null и сюда не попадает)
+      final day = _spendDay(tx); // возврат по удалённой покупке даёт null и сюда не попадает
+      if (day == null || day.isBefore(from) || day.isAfter(to) || _isPlannedSpend(tx)) continue;
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind == LedgerKind.expense) sum += p.amount;
       }
     }
     return sum < 0 ? 0 : sum;
+  }
+
+  /// Сегодняшние повседневные траты из дневного бюджета.
+  int spentToday() => spentBetween(today, today);
+
+  /// Сколько доступно сегодня с учётом переноса (D64): за каждый день с
+  /// начала копления (`dailyLimitSince`) лимит либо остаётся неизрасходован
+  /// и добавляется к завтрашнему дню, либо превышен — и настолько же
+  /// уменьшает доступное на будущее. Эквивалентно «выдано лимитов за N дней
+  /// минус потрачено за N дней»; ежедневно ничего не сохраняется отдельно —
+  /// значение всегда считается заново по журналу.
+  int? get dailyLimitAvailable {
+    final limit = dailyLimit;
+    if (limit == null) return null;
+    final since = dailyLimitSince ?? today;
+    final days = today.difference(since.isAfter(today) ? today : since).inDays + 1;
+    return limit * days - spentBetween(since, today);
+  }
+
+  /// Вклад прошлых дней в сегодняшнее доступное: положительный — прошлые
+  /// дни сэкономили и добавили сегодня, отрицательный — прошлый перерасход
+  /// уменьшил сегодняшнюю сумму. `0` в первый день лимита или без переноса.
+  int get dailyLimitCarry {
+    final limit = dailyLimit;
+    final available = dailyLimitAvailable;
+    if (limit == null || available == null) return 0;
+    return available - (limit - spentToday());
   }
 
   static DateTime _onDay(int year, int month, int day) {

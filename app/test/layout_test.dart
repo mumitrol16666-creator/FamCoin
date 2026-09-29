@@ -11,6 +11,7 @@ import 'package:famcoin/state/secret_store.dart';
 import 'package:famcoin/state/settings.dart';
 import 'package:famcoin/theme/app_theme.dart';
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
+import 'package:famcoin/ui/budget/sheets.dart';
 import 'package:famcoin/ui/more/more_screen.dart';
 import 'package:famcoin/ui/more/settings_screen.dart';
 import 'package:famcoin/ui/ops/add_transaction_sheet.dart';
@@ -183,6 +184,24 @@ void main() {
     await tester.pumpAndSettle();
     await revealForWhom();
     expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Общее')).selected, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('лимит: можно создать свою категорию прямо в форме', (tester) async {
+    await pumpApp(
+      tester,
+      size: const Size(360, 732),
+      home: Scaffold(body: Builder(builder: (context) => Center(child: FilledButton(onPressed: () => addLimitFlow(context), child: const Text('open'))))),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    final ownCategoryChip = find.widgetWithText(ActionChip, 'Своя категория');
+    expect(ownCategoryChip, findsOneWidget, reason: 'иначе непонятно, что лимит можно поставить и на свою категорию');
+    await tester.ensureVisible(ownCategoryChip);
+    await tester.pumpAndSettle();
+    await tester.tap(ownCategoryChip);
+    await tester.pumpAndSettle();
+    expect(find.text('Своя категория'), findsWidgets); // заголовок листа создания
     await tester.pumpWidget(const SizedBox());
   });
 

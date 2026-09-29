@@ -195,6 +195,14 @@ class HomeScreen extends StatelessWidget {
             return runAction(ctx, () => state.setDailyLimit(a));
           },
         ),
+        if (state.dailyLimit != null && state.dailyLimitCarry != 0)
+          TextButton(
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              if (await runAction(ctx, state.resetDailyLimitCarry)) nav.pop();
+            },
+            child: Text(l.carryReset),
+          ),
         if (state.dailyLimit != null)
           TextButton(
             onPressed: () async {
@@ -225,8 +233,9 @@ class _GuideCard extends StatelessWidget {
     final showTotal = state.guideView == 'total';
     final limit = state.dailyLimit;
     final spent = state.spentToday();
-    final int? headline = showTotal ? state.ledger.liquid() : (limit == null ? null : limit - spent);
+    final int? headline = showTotal ? state.ledger.liquid() : state.dailyLimitAvailable;
     final negative = (headline ?? 0) < 0;
+    final carry = state.dailyLimitCarry;
 
     return AppCard(
       color: negative ? fam.guideBad : fam.guideBg,
@@ -247,7 +256,10 @@ class _GuideCard extends StatelessWidget {
           if (!showTotal) ...[
             const SizedBox(height: 2),
             Text(
-              limit == null ? l.dailyLimitPrompt : '${formatMoney(limit)} ${l.perDay} · ${l.spentTodayLabel} ${formatMoney(spent)}',
+              limit == null
+                  ? l.dailyLimitPrompt
+                  : '${formatMoney(limit)} ${l.perDay} · ${l.spentTodayLabel} ${formatMoney(spent)}'
+                      '${carry == 0 ? '' : carry > 0 ? ' · ${l.carryPositive(formatMoney(carry))}' : ' · ${l.carryNegative(formatMoney(-carry))}'}',
               style: const TextStyle(fontSize: 13),
             ),
           ],
