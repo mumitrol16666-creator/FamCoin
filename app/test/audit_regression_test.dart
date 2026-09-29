@@ -58,6 +58,13 @@ class FakeServer {
         for (final item in (c['commands'] as List).cast<Map<String, dynamic>>()) {
           _apply(item);
         }
+      case 'payPlannedPeriod':
+      case 'setPlannedPeriodPaid':
+        final latest = entities['planned']?[c['plannedId']];
+        if (latest == null) throw LedgerException('План платежа не найден', code: 'plannedNotFound');
+        for (final part in expandPlannedCommand(c, latest)) {
+          _apply(part);
+        }
       case 'upsertEntity':
         entities.putIfAbsent(c['kind'] as String, () => {})[c['entityId'] as String] = Map<String, dynamic>.from(c['data'] as Map);
       case 'deleteEntity':

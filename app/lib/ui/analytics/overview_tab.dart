@@ -89,6 +89,7 @@ class OverviewTab extends StatelessWidget {
             Wrap(spacing: 12, runSpacing: 4, children: [
               _legendDot(fam.income, l.reportIncome),
               _legendDot(fam.expense, l.reportExpense),
+              _legendDot(fam.accent, l.refund),
               _legendLine(context.scheme.primary, l.runningBalance),
             ]),
             const SizedBox(height: 6),

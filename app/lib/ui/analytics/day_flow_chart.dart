@@ -69,29 +69,39 @@ class DayFlowChart extends StatelessWidget {
                     onTap: (todayIndex == null || i <= todayIndex!) ? () => onSelect(selectedDay == i ? null : i) : null,
                     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                       Expanded(
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 1),
-                            height: income[i] <= 0 ? 0 : (4 + (height / 2 - 6) * income[i] / scale).clamp(0, height / 2 - 2).toDouble(),
-                            decoration: BoxDecoration(
-                              color: (selectedDay == i ? fam.income : fam.income.withValues(alpha: todayIndex == i ? 1 : .55)),
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                          Expanded(child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Container(
+                              key: ValueKey('day-$i-income'),
+                              margin: const EdgeInsets.symmetric(horizontal: 1),
+                              height: income[i] <= 0 ? 0 : (4 + (height / 2 - 6) * income[i] / scale).clamp(0, height / 2 - 2).toDouble(),
+                              decoration: BoxDecoration(color: fam.income.withValues(alpha: selectedDay == i || todayIndex == i ? 1 : .55),
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(2))),
                             ),
-                          ),
-                        ),
+                          )),
+                          if (expense[i] < 0)
+                            Expanded(child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                key: ValueKey('day-$i-refund'),
+                                margin: const EdgeInsets.symmetric(horizontal: 1),
+                                height: (4 + (height / 2 - 6) * -expense[i] / scale).clamp(0, height / 2 - 2).toDouble(),
+                                decoration: BoxDecoration(color: fam.accent,
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(2))),
+                              ),
+                            )),
+                        ]),
                       ),
                       Expanded(
                         child: Align(
                           alignment: Alignment.topCenter,
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: 1),
-                            // Возврат может сделать расход дня отрицательным
-                            // (в пределах месяца это редкость, межмесячный —
-                            // обычное дело); столбик по модулю, а не 0 —
-                            // иначе день с одним возвратом выглядит пустым,
-                            // будто в нём вообще ничего не было (F05).
-                            height: expense[i] == 0 ? 0 : (4 + (height / 2 - 6) * expense[i].abs() / scale).clamp(0, height / 2 - 2).toDouble(),
+                            // Only positive net expense points down. Net refunds
+                            // have their own upward series in the top half.
+                            key: ValueKey('day-$i-expense'),
+                            height: expense[i] <= 0 ? 0 : (4 + (height / 2 - 6) * expense[i] / scale).clamp(0, height / 2 - 2).toDouble(),
                             decoration: BoxDecoration(
                               color: selectedDay == i ? fam.accent : fam.expense.withValues(alpha: todayIndex == i ? 1 : .55),
                               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(2)),

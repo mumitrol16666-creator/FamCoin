@@ -195,6 +195,13 @@ class AppState extends ChangeNotifier {
         for (final item in (c['commands'] as List).cast<Map<String, dynamic>>()) {
           _applyLocal(item);
         }
+      case 'payPlannedPeriod':
+      case 'setPlannedPeriodPaid':
+        final latest = _kind('planned')[c['plannedId']];
+        if (latest == null) throw LedgerException('План платежа не найден', code: 'plannedNotFound');
+        for (final part in expandPlannedCommand(c, latest)) {
+          _applyLocal(part);
+        }
       case 'upsertEntity':
         _entities.putIfAbsent(c['kind'] as String, () => {})[c['entityId'] as String] = Map<String, dynamic>.from(c['data'] as Map);
         if (c['kind'] == 'category') _syncCategories();
@@ -651,24 +658,25 @@ class AppState extends ChangeNotifier {
     }, commandId: commandId);
   }
 
-  Future<void> payDebt({required String debtId, required String account, required int principal, int interest = 0, DateTime? date}) =>
-      send({'type': 'loanPayment', 'id': newId(), 'date': _date(date ?? today), 'account': account, 'debtId': debtId, 'principal': principal.toString(), 'interest': interest.toString()});
+  Future<void> payDebt({required String debtId, required String account, required int principal, int interest = 0, DateTime? date, String? id, String? commandId}) =>
+      send({'type': 'loanPayment', 'id': id ?? newId(), 'date': _date(date ?? today), 'account': account, 'debtId': debtId, 'principal': principal.toString(), 'interest': interest.toString()}, commandId: commandId);
 
   /// Оплата срока планового платежа: факт и отметка «оплачено» — одной
   /// командой. Запись помнит платёж и период (`meta.planned`, `meta.period`),
   /// чтобы её удаление снова открыло срок.
-  Future<void> payDue(DueItem due, {required String account, required int amount, int interest = 0, DateTime? date, String? commandId}) {
-    final p = due.planned;
-    final d = _date(date ?? today);
-    final link = {'planned': p.id, 'period': due.period};
-    final fact = p.debtId != null
-        ? {'type': 'loanPayment', 'id': newId(), 'date': d, 'account': account, 'debtId': p.debtId, 'principal': (amount - interest).toString(), 'interest': interest.toString(), 'meta': link}
-        : {'type': 'expense', 'id': newId(), 'date': d, 'account': account, 'splits': {p.category: amount.toString()}, 'meta': {'who': 'shared', 'note': p.name, ...link}};
-    return sendBatch([
-      fact,
-      {'type': 'upsertEntity', 'kind': 'planned', 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, due.period})},
-    ], commandId: commandId);
-  }
+  Future<void> payDue(DueItem due, {required String account, required int amount, int interest = 0, DateTime? date, String? id, String? commandId}) =>
+      send({
+        'type': 'payPlannedPeriod', 'id': id ?? newId(),
+        'plannedId': due.planned.id, 'period': due.period,
+        'date': _date(date ?? today), 'account': account,
+        'amount': amount.toString(), 'interest': interest.toString(),
+        'expectedDebtId': due.planned.debtId,
+      }, commandId: commandId);
+
+  Future<void> markDuePaid(DueItem due, {String? commandId}) => send({
+        'type': 'setPlannedPeriodPaid', 'plannedId': due.planned.id,
+        'period': due.period, 'paid': true,
+      }, commandId: commandId);
 
   /// Исправление покупки: старая версия отменяется, новая проводится —
   /// одной командой, история сохраняется (F032).
@@ -750,13 +758,18 @@ class AppState extends ChangeNotifier {
   /// Отменённые записи не считаются (повторный аудит, F03): случайно
   /// внесённая и тут же удалённая старая операция не должна отодвигать
   /// начало учёта назад.
-  DateTime? get _firstActivityMonth {
+  DateTime? get _firstActivityDay {
     DateTime? earliest;
     for (final tx in ledger.transactions) {
-      if (tx.type == EventType.reversal || ledger.isReversed(tx.id)) continue;
+      if (tx.type == EventType.reversal || ledger.isReversed(tx.id) || tx.date.isAfter(today)) continue;
       if (earliest == null || tx.date.isBefore(earliest)) earliest = tx.date;
     }
-    return earliest == null ? null : DateTime(earliest.year, earliest.month, 1);
+    return earliest;
+  }
+
+  DateTime? get _firstActivityMonth {
+    final day = _firstActivityDay;
+    return day == null ? null : DateTime(day.year, day.month, 1);
   }
 
   /// Долг, по которому сейчас может быть платёж: остаток больше нуля.
@@ -845,7 +858,7 @@ class AppState extends ChangeNotifier {
   DebtLoadStatus get debtLoadStatus {
     final income = avgMonthlyIncome();
     return debtLoad(
-      [for (final d in bankDebts.where(_debtStillOwed)) _debtLoadInput(d)],
+      [for (final d in bankDebts) _debtLoadInput(d)],
       monthlyIncome: income > 0 ? income : null,
     );
   }
@@ -853,7 +866,7 @@ class AppState extends ChangeNotifier {
   DebtLoadInput _debtLoadInput(DebtInfo d) => DebtLoadInput(
         id: d.id,
         currentBalance: debtBalance(d.id),
-        monthlyPayment: plannedForDebt(d.id)?.amount ?? 0,
+        monthlyPayment: _debtStillOwed(d) ? plannedForDebt(d.id)?.amount ?? 0 : 0,
         annualRatePercent: d.rate,
         // Кредитка — револьверный долг: баланс растёт от новых покупок,
         // «доля погашения» для неё не имеет смысла.
@@ -939,9 +952,11 @@ class AppState extends ChangeNotifier {
   /// потрачено (F13): иначе дни дохода без покупок молча выпадают и меняют
   /// смысл показателя.
   double? paydaySpendRatio({int months = 3}) {
+    if (months <= 0) return null;
     final requestedStart = monthOf(-(months - 1));
-    final firstMonth = _firstActivityMonth;
-    final start = firstMonth != null && firstMonth.isAfter(requestedStart) ? firstMonth : requestedStart;
+    final firstDay = _firstActivityDay;
+    if (firstDay == null) return null;
+    final start = firstDay.isAfter(requestedStart) ? firstDay : requestedStart;
     // До сегодня включительно, не до конца месяца (повторный аудит, F04):
     // будущие дни ещё не наступили и не могут быть «обычными днями без
     // трат» — они просто не наблюдались.
@@ -991,10 +1006,10 @@ class AppState extends ChangeNotifier {
     if (tx != null && plannedId is String) {
       final p = planned.where((p) => p.id == plannedId).firstOrNull;
       final period = tx.meta['period'] as String? ?? _period(tx.date);
-      if (p != null && p.paid.contains(period)) {
+      if (p != null) {
         return sendBatch([
           reverse,
-          {'type': 'upsertEntity', 'kind': 'planned', 'entityId': p.id, 'data': p.toJson(paid: {...p.paid}..remove(period))},
+          {'type': 'setPlannedPeriodPaid', 'plannedId': p.id, 'period': period, 'paid': false},
         ], commandId: commandId);
       }
     }
@@ -1010,10 +1025,10 @@ class AppState extends ChangeNotifier {
     if (tx != null && plannedId is String) {
       final p = planned.where((p) => p.id == plannedId).firstOrNull;
       final period = tx.meta['period'] as String? ?? _period(tx.date);
-      if (p != null && !p.paid.contains(period)) {
+      if (p != null) {
         return sendBatch([
           restore,
-          {'type': 'upsertEntity', 'kind': 'planned', 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, period})},
+          {'type': 'setPlannedPeriodPaid', 'plannedId': p.id, 'period': period, 'paid': true},
         ], commandId: commandId);
       }
     }

@@ -132,6 +132,10 @@ String? ledgerErrorText(AppLocalizations l, String? code) => switch (code) {
       'restoreNotReversed' => l.leRestoreNotReversed,
       'alreadyRestored' => l.leAlreadyRestored,
       'hasRefunds' => l.leHasRefunds,
+      'periodAlreadyPaid' => l.lePeriodAlreadyPaid,
+      'plannedChanged' => l.lePlannedChanged,
+      'plannedNotFound' => l.lePlannedNotFound,
+      'invalidVersionChain' => l.leInvalidVersionChain,
       _ => null,
     };
 
