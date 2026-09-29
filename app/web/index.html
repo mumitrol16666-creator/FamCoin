@@ -46,13 +46,76 @@
   -->
   <script>
     // Старые установки: снимаем service worker прежних сборок, иначе он
-    // продолжит отдавать закешированную версию.
+    // продолжит отдавать закешированную версию. Наш push-sw.js только
+    // принимает уведомления и ничего не кеширует — его оставляем.
     if (navigator.serviceWorker) {
       navigator.serviceWorker.getRegistrations().then(function (rs) {
-        rs.forEach(function (r) { r.unregister(); });
+        rs.forEach(function (r) {
+          var url = (r.active || r.waiting || r.installing || {}).scriptURL || '';
+          if (url.indexOf('push-sw.js') < 0) r.unregister();
+        });
         if (window.caches) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
       });
     }
+  </script>
+  <script>
+    // Push-уведомления (Web Push). На iPhone работают только у сайта,
+    // добавленного на экран «Домой», и только после нажатия кнопки.
+    window.famcoinPush = {
+      _ios: function () {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      },
+      _standalone: function () {
+        return window.navigator.standalone === true ||
+          (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+      },
+      _reg: function () {
+        return navigator.serviceWorker.register('push-sw.js').then(function () {
+          return navigator.serviceWorker.ready;
+        });
+      },
+      // unsupported | needs-install | denied | off | on
+      status: function () {
+        if (this._ios() && !this._standalone()) return Promise.resolve('needs-install');
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+          return Promise.resolve('unsupported');
+        }
+        if (Notification.permission === 'denied') return Promise.resolve('denied');
+        return this._reg().then(function (reg) { return reg.pushManager.getSubscription(); })
+          .then(function (sub) { return sub && Notification.permission === 'granted' ? 'on' : 'off'; });
+      },
+      // Возвращает JSON подписки: {endpoint, p256dh, auth}; '' — разрешение не дано.
+      enable: function (key) {
+        var self = this;
+        return Notification.requestPermission().then(function (perm) {
+          if (perm !== 'granted') return '';
+          return self._reg().then(function (reg) {
+            return reg.pushManager.getSubscription().then(function (old) {
+              if (old) return old;
+              var pad = '='.repeat((4 - key.length % 4) % 4);
+              var raw = atob((key + pad).replace(/-/g, '+').replace(/_/g, '/'));
+              var bytes = new Uint8Array(raw.length);
+              for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+              return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
+            });
+          });
+        }).then(function (sub) {
+          if (!sub) return '';
+          var j = sub.toJSON();
+          return JSON.stringify({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth });
+        });
+      },
+      // Возвращает адрес отменённой подписки или ''.
+      disable: function () {
+        return this._reg().then(function (reg) { return reg.pushManager.getSubscription(); })
+          .then(function (sub) {
+            if (!sub) return '';
+            var endpoint = sub.endpoint;
+            return sub.unsubscribe().then(function () { return endpoint; });
+          });
+      }
+    };
   </script>
   <script>
     // Safari на iOS 26: после клавиатуры визуальная область (visualViewport)

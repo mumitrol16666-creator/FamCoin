@@ -156,6 +156,14 @@ class ApiClient {
 
   Future<void> sendTestNotification(String token, String kind) => _send('POST', '/notifications/test', body: {'kind': kind}, token: token);
 
+  Future<String> pushKey(String token) async => (await _send('GET', '/push/key', token: token))['key'] as String;
+
+  Future<void> pushSubscribe(String token, Map<String, dynamic> subscription) =>
+      _send('POST', '/push/subscribe', body: subscription, token: token);
+
+  Future<void> pushUnsubscribe(String token, String endpoint) =>
+      _send('POST', '/push/unsubscribe', body: {'endpoint': endpoint}, token: token);
+
   Future<String> telegramLinkCode(String token) async => (await _send('POST', '/telegram/link', token: token))['code'] as String;
 
   Future<void> telegramUnlink(String token) => _send('POST', '/telegram/unlink', token: token);

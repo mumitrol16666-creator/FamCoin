@@ -192,6 +192,22 @@ Handler buildHandler(
       await notifications.sendBrief(id, kind, DateTime(now.year, now.month, now.day));
       return _json(200, {'status': 'ok'});
     })
+    ..get('/push/key', (Request req) async => _json(200, {'key': await notifications.push.publicKey()}))
+    ..post('/push/subscribe', (Request req) async {
+      final id = await user(req);
+      final b = await _body(req);
+      try {
+        await notifications.push.subscribe(id, '${b['endpoint'] ?? ''}', '${b['p256dh'] ?? ''}', '${b['auth'] ?? ''}');
+      } on ArgumentError {
+        throw ApiError(400, 'bad_request');
+      }
+      return _json(200, {'status': 'ok'});
+    })
+    ..post('/push/unsubscribe', (Request req) async {
+      final id = await user(req);
+      await notifications.push.unsubscribe(id, '${(await _body(req))['endpoint'] ?? ''}');
+      return _json(200, {'status': 'ok'});
+    })
     ..post('/telegram/link', (Request req) async {
       final id = await user(req);
       return _json(200, {'code': await notifications.linkCode(id)});

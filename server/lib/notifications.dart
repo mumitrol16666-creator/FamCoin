@@ -12,6 +12,7 @@ import 'auth_service.dart';
 import 'briefs.dart';
 import 'ledger_service.dart';
 import 'telegram.dart';
+import 'webpush.dart';
 
 /// Казахстан с 2024 года живёт по единому времени UTC+5.
 const kzOffset = Duration(hours: 5);
@@ -19,11 +20,12 @@ const morningHour = 8;
 const eveningHour = 21;
 
 class NotificationService {
-  NotificationService(this.db, this.ledger, this.telegram);
+  NotificationService(this.db, this.ledger, this.telegram, this.push);
 
   final Pool db;
   final LedgerService ledger;
   final Telegram telegram;
+  final WebPush push;
   Timer? _timer;
   bool _busy = false;
 
@@ -104,6 +106,7 @@ class NotificationService {
     final chat = await db.execute(Sql.named('SELECT telegram_chat_id FROM users WHERE id = @u'), parameters: {'u': userId});
     final chatId = chat.isEmpty ? null : chat.first[0] as int?;
     if (chatId != null) await telegram.send(chatId, '<b>$title</b>\n$body');
+    await push.sendToUser(userId, title, body.replaceAll(RegExp(r'</?b>'), ''), tag: kind);
   }
 
   Future<List<Map<String, Object?>>> list(String userId, {int limit = 50}) async {
@@ -131,6 +134,7 @@ class NotificationService {
       'evening': notif['evening'] != false,
       'telegramLinked': r.first[1] == true,
       'telegramAvailable': telegram.enabled,
+      'pushDevices': await push.deviceCount(userId),
     };
   }
 

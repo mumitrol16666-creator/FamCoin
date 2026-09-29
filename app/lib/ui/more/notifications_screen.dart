@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../state/app_scope.dart';
+import '../../state/push.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 
@@ -19,6 +20,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Map<String, dynamic>? _settings;
   String? _code;
   bool _loadingCode = false;
+  String _push = 'unsupported';
 
   @override
   void didChangeDependencies() {
@@ -31,11 +33,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       final items = await state.api.notifications(state.token);
       final settings = await state.api.notificationSettings(state.token);
+      final push = await pushStatus();
       if (!mounted) return;
       setState(() {
         _items = items;
         _settings = settings;
+        _push = push;
       });
+      // Подписка есть в браузере, но сервер её потерял (например, удалил как
+      // просроченную) — передаём заново, разрешение повторно не спрашивается.
+      if (push == 'on' && (settings['pushDevices'] ?? 0) == 0) {
+        try {
+          final sub = await pushEnable(await state.api.pushKey(state.token));
+          if (sub != null) await state.api.pushSubscribe(state.token, sub);
+        } catch (_) {}
+      }
       if (items.any((i) => i['read'] != true)) await state.api.markNotificationsRead(state.token);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorText(context.l10n, e))));
@@ -49,6 +61,57 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) setState(() => _settings = s);
     });
     if (!ok && mounted) setState(() {});
+  }
+
+  Future<void> _enablePush() async {
+    final state = AppScope.of(context).state;
+    await runAction(context, () async {
+      // Разрешение нужно запрашивать сразу по нажатию — иначе iOS его не покажет.
+      final key = await state.api.pushKey(state.token);
+      final sub = await pushEnable(key);
+      if (sub != null) await state.api.pushSubscribe(state.token, sub);
+    });
+    if (mounted) _load();
+  }
+
+  Future<void> _disablePush() async {
+    final state = AppScope.of(context).state;
+    await runAction(context, () async {
+      final endpoint = await pushDisable();
+      if (endpoint.isNotEmpty) await state.api.pushUnsubscribe(state.token, endpoint);
+    });
+    if (mounted) _load();
+  }
+
+  Widget _pushCard(BuildContext context) {
+    final l = context.l10n;
+    final fam = context.fam;
+    final hint = switch (_push) {
+      'on' => l.pushOnDesc,
+      'off' => l.pushOffDesc,
+      'needs-install' => l.pushNeedsInstall,
+      'denied' => l.pushDenied,
+      _ => l.pushUnsupported,
+    };
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.notifications_active_outlined),
+          const SizedBox(width: 10),
+          Expanded(child: Text(l.pushTitle, style: const TextStyle(fontWeight: FontWeight.w600))),
+          if (_push == 'on') Text(l.pushOn, style: TextStyle(color: fam.income, fontWeight: FontWeight.w600)),
+        ]),
+        const SizedBox(height: 6),
+        Text(hint, style: TextStyle(fontSize: 12, color: fam.text2)),
+        if (_push == 'off') ...[
+          const SizedBox(height: 8),
+          FilledButton.tonal(onPressed: _enablePush, child: Text(l.pushEnable)),
+        ] else if (_push == 'on') ...[
+          const SizedBox(height: 8),
+          OutlinedButton(onPressed: _disablePush, child: Text(l.pushDisable)),
+        ],
+      ]),
+    );
   }
 
   Future<void> _link() async {
@@ -95,6 +158,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ]),
               ),
+              _pushCard(context),
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [

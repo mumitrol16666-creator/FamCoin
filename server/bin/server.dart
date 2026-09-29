@@ -7,6 +7,7 @@ import 'package:famcoin_server/billing.dart';
 import 'package:famcoin_server/ledger_service.dart';
 import 'package:famcoin_server/notifications.dart';
 import 'package:famcoin_server/telegram.dart';
+import 'package:famcoin_server/webpush.dart';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf_io.dart' as io;
 
@@ -30,7 +31,7 @@ Future<void> main() async {
   final auth = AuthService(db);
   final ledger = LedgerService(db);
   final telegram = Telegram(db, token: env['TELEGRAM_BOT_TOKEN']);
-  final notifications = NotificationService(db, ledger, telegram)..start();
+  final notifications = NotificationService(db, ledger, telegram, WebPush(db, subject: pushSubject(env['CORS_ORIGIN'])))..start();
   final billing = BillingService(
     db,
     telegram,
