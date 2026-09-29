@@ -77,10 +77,10 @@ class BudgetTab extends StatelessWidget {
         SectionHeader(l.recurringExpenses),
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (state.planned.isEmpty)
+            if (state.activePlanned.isEmpty)
               Text(l.noPlanned, style: TextStyle(color: fam.text2))
             else
-              for (final p in state.planned)
+              for (final p in state.activePlanned)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(children: [Expanded(child: Text(p.name, style: TextStyle(color: fam.text2))), MoneyText(p.amount, style: const TextStyle(fontSize: 13))]),

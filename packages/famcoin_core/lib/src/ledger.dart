@@ -348,14 +348,27 @@ class Ledger {
   bool isRestored(String txId) =>
       _transactions.any((t) => t.meta['restoredFrom'] == txId && !_reversed.contains(t.id));
 
-  /// В корзине: удалена и ещё не восстановлена (сами отмены не считаются).
+  /// `true`, если [txId] отменена не настоящим удалением, а как шаг правки:
+  /// где-то есть более новая версия с `meta.edited == txId`. Такую старую
+  /// версию нельзя показывать в корзине и восстанавливать как независимую
+  /// операцию — иначе правка «10 000 → 12 000» плюс восстановление старой
+  /// версии дают задвоенные 22 000 вместо одной покупки на 12 000 (повторный
+  /// аудит, F01).
+  bool _supersededByEdit(String txId) => _transactions.any((t) => t.meta['edited'] == txId);
+
+  /// В корзине: удалена и ещё не восстановлена (сами отмены и старые версии
+  /// правок не считаются).
   bool isDeleted(String txId) {
     final t = _byId[txId];
-    return t != null && t.type != EventType.reversal && _reversed.contains(txId) && !isRestored(txId);
+    return t != null && t.type != EventType.reversal && _reversed.contains(txId) && !isRestored(txId) && !_supersededByEdit(txId);
   }
 
   /// Восстановление удалённой операции: новая запись с теми же проводками и
   /// `meta.restoredFrom`; исходная и отменяющая записи остаются в истории.
+  /// Ограничения исходного события проверяются заново (F02 повторного
+  /// аудита) — с момента удаления состояние могло измениться (например,
+  /// добавился ещё один возврат или долг успели погасить), а сбалансированные
+  /// проводки сами по себе не значат, что операция сейчас допустима.
   Transaction restore(String txId, {required String newId}) {
     final original = byId(txId) ?? (throw LedgerException('Нет операции $txId', code: 'noSuchTransaction'));
     if (!_reversed.contains(txId) || original.type == EventType.reversal) {
@@ -364,6 +377,10 @@ class Ledger {
     if (isRestored(txId)) {
       throw LedgerException('Операция уже восстановлена', code: 'alreadyRestored');
     }
+    if (_supersededByEdit(txId)) {
+      throw LedgerException('Эта версия операции заменена более новой правкой', code: 'restoreSuperseded');
+    }
+    _revalidateForRestore(original);
     final tx = Transaction(
       id: newId,
       date: original.date,
@@ -373,6 +390,42 @@ class Ledger {
     );
     post(tx);
     return tx;
+  }
+
+  /// Заново проверяет то же самое, что проверяет создание такой операции:
+  /// восстановление копирует старые проводки напрямую, минуя доменные
+  /// конструкторы из `events.dart` и их проверки.
+  void _revalidateForRestore(Transaction original) {
+    switch (original.type) {
+      case EventType.refund:
+        final of = original.meta['refundOf'];
+        if (of is! String) return;
+        final purchase = currentVersion(of);
+        if (purchase == null) {
+          throw LedgerException('Покупка отменена — возврат по ней невозможен', code: 'purchaseCancelled');
+        }
+        for (final p in original.postings) {
+          if (_accounts[p.accountId]?.kind != LedgerKind.expense) continue;
+          final amount = -p.amount; // возврат хранит отрицательную проводку по категории
+          final bought = purchase.amountOn(p.accountId);
+          final already = refundedFor(of, p.accountId);
+          if (amount + already > bought) {
+            throw LedgerException('Возврат больше суммы покупки в этой категории', code: 'refundExceeds');
+          }
+        }
+      case EventType.loanPayment:
+      case EventType.repaymentMade:
+        for (final p in original.postings) {
+          if (_accounts[p.accountId]?.kind != LedgerKind.liability) continue;
+          final principal = -p.amount; // платёж уменьшает долг
+          final owed = balance(p.accountId);
+          if (principal > owed) {
+            throw LedgerException('Тело $principal больше остатка долга $owed', code: 'principalExceeds');
+          }
+        }
+      default:
+        break;
+    }
   }
 
   // -------------------------------------------------------------- остатки

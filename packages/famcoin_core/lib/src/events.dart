@@ -74,6 +74,32 @@ extension LedgerEvents on Ledger {
     }
   }
 
+  /// Правка покупки (`meta.edited` → старая версия) не может занизить сумму
+  /// по категории ниже уже сделанных возвратов по всей цепочке версий —
+  /// иначе возвраты превышают стоимость покупки (повторный аудит, F03).
+  /// Проверяются все категории, по которым вообще были возвраты, а не
+  /// только те, что остались в новой версии — категорию с возвратом нельзя
+  /// убрать из покупки целиком.
+  void _checkEditNotBelowRefunded(String editedId, Map<String, int> newSplits) {
+    final root = purchaseRoot(editedId);
+    final newAmounts = {for (final e in newSplits.entries) expenseAccount(e.key): e.value};
+    final refundedAccounts = <String>{};
+    for (final t in transactions) {
+      if (t.type != EventType.refund || isReversed(t.id)) continue;
+      final of = t.meta['refundOf'];
+      if (of is! String || purchaseRoot(of) != root) continue;
+      for (final p in t.postings) {
+        if (account(p.accountId).kind == LedgerKind.expense) refundedAccounts.add(p.accountId);
+      }
+    }
+    for (final acc in refundedAccounts) {
+      final already = refundedFor(root, acc);
+      if ((newAmounts[acc] ?? 0) < already) {
+        throw LedgerException('Новая сумма меньше уже возвращённой по этой категории', code: 'editBelowRefunded');
+      }
+    }
+  }
+
   String _money(String id) {
     requireActiveMoney(id);
     return id;
@@ -144,6 +170,10 @@ extension LedgerEvents on Ledger {
     _checkSplits(splits);
     final total = splits.values.fold(0, (a, b) => a + b);
     _positive(total, 'Сумма покупки');
+    final editedId = meta['edited'];
+    if (editedId is String && byId(editedId) != null) {
+      _checkEditNotBelowRefunded(editedId, splits);
+    }
     if (bonusPoints > 0) {
       final wallet = bonusWallet ?? (throw LedgerException('Не указан бонусный кошелёк', code: 'noBonusWallet'));
       final have = bonusWallets[wallet] ?? 0;

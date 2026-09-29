@@ -41,7 +41,9 @@ class DayFlowChart extends StatelessWidget {
       running.add(acc);
     }
     final maxUp = income.fold(0, (m, v) => v > m ? v : m);
-    final maxDown = expense.fold(0, (m, v) => v > m ? v : m);
+    // Возврат внутри месяца может дать отрицательный расход дня — берём
+    // модуль, иначе такой день занижает шкалу (повторный аудит, F05).
+    final maxDown = expense.fold(0, (m, v) => v.abs() > m ? v.abs() : m);
     final maxRunning = running.fold(0, (m, v) => v.abs() > m ? v.abs() : m);
     // Единая шкала на столбики и линию, иначе линия либо теряется, либо
     // выходит за пределы графика.
@@ -56,12 +58,15 @@ class DayFlowChart extends StatelessWidget {
             for (var i = 0; i < income.length; i++)
               Expanded(
                 child: Semantics(
-                  button: true,
+                  // Будущий день текущего месяца нельзя выбрать (повторный
+                  // аудит, F06) — иначе календарь получает initialDate позже
+                  // lastDate и нарушает свой контракт.
+                  button: todayIndex == null || i <= todayIndex!,
                   selected: selectedDay == i,
                   label: dayLabel(i),
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: () => onSelect(selectedDay == i ? null : i),
+                    onTap: (todayIndex == null || i <= todayIndex!) ? () => onSelect(selectedDay == i ? null : i) : null,
                     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                       Expanded(
                         child: Align(
@@ -81,7 +86,12 @@ class DayFlowChart extends StatelessWidget {
                           alignment: Alignment.topCenter,
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: 1),
-                            height: expense[i] <= 0 ? 0 : (4 + (height / 2 - 6) * expense[i] / scale).clamp(0, height / 2 - 2).toDouble(),
+                            // Возврат может сделать расход дня отрицательным
+                            // (в пределах месяца это редкость, межмесячный —
+                            // обычное дело); столбик по модулю, а не 0 —
+                            // иначе день с одним возвратом выглядит пустым,
+                            // будто в нём вообще ничего не было (F05).
+                            height: expense[i] == 0 ? 0 : (4 + (height / 2 - 6) * expense[i].abs() / scale).clamp(0, height / 2 - 2).toDouble(),
                             decoration: BoxDecoration(
                               color: selectedDay == i ? fam.accent : fam.expense.withValues(alpha: todayIndex == i ? 1 : .55),
                               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(2)),

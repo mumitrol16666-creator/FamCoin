@@ -522,25 +522,29 @@ class AppState extends ChangeNotifier {
   /// этого графика он всё же встаёт на свою дату — иначе сумма столбиков
   /// разошлась бы с месячным отчётом и категориями, которые всегда считают
   /// возврат по его собственной дате (F03).
+  /// День, под которым операция показывается на графике по дням и в его
+  /// детализации: у возврата в границах своего месяца — день покупки (тот
+  /// же, что учитывает дневной лимит через `_spendDay`), у возврата, который
+  /// пересёк границу месяца, и у всех остальных операций — собственная дата.
+  /// Общая функция для `dailyExpense()` и `transactionsOnDay()` — столбик
+  /// графика и список операций под ним всегда должны показывать одно и то
+  /// же (повторный аудит, F05).
+  DateTime? _chartDay(Transaction t) {
+    if (t.type != EventType.refund) return t.date;
+    final spendDay = _spendDay(t); // возврат по удалённой покупке — null, не входит
+    if (spendDay == null) return null;
+    if (spendDay.year != t.date.year || spendDay.month != t.date.month) return t.date;
+    return spendDay;
+  }
+
   List<int> dailyExpense(DateTime monthStart) {
     final days = DateTime(monthStart.year, monthStart.month + 1, 0).day;
     final out = List<int>.filled(days, 0);
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
     for (final tx in ledger.transactions) {
       if (ledger.isReversed(tx.id) || tx.type == EventType.reversal) continue;
-      final spendDay = _spendDay(tx); // возврат по удалённой покупке — null, не входит
-      if (spendDay == null) continue;
-      var day = spendDay;
-      // Покупка была в ДРУГОМ месяце, чем сам возврат — считаем по дате
-      // возврата, как report()/expenseByCategory(), а не по дню покупки.
-      // Иначе один и тот же возврат либо задваивался бы в месяце покупки
-      // (там, где он реально не при делах), либо пропадал бы из месяца, где
-      // он должен быть по датой. Проверка не зависит от того, какой месяц
-      // сейчас запрашивают — это свойство самой операции.
-      if (tx.type == EventType.refund && (spendDay.year != tx.date.year || spendDay.month != tx.date.month)) {
-        day = tx.date;
-      }
-      if (day.isBefore(monthStart) || !day.isBefore(end)) continue;
+      final day = _chartDay(tx);
+      if (day == null || day.isBefore(monthStart) || !day.isBefore(end)) continue;
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind == LedgerKind.expense) out[day.day - 1] += p.amount;
       }
@@ -572,11 +576,26 @@ class AppState extends ChangeNotifier {
     final out = <String, int>{};
     for (final tx in userTransactions) {
       if ((tx.type != EventType.expense && tx.type != EventType.refund) || tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
-      final who = tx.meta['who'] as String? ?? 'me';
       final sum = tx.postings.where((p) => ledger.account(p.accountId).kind == LedgerKind.expense).fold(0, (s, p) => s + p.amount);
-      out.update(who, (v) => v + sum, ifAbsent: () => sum);
+      out.update(_whoFor(tx), (v) => v + sum, ifAbsent: () => sum);
     }
     return out;
+  }
+
+  /// «Для кого» операции: собственный `meta.who`, а у возврата без него
+  /// (старые записи до того, как `refund()` начал сохранять `who`) — «для
+  /// кого» была связанная покупка через `refundOf` (повторный аудит, F10).
+  String _whoFor(Transaction t) {
+    final own = t.meta['who'] as String?;
+    if (own != null) return own;
+    if (t.type == EventType.refund) {
+      final of = t.meta['refundOf'];
+      if (of is String) {
+        final purchaseWho = (ledger.currentVersion(of) ?? ledger.byId(of))?.meta['who'] as String?;
+        if (purchaseWho != null) return purchaseWho;
+      }
+    }
+    return 'me';
   }
 
   /// Операции месяца, затронувшие категорию расхода.
@@ -587,6 +606,12 @@ class AppState extends ChangeNotifier {
         .where((t) => !t.date.isBefore(monthStart) && t.date.isBefore(end) && t.postings.any((p) => p.accountId == acc))
         .toList();
   }
+
+  /// Операции конкретного дня графика по дням — тем же правилом дня, что и
+  /// столбик (`_chartDay`), а не по собственной дате операции: иначе список
+  /// под графиком не совпадал бы со значением столбика для возврата внутри
+  /// месяца (повторный аудит, F05).
+  List<Transaction> transactionsOnDay(DateTime day) => userTransactions.where((t) => _chartDay(t) == day).toList();
 
   /// Операции по долгу: банковскому (`debtId`) или человеку.
   List<Transaction> debtTransactions(String accountId) =>
@@ -722,19 +747,25 @@ class AppState extends ChangeNotifier {
   /// Первый месяц, за который в журнале вообще есть операции; `null` —
   /// журнал пуст. Отличает «дохода не было» от «истории ещё не было» (F08):
   /// месяцы до начала учёта не должны считаться нулевыми при усреднении.
+  /// Отменённые записи не считаются (повторный аудит, F03): случайно
+  /// внесённая и тут же удалённая старая операция не должна отодвигать
+  /// начало учёта назад.
   DateTime? get _firstActivityMonth {
     DateTime? earliest;
     for (final tx in ledger.transactions) {
+      if (tx.type == EventType.reversal || ledger.isReversed(tx.id)) continue;
       if (earliest == null || tx.date.isBefore(earliest)) earliest = tx.date;
     }
     return earliest == null ? null : DateTime(earliest.year, earliest.month, 1);
   }
 
-  /// Долг, за которым ещё нужно следить: кредитка — всегда (баланс может
-  /// снова вырасти от новых покупок), остальные — пока остаток больше нуля
-  /// (F10). Полностью выплаченный заём/рассрочка не должен создавать будущих
-  /// обязательств и попадать в долговую нагрузку.
-  bool _debtStillOwed(DebtInfo d) => d.kind == 'creditCard' || debtBalance(d.id) > 0;
+  /// Долг, по которому сейчас может быть платёж: остаток больше нуля.
+  /// Пересчитывается заново каждый раз по журналу — револьверный долг
+  /// (кредитка) сам «оживает» новой покупкой, отдельного признака «вида
+  /// долга» здесь не нужно (повторный аудит, F02: раньше кредитка считалась
+  /// «актуальной» всегда, даже без баланса и новых начислений — платёж
+  /// требовался без причины).
+  bool _debtStillOwed(DebtInfo d) => debtBalance(d.id) > 0;
 
   /// Плановый платёж ещё актуален: не привязан к долгу либо привязанный долг
   /// ещё не закрыт.
@@ -744,10 +775,15 @@ class AppState extends ChangeNotifier {
     return debt != null && _debtStillOwed(debt);
   }
 
+  /// Действующие плановые платежи — без привязанных к уже погашенным долгам
+  /// (F10). Строки списка и его сумма должны показывать одно и то же
+  /// (повторный аудит, F01): `recurringMonthly` — это сумма именно этого
+  /// списка, не всех `planned` без разбора.
+  List<PlannedInfo> get activePlanned => planned.where(_plannedDebtActive).toList();
+
   /// Постоянные ежемесячные обязательства (раздел 9.11): плановые платежи,
   /// включая платежи по кредитам — они заводятся как планы со ссылкой на долг.
-  /// Закрытые долги (F10) сюда не попадают.
-  int get recurringMonthly => planned.where(_plannedDebtActive).fold(0, (s, p) => s + p.amount);
+  int get recurringMonthly => activePlanned.fold(0, (s, p) => s + p.amount);
 
   /// Средний доход за последние [months] уже закончившихся месяцев (без
   /// текущего — он не закончился), но не раньше начала учёта: месяц без
@@ -906,7 +942,10 @@ class AppState extends ChangeNotifier {
     final requestedStart = monthOf(-(months - 1));
     final firstMonth = _firstActivityMonth;
     final start = firstMonth != null && firstMonth.isAfter(requestedStart) ? firstMonth : requestedStart;
-    final end = monthEnd;
+    // До сегодня включительно, не до конца месяца (повторный аудит, F04):
+    // будущие дни ещё не наступили и не могут быть «обычными днями без
+    // трат» — они просто не наблюдались.
+    final end = today.add(const Duration(days: 1));
     final incomeDays = <DateTime>{};
     final spendByDay = <DateTime, int>{};
     for (final tx in ledger.transactions) {

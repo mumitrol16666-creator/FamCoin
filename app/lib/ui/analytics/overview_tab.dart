@@ -106,9 +106,15 @@ class OverviewTab extends StatelessWidget {
                 onPressed: () async {
                   final last = DateTime(month.year, month.month, expense.length);
                   final lastAllowed = last.isAfter(state.today) ? state.today : last;
+                  final wanted = selectedDay == null ? lastAllowed : DateTime(month.year, month.month, selectedDay! + 1);
+                  // На всякий случай не даём initialDate оказаться позже lastDate
+                  // (повторный аудит, F06) — выбранный день теоретически может
+                  // быть будущим (см. защиту в DayFlowChart), а контракт
+                  // showDatePicker требует initialDate в пределах диапазона.
+                  final initial = wanted.isAfter(lastAllowed) ? lastAllowed : wanted;
                   final picked = await showDatePicker(
                     context: context,
-                    initialDate: selectedDay == null ? lastAllowed : DateTime(month.year, month.month, selectedDay! + 1),
+                    initialDate: initial,
                     firstDate: month,
                     lastDate: lastAllowed,
                   );
@@ -119,7 +125,7 @@ class OverviewTab extends StatelessWidget {
           ]),
         ),
         if (selectedDay != null)
-          for (final t in state.userTransactions.where((t) => t.date == DateTime(month.year, month.month, selectedDay! + 1)))
+          for (final t in state.transactionsOnDay(DateTime(month.year, month.month, selectedDay! + 1)))
             Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: TransactionTile(t)),
 
         // Лимиты и % месяца — только по текущему месяцу (F07): прошлый лимит
