@@ -45,12 +45,6 @@ class _SubmitButtonState extends State<SubmitButton> {
   }
 }
 
-String? _firstAccount(BuildContext context) {
-  final accounts = AppScope.of(context).state.activeAccounts;
-  final liquid = accounts.where((a) => a.liquid);
-  return (liquid.isNotEmpty ? liquid.first : accounts.firstOrNull)?.id;
-}
-
 /// Payment forms keep one immutable attempt until its outcome is known.
 Future<void> showPayDueSheet(BuildContext context, DueItem due) => showPaymentSheet(context, due: due);
 

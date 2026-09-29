@@ -45,7 +45,7 @@ void main() {
     await tester.tap(actionButton);
     await tester.pumpAndSettle();
     expect(find.text('Повторить проверку оплаты'), findsOneWidget);
-    final close = tester.widget<IconButton>(find.byTooltip('Закрыть').last);
+    final close = tester.widget<IconButton>(find.byWidgetPredicate((w) => w is IconButton && w.tooltip == 'Закрыть').last);
     expect(close.onPressed, isNull);
     await tester.tap(find.text('Повторить проверку оплаты'));
     await tester.pumpAndSettle();

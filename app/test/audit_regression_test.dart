@@ -33,14 +33,14 @@ class FakeServer {
 
   Future<http.Response> _handle(http.Request req) async {
     if (offline) throw http.ClientException('offline');
-    if (req.url.path == '/state') return http.Response(jsonEncode(_snapshot()), 200);
+    if (req.url.path == '/state') return http.Response(jsonEncode(_snapshot()), 200, headers: {'content-type': 'application/json; charset=utf-8'});
     final cmd = jsonDecode(req.body) as Map<String, dynamic>;
     final id = cmd['commandId'] as String;
     if (seen.contains(id)) return http.Response(jsonEncode({'revision': revision, 'repeated': true}), 200);
     try {
       _apply(cmd);
     } on LedgerException catch (e) {
-      return http.Response(jsonEncode({'error': 'ledger', 'message': e.message}), 422);
+      return http.Response(jsonEncode({'error': 'ledger', 'message': e.message, 'code': e.code}), 422, headers: {'content-type': 'application/json; charset=utf-8'});
     }
     seen.add(id);
     revision++;
