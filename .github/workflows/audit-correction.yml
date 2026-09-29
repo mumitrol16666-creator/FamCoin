@@ -1,0 +1,39 @@
+name: Audit compatibility correction
+on:
+  push:
+    branches: ['fix/audit-integrity-63eb7df']
+    paths: ['.github/workflows/audit-correction.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'mumitrol16666-creator/FamCoin' && github.ref == 'refs/heads/fix/audit-integrity-63eb7df'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/audit-integrity-63eb7df
+      - name: Preserve the existing error code for an edited-away version
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p = Path('packages/famcoin_core/lib/src/ledger.dart')
+          b = p.read_bytes()
+          assert hashlib.sha1(b'blob ' + str(len(b)).encode() + b'\0' + b).hexdigest() == 'b95a3dfba31c870b05b841f1520cb4ad5cb84edb'
+          s = b.decode()
+          old = '    if (isRestored(txId)) {\n'
+          new = '''    // Preserve the public distinction between an edit replacement and
+              // an already restored record, while both remain non-restorable.
+              if (_transactions.any((t) => t.meta['edited'] == txId)) {
+                throw LedgerException('Эта версия операции заменена более новой правкой', code: 'restoreSuperseded');
+              }
+          ''' + old
+          assert s.count(old) == 1
+          p.write_text(s.replace(old, new))
+          PY
+          git diff --check
+          git add packages/famcoin_core/lib/src/ledger.dart
+          git -c user.name='FamCoin audit automation' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix(core): preserve restoreSuperseded for edited-away versions'
+          git push origin HEAD:refs/heads/fix/audit-integrity-63eb7df
