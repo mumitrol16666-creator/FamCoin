@@ -395,6 +395,11 @@ class Ledger {
     if (!_reversed.contains(txId) || original.type == EventType.reversal) {
       throw LedgerException('Восстановить можно только удалённую операцию', code: 'restoreNotReversed');
     }
+    // Preserve the public distinction between an edit replacement and
+    // an already restored record, while both remain non-restorable.
+    if (_transactions.any((t) => t.meta['edited'] == txId)) {
+      throw LedgerException('Эта версия операции заменена более новой правкой', code: 'restoreSuperseded');
+    }
     if (isRestored(txId)) {
       throw LedgerException('Операция уже восстановлена', code: 'alreadyRestored');
     }
