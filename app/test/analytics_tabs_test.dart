@@ -54,6 +54,36 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('Обзор: выбранный день не переживает смену месяца с другой вкладки (F05)', (tester) async {
+    final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(390, 844));
+    await f.state.addExpense(amount: kzt(1000), category: 'food', account: 'cash', date: DateTime(2026, 8, 31));
+    await tester.pump();
+
+    Finder tabFinder(String label) => find.descendant(of: find.byType(TabBar), matching: find.text(label));
+
+    // Август короче сентября только по индексу: уходим в август и выбираем
+    // 31-е число через календарь (по умолчанию открывается на последнем дне).
+    await tester.tap(find.byTooltip('Предыдущий месяц').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Выбрать день'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ОК')); // подтверждение пикера — по-русски кириллицей
+    await tester.pumpAndSettle();
+
+    // Переключаем месяц НАЗАД на сентябрь через «Расходы», а не через «Обзор».
+    await tester.tap(tabFinder('Расходы'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Следующий месяц').first);
+    await tester.pumpAndSettle();
+
+    // Возврат на «Обзор» с сентябрём (30 дней) и «застрявшим» днём 31 не
+    // должен падать RangeError-ом при построении графика.
+    await tester.tap(tabFinder('Обзор'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('Капитал: чистый капитал и разбивка совпадают с ledger.netWorth()', (tester) async {
     final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(390, 844));
     await f.state.sendBatch(f.state.newBankDebtCommands(name: 'Kaspi', kind: 'loan', balance: kzt(200000), payment: kzt(20000), day: 5, rate: 20));

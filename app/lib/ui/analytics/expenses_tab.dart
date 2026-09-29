@@ -73,7 +73,7 @@ class ExpensesTab extends StatelessWidget {
                         MoneyText(e.value, style: const TextStyle(fontSize: 13)),
                         SizedBox(
                           width: 44,
-                          child: Text(totalCats == 0 ? '' : '${(e.value * 100 / totalCats).round()}%', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: fam.text2)),
+                          child: Text(categorySharePercent(e.value, totalCats), textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: fam.text2)),
                         ),
                       ]),
                       const SizedBox(height: 4),

@@ -19,7 +19,7 @@ class HistoryTab extends StatelessWidget {
     final state = AppScope.of(context).state;
     final locale = Localizations.localeOf(context).toString();
     final history = state.netWorthHistory(months);
-    final labels = List<String>.generate(months, (i) => i == months - 1 ? l.now : '−${months - 1 - i}${l.monthsShort}');
+    final labels = List<String>.generate(history.length, (i) => i == history.length - 1 ? l.now : '−${history.length - 1 - i}${l.monthsShort}');
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),

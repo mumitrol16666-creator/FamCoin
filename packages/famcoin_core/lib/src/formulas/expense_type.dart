@@ -50,10 +50,13 @@ class ExpenseTypeSplit {
 }
 
 /// [byCategory] — сумма расхода по id категории за период (без знака, ≥ 0).
-ExpenseTypeSplit splitExpenseTypes(Map<String, int> byCategory) {
+/// [classify] переопределяет тип по умолчанию — например, чтобы учесть
+/// выбор владельца для своей категории (см. `AppState.expenseTypeFor`).
+ExpenseTypeSplit splitExpenseTypes(Map<String, int> byCategory, {ExpenseType Function(String)? classify}) {
+  final resolve = classify ?? expenseTypeOf;
   var mandatory = 0, regular = 0, discretionary = 0;
   for (final e in byCategory.entries) {
-    switch (expenseTypeOf(e.key)) {
+    switch (resolve(e.key)) {
       case ExpenseType.mandatory:
         mandatory += e.value;
       case ExpenseType.regular:

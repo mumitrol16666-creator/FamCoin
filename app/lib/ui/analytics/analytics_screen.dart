@@ -36,6 +36,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
 
   void _openTab(int i) => setState(() => _tab.index = i);
 
+  /// Общий обработчик смены месяца для «Обзора» и «Расходов» (F05): выбранный
+  /// день сбрасывается всегда, а не только при смене месяца из «Обзора» —
+  /// иначе он переживал переход в более короткий месяц и ломал график.
+  void _onOffset(int o) => setState(() {
+        _offset = o;
+        _selectedDay = null;
+      });
+
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
@@ -56,15 +64,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
         body: TabBarView(controller: _tab, children: [
           OverviewTab(
             offset: _offset,
-            onOffset: (o) => setState(() {
-              _offset = o;
-              _selectedDay = null;
-            }),
+            onOffset: _onOffset,
             selectedDay: _selectedDay,
             onSelectDay: (d) => setState(() => _selectedDay = d),
             onOpenTab: _openTab,
           ),
-          ExpensesTab(offset: _offset, onOffset: (o) => setState(() => _offset = o)),
+          ExpensesTab(offset: _offset, onOffset: _onOffset),
           const BudgetTab(),
           const CapitalTab(),
           const HistoryTab(),

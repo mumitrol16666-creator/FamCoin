@@ -131,7 +131,9 @@ void main() {
     expect(days[20], kzt(12340 - 1500));
     expect(days[21], 0);
     expect(state.categoryTransactions('household', state.monthStart).length, 2);
-    expect(state.expenseByWho(state.monthStart)['shared'], kzt(12340));
+    // Возврат наследует «для кого» от покупки и нетится в разбивке (F04) —
+    // иначе покупка с возвратом завышала бы расход члена семьи.
+    expect(state.expenseByWho(state.monthStart)['shared'], kzt(12340 - 1500));
   });
 
   test('сверка остатка: разница в журнале и отчёте, но не в доходах', () async {

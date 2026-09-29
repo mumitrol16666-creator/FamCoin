@@ -1,3 +1,4 @@
+import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
@@ -95,6 +96,10 @@ Future<String?> showCategorySheet(BuildContext context, {CategoryDef? initial, b
   final name = TextEditingController(text: initial?.name ?? '');
   var icon = initial?.iconIndex ?? 0;
   var isIncome = initial?.isIncome ?? income;
+  // Тип расхода можно задать и поменять (F12) — иначе своя категория всегда
+  // молча считалась свободной, а владелец мог не знать, что это вообще
+  // настраивается.
+  var expenseType = initial?.expenseType ?? ExpenseType.discretionary;
   return showFormSheet<String>(
     context,
     title: initial == null ? l.ownCategory : l.editCategory,
@@ -109,6 +114,21 @@ Future<String?> showCategorySheet(BuildContext context, {CategoryDef? initial, b
             selected: {isIncome},
             onSelectionChanged: (s) => set(() => isIncome = s.first),
           ),
+        if (!isIncome) ...[
+          const SizedBox(height: 12),
+          Text(l.categoryExpenseType, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+          const SizedBox(height: 6),
+          SegmentedButton<ExpenseType>(
+            showSelectedIcon: false,
+            segments: [
+              ButtonSegment(value: ExpenseType.mandatory, label: Text(l.typeMandatory)),
+              ButtonSegment(value: ExpenseType.regular, label: Text(l.typeRegular)),
+              ButtonSegment(value: ExpenseType.discretionary, label: Text(l.typeDiscretionary)),
+            ],
+            selected: {expenseType},
+            onSelectionChanged: (s) => set(() => expenseType = s.first),
+          ),
+        ],
         const SizedBox(height: 12),
         Text(l.categoryIcon, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
         const SizedBox(height: 6),
@@ -129,9 +149,9 @@ Future<String?> showCategorySheet(BuildContext context, {CategoryDef? initial, b
             String? id = initial?.id;
             final ok = await runAction(ctx, () async {
               if (initial == null) {
-                id = await state.addCategory(name: n, iconIndex: icon, income: isIncome);
+                id = await state.addCategory(name: n, iconIndex: icon, income: isIncome, expenseType: isIncome ? null : expenseType);
               } else {
-                await state.upsert('category', initial.id, {'name': n, 'icon': icon, 'income': initial.isIncome});
+                await state.upsert('category', initial.id, {'name': n, 'icon': icon, 'income': initial.isIncome, if (!initial.isIncome) 'expenseType': expenseType.name});
               }
             });
             if (ok && ctx.mounted) Navigator.of(ctx).pop(id);

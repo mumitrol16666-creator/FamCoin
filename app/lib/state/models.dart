@@ -16,7 +16,7 @@ String newId() {
 int _minor(Object? v) => v == null ? 0 : parseMinor(v);
 
 class CategoryDef {
-  const CategoryDef(this.id, this.icon, {this.isIncome = false, this.name, this.iconIndex});
+  const CategoryDef(this.id, this.icon, {this.isIncome = false, this.name, this.iconIndex, this.expenseType});
   final String id;
   final IconData icon;
   final bool isIncome;
@@ -25,8 +25,12 @@ class CategoryDef {
   final String? name;
   final int? iconIndex;
 
+  /// Тип расхода, выбранный владельцем для своей категории (F12); `null` —
+  /// не выбирался, тогда действует запасной вариант из ядра (свободные).
+  final ExpenseType? expenseType;
+
   bool get isCustom => name != null;
-  Map<String, Object?> toJson() => {'name': name, 'icon': iconIndex ?? 0, 'income': isIncome};
+  Map<String, Object?> toJson() => {'name': name, 'icon': iconIndex ?? 0, 'income': isIncome, if (expenseType != null) 'expenseType': expenseType!.name};
 }
 
 /// Значки для своих категорий — фиксированный набор, чтобы сборка
@@ -44,7 +48,9 @@ final Map<String, CategoryDef> customCategories = {};
 
 CategoryDef customCategoryFromJson(String id, Map<String, dynamic> d) {
   final idx = ((d['icon'] as num?)?.toInt() ?? 0).clamp(0, customIcons.length - 1);
-  return CategoryDef(id, customIcons[idx], isIncome: d['income'] == true, name: d['name'] as String? ?? '?', iconIndex: idx);
+  final typeName = d['expenseType'] as String?;
+  final type = typeName == null ? null : ExpenseType.values.where((t) => t.name == typeName).firstOrNull;
+  return CategoryDef(id, customIcons[idx], isIncome: d['income'] == true, name: d['name'] as String? ?? '?', iconIndex: idx, expenseType: type);
 }
 
 const categories = <CategoryDef>[

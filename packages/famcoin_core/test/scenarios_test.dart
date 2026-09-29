@@ -288,6 +288,15 @@ void main() {
       expect(() => l.reverse('e', newId: 'e-rev2'), throwsA(isA<LedgerException>()));
     });
 
+    test('F02: отмена начального остатка не создаёт фиктивный денежный поток', () {
+      final l = seed(opening: 0)..openingBalance(id: 'open', date: d0, account: 'kaspi', amount: kzt(100000));
+      l.reverse('open', newId: 'open-rev', date: d1);
+      expect(l.balance('kaspi'), 0);
+      // Ни сам ввод остатка, ни его отмена не должны попадать в cashFlow —
+      // это не операционное движение денег, а исправление исходных данных.
+      expect(l.report(periodFrom, periodTo).cashFlow, 0);
+    });
+
     test('T31 агрегаты после правок совпадают с перестройкой по журналу', () {
       final l = seed();
       final agg = DailyTotals();

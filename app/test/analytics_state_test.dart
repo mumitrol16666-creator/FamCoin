@@ -189,7 +189,10 @@ void main() {
     await s.addExpense(amount: kzt(40000), category: 'fun', account: 'cash', date: incomeDay);
     await s.addExpense(amount: kzt(10000), category: 'food', account: 'cash', date: otherDay1);
     await s.addExpense(amount: kzt(10000), category: 'food', account: 'cash', date: otherDay2);
-    expect(s.paydaySpendRatio(), closeTo(40000 / 10000, 0.001));
+    // Знаменатель — все наблюдаемые дни месяца с начала учёта (сентябрь, F13),
+    // а не только дни, когда что-то потрачено: 1 день дохода (40000 ₸),
+    // 29 обычных (20000 ₸ на двоих, остальные 27 — без трат, но считаются).
+    expect(s.paydaySpendRatio(), closeTo(40000 / (20000 / 29), 0.001));
   });
 
   test('paydaySpendRatio: null без доходных дней в окне', () async {
@@ -198,5 +201,83 @@ void main() {
     final s = f.state;
     await s.addExpense(amount: kzt(1000), category: 'food', account: 'cash', date: s.today);
     expect(s.paydaySpendRatio(), isNull);
+  });
+
+  test('dailyExpense: возврат за другой месяц считается по своей дате, а не по дню покупки (F03)', () async {
+    final f = setUp();
+    await f.init();
+    final s = f.state;
+    await s.addExpense(amount: kzt(50000), category: 'food', account: 'cash', date: DateTime(2026, 8, 31));
+    final purchase = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    await s.refund(purchase, category: 'food', amount: kzt(20000), account: 'cash', date: DateTime(2026, 9, 2));
+
+    final august = DateTime(2026, 8, 1);
+    final september = DateTime(2026, 9, 1);
+    // Сумма дневного графика месяца должна совпадать с месячным отчётом,
+    // который всегда считает возврат по его собственной дате.
+    expect(s.dailyExpense(august).fold<int>(0, (a, b) => a + b), s.reportFor(august).expense);
+    expect(s.dailyExpense(september).fold<int>(0, (a, b) => a + b), s.reportFor(september).expense);
+    expect(s.reportFor(august).expense, kzt(50000));
+    expect(s.reportFor(september).expense, -kzt(20000));
+  });
+
+  test('unplannedLargeExpenses: оплата планового платежа не считается, порог — по сумме всей покупки (F11)', () async {
+    final f = setUp();
+    await f.init();
+    final s = f.state;
+    await s.upsert('planned', 'rent', {'name': 'Аренда', 'amount': '3000000', 'day': 10, 'category': 'home', 'paid': [], 'start': '2026-09-01'});
+    final due = s.dueItems(s.monthEnd.subtract(const Duration(days: 1))).firstWhere((d) => d.planned.id == 'rent');
+    await s.payDue(due, account: 'cash', amount: kzt(30000)); // крупный плановый платёж — заведомо «по плану»
+
+    // Покупка 24 000 ₸ разделена на две категории без лимита: по отдельности
+    // ниже порога, но сумма покупки — выше (порог не обходится разделением чека).
+    await s.send({
+      'type': 'expense',
+      'id': 'split1',
+      'date': dateToJson(s.today),
+      'account': 'cash',
+      'splits': {'fun': kzt(12000).toString(), 'clothes': kzt(12000).toString()},
+    });
+
+    final found = s.unplannedLargeExpenses(s.monthStart, threshold: kzt(20000));
+    expect(found.length, 1);
+    expect(found.single.id, 'split1');
+  });
+
+  test('dueItems/recurringMonthly/debtLoadStatus: закрытый заём не создаёт обязательств, кредитка на нуле — создаёт (F10)', () async {
+    final f = setUp();
+    await f.init();
+    final s = f.state;
+    await s.sendBatch(s.newBankDebtCommands(name: 'Авто', kind: 'loan', balance: kzt(100000), payment: kzt(100000), day: 5, rate: 10));
+    final loan = s.bankDebts.firstWhere((d) => d.kind == 'loan');
+    await s.payDebt(debtId: loan.id, account: 'cash', principal: kzt(100000), date: s.today);
+    expect(s.debtBalance(loan.id), 0);
+
+    expect(s.debtLoadStatus.totalDebt, 0);
+    expect(s.debtLoadStatus.monthlyPayments, 0);
+    expect(s.recurringMonthly, 0);
+    expect(s.dueItems(s.monthEnd.subtract(const Duration(days: 1))), isEmpty);
+
+    // Кредитка на нуле — револьверный долг, баланс может снова вырасти:
+    // плановый платёж по ней всё ещё считается (в отличие от закрытого займа).
+    await s.sendBatch(s.newBankDebtCommands(name: 'Kaspi Red', kind: 'creditCard', balance: 0, payment: kzt(5000), day: 15, rate: 20));
+    expect(s.recurringMonthly, kzt(5000));
+  });
+
+  test('expenseTypeFor: владелец может переопределить тип своей категории (F12)', () async {
+    final f = setUp();
+    await f.init();
+    final s = f.state;
+    final medsId = await s.addCategory(name: 'Лекарства', iconIndex: 0, income: false, expenseType: ExpenseType.mandatory);
+    expect(s.expenseTypeFor(medsId), ExpenseType.mandatory);
+
+    await s.addExpense(amount: kzt(15000), category: medsId, account: 'cash', date: s.today);
+    final split = s.expenseTypeSplit(s.monthStart);
+    expect(split.mandatory, kzt(15000));
+    expect(split.discretionary, 0);
+
+    // Без явного выбора — по-прежнему свободные по умолчанию (D66).
+    final hobbyId = await s.addCategory(name: 'Хобби', iconIndex: 1, income: false);
+    expect(s.expenseTypeFor(hobbyId), ExpenseType.discretionary);
   });
 }

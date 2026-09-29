@@ -387,6 +387,12 @@ class Ledger {
     return sum;
   }
 
+  /// `true`, если [tx] сама — начальный остаток, либо отменяет начальный
+  /// остаток: обе стороны такой пары не являются потоком периода (F02).
+  bool _isOpeningLike(Transaction tx) =>
+      tx.type == EventType.opening ||
+      (tx.type == EventType.reversal && tx.reverses != null && _byId[tx.reverses]?.type == EventType.opening);
+
   /// Сумма проводок по счетам, отобранным `where`, за полуинтервал [from, to).
   /// `skipOpening` исключает начальные остатки: они не являются потоком периода.
   int sumPostings(bool Function(LedgerAccount) where,
@@ -395,7 +401,7 @@ class Ledger {
     for (final tx in _transactions) {
       if (from != null && tx.date.isBefore(from)) continue;
       if (to != null && !tx.date.isBefore(to)) continue;
-      if (skipOpening && tx.type == EventType.opening) continue;
+      if (skipOpening && _isOpeningLike(tx)) continue;
       for (final p in tx.postings) {
         if (where(_accounts[p.accountId]!)) sum += p.amount;
       }

@@ -63,10 +63,11 @@ class OverviewTab extends StatelessWidget {
               Expanded(child: _kv(context, l.reportExpense, -report.expense, fam.expense)),
             ]),
             const Divider(height: 20),
-            _row(context, l.freeCashFlow, report.result, sign: true, bold: true),
+            _row(context, l.incomeMinusExpense, report.result, sign: true, bold: true),
+            _row(context, l.cashFlow, report.cashFlow, sign: true),
             if (report.income > 0) _text(context, l.savingsRate, '${(report.result * 100 / report.income).round()}%'),
             _text(context, l.avgPerDay, formatMoney(avgDay)),
-            if (offset == 0 && prev.expense > 0 || prev.income > 0) ...[
+            if (offset == 0 && (prev.expense > 0 || prev.income > 0)) ...[
               const SizedBox(height: 8),
               Text(monthCompareText(l, report: report, prev: prev), style: TextStyle(fontSize: 12, color: fam.text2)),
             ],
@@ -121,8 +122,13 @@ class OverviewTab extends StatelessWidget {
           for (final t in state.userTransactions.where((t) => t.date == DateTime(month.year, month.month, selectedDay! + 1)))
             Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: TransactionTile(t)),
 
-        SectionHeader(l.budgetShort, action: l.details, onAction: () => onOpenTab(2)),
-        AppCard(child: _budgetSummary(context, state, l, fam)),
+        // Лимиты и % месяца — только по текущему месяцу (F07): прошлый лимит
+        // нигде не хранится, поэтому для прошлого месяца тут нечего показать
+        // честно — лучше не показывать вовсе, чем текущие цифры под чужой шапкой.
+        if (offset == 0) ...[
+          SectionHeader(l.budgetShort, action: l.details, onAction: () => onOpenTab(2)),
+          AppCard(child: _budgetSummary(context, state, l, fam)),
+        ],
 
         SectionHeader(l.whereMoneyGoes, action: l.details, onAction: () => onOpenTab(1)),
         if (cats.isEmpty)
@@ -139,7 +145,7 @@ class OverviewTab extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(child: Text(categoryName(l, e.key))),
                     MoneyText(e.value, style: const TextStyle(fontSize: 13)),
-                    SizedBox(width: 44, child: Text(totalCats == 0 ? '' : '${(e.value * 100 / totalCats).round()}%', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: fam.text2))),
+                    SizedBox(width: 44, child: Text(categorySharePercent(e.value, totalCats), textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: fam.text2))),
                   ]),
                 ),
             ]),
@@ -154,7 +160,7 @@ class OverviewTab extends StatelessWidget {
         Builder(builder: (context) {
           final nw = state.ledger.netWorth();
           final history = state.netWorthHistory(6);
-          final changed = history.first.capital == 0 ? null : nw.capital - history.first.capital;
+          final changed = history.length < 2 ? null : nw.capital - history.first.capital;
           return AppCard(
             child: Row(children: [
               Expanded(

@@ -429,6 +429,7 @@ class AppState extends ChangeNotifier {
     final items = <DueItem>[];
     final todayIdx = today.year * 12 + today.month - 1;
     for (final p in planned) {
+      if (!_plannedDebtActive(p)) continue; // долг уже закрыт (F10)
       final from = p.start ?? monthStart;
       // Не раньше 10 лет назад и не дальше двух месяцев вперёд.
       final startIdx = (from.year * 12 + from.month - 1).clamp(todayIdx - 120, todayIdx + 2);
@@ -516,15 +517,30 @@ class AppState extends ChangeNotifier {
     return list;
   }
 
-  /// Расход по дням месяца: индекс 0 — первое число.
+  /// Расход по дням месяца: индекс 0 — первое число. Возврат обычно считается
+  /// по дню покупки (`_spendDay`); если покупка была в ДРУГОМ месяце, для
+  /// этого графика он всё же встаёт на свою дату — иначе сумма столбиков
+  /// разошлась бы с месячным отчётом и категориями, которые всегда считают
+  /// возврат по его собственной дате (F03).
   List<int> dailyExpense(DateTime monthStart) {
     final days = DateTime(monthStart.year, monthStart.month + 1, 0).day;
     final out = List<int>.filled(days, 0);
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
     for (final tx in ledger.transactions) {
       if (ledger.isReversed(tx.id) || tx.type == EventType.reversal) continue;
-      final day = _spendDay(tx); // возврат — к дню покупки
-      if (day == null || day.isBefore(monthStart) || !day.isBefore(end)) continue;
+      final spendDay = _spendDay(tx); // возврат по удалённой покупке — null, не входит
+      if (spendDay == null) continue;
+      var day = spendDay;
+      // Покупка была в ДРУГОМ месяце, чем сам возврат — считаем по дате
+      // возврата, как report()/expenseByCategory(), а не по дню покупки.
+      // Иначе один и тот же возврат либо задваивался бы в месяце покупки
+      // (там, где он реально не при делах), либо пропадал бы из месяца, где
+      // он должен быть по датой. Проверка не зависит от того, какой месяц
+      // сейчас запрашивают — это свойство самой операции.
+      if (tx.type == EventType.refund && (spendDay.year != tx.date.year || spendDay.month != tx.date.month)) {
+        day = tx.date;
+      }
+      if (day.isBefore(monthStart) || !day.isBefore(end)) continue;
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind == LedgerKind.expense) out[day.day - 1] += p.amount;
       }
@@ -533,13 +549,14 @@ class AppState extends ChangeNotifier {
   }
 
   /// Доход месяца по дням — для графика «доход/расход по дням» (индекс 0 —
-  /// первое число).
+  /// первое число). По проводкам дохода, а не по виду события (F04): доход
+  /// может прийти и не через `EventType.income` (например, проценты по долгу).
   List<int> dailyIncome(DateTime monthStart) {
     final days = DateTime(monthStart.year, monthStart.month + 1, 0).day;
     final out = List<int>.filled(days, 0);
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
     for (final tx in ledger.transactions) {
-      if (ledger.isReversed(tx.id) || tx.type != EventType.income) continue;
+      if (ledger.isReversed(tx.id) || tx.type == EventType.reversal) continue;
       if (tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind == LedgerKind.income) out[tx.date.day - 1] += p.amount;
@@ -548,12 +565,13 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
-  /// Расход месяца по отметке «для кого».
+  /// Расход месяца по отметке «для кого» — считает и возвраты (F04), иначе
+  /// покупка с возвратом в одном месяце завышает расход члена семьи.
   Map<String, int> expenseByWho(DateTime monthStart) {
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
     final out = <String, int>{};
     for (final tx in userTransactions) {
-      if (tx.type != EventType.expense || tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
+      if ((tx.type != EventType.expense && tx.type != EventType.refund) || tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
       final who = tx.meta['who'] as String? ?? 'me';
       final sum = tx.postings.where((p) => ledger.account(p.accountId).kind == LedgerKind.expense).fold(0, (s, p) => s + p.amount);
       out.update(who, (v) => v + sum, ifAbsent: () => sum);
@@ -651,8 +669,10 @@ class AppState extends ChangeNotifier {
   /// Возврат покупки на счёт (F028): уменьшает расход категории в дату
   /// возврата. Привязывается к исходной версии покупки, поэтому правка
   /// покупки не открывает возврат заново; лимит проверяет ядро и сервер.
+  /// Наследует «для кого» от покупки (F04) — иначе возврат по чужой покупке
+  /// считался бы за «меня» в семейной разбивке.
   Future<void> refund(Transaction purchase, {required String category, required int amount, required String account, DateTime? date, String? commandId}) =>
-      send({'type': 'refund', 'id': newId(), 'date': _date(date ?? today), 'category': category, 'amount': amount.toString(), 'toAccount': account, 'meta': {'refundOf': ledger.purchaseRoot(purchase.id)}}, commandId: commandId);
+      send({'type': 'refund', 'id': newId(), 'date': _date(date ?? today), 'category': category, 'amount': amount.toString(), 'toAccount': account, 'meta': {'refundOf': ledger.purchaseRoot(purchase.id), 'who': purchase.meta['who'] ?? 'me'}}, commandId: commandId);
 
   /// Сколько по покупке уже возвращено в категории — по всем версиям покупки.
   int refundedFor(String purchaseId, String category) => ledger.refundedFor(purchaseId, expenseAccount(category));
@@ -670,32 +690,81 @@ class AppState extends ChangeNotifier {
 
   // ------------------------------------------------------- аналитика (D66)
 
+  /// Тип расхода категории: выбор владельца для своей категории (F12) —
+  /// приоритетнее запасного назначения по id из ядра (свободные по умолчанию).
+  ExpenseType expenseTypeFor(String categoryId) => customCategories[categoryId]?.expenseType ?? expenseTypeOf(categoryId);
+
   /// Расход месяца по трём типам вместо десятков категорий (раздел 9.8):
   /// обязательные (аренда, коммуналка, связь, кредиты), обычные (еда,
   /// транспорт, бытовое) и свободные (кафе, развлечения, подарки). Своя
-  /// категория — свободные по умолчанию, смысл по названию не определить.
-  ExpenseTypeSplit expenseTypeSplit(DateTime monthStart) => splitExpenseTypes({for (final e in categoriesFor(monthStart)) e.key: e.value});
+  /// категория — свободные по умолчанию, если владелец не указал иное.
+  ExpenseTypeSplit expenseTypeSplit(DateTime monthStart) =>
+      splitExpenseTypes({for (final e in categoriesFor(monthStart)) e.key: e.value}, classify: expenseTypeFor);
 
   /// Чистый капитал на конец каждого из последних [months] месяцев, самый
   /// новый — сегодня (месяц ещё не закончился). Ничего не хранится отдельно:
   /// журнал уже весь на устройстве (D63), это просто снимок на разные даты.
-  List<NetWorth> netWorthHistory(int months) => [
-        for (var k = months - 1; k >= 0; k--) ledger.netWorth(asOf: k == 0 ? today : monthOf(1 - k).subtract(const Duration(days: 1))),
-      ];
+  /// Точек меньше [months], если учёт начат позже (F08): капитал «до того,
+  /// как завели приложение» не показываем нулём — это не то же самое, что
+  /// «денег правда не было».
+  List<NetWorth> netWorthHistory(int months) {
+    final firstMonth = _firstActivityMonth;
+    var n = months;
+    if (firstMonth != null) {
+      final elapsed = (today.year - firstMonth.year) * 12 + (today.month - firstMonth.month) + 1;
+      n = n.clamp(1, elapsed);
+    } else {
+      n = 1; // журнал пуст — есть только «сейчас»
+    }
+    return [for (var k = n - 1; k >= 0; k--) ledger.netWorth(asOf: k == 0 ? today : monthOf(1 - k).subtract(const Duration(days: 1)))];
+  }
+
+  /// Первый месяц, за который в журнале вообще есть операции; `null` —
+  /// журнал пуст. Отличает «дохода не было» от «истории ещё не было» (F08):
+  /// месяцы до начала учёта не должны считаться нулевыми при усреднении.
+  DateTime? get _firstActivityMonth {
+    DateTime? earliest;
+    for (final tx in ledger.transactions) {
+      if (earliest == null || tx.date.isBefore(earliest)) earliest = tx.date;
+    }
+    return earliest == null ? null : DateTime(earliest.year, earliest.month, 1);
+  }
+
+  /// Долг, за которым ещё нужно следить: кредитка — всегда (баланс может
+  /// снова вырасти от новых покупок), остальные — пока остаток больше нуля
+  /// (F10). Полностью выплаченный заём/рассрочка не должен создавать будущих
+  /// обязательств и попадать в долговую нагрузку.
+  bool _debtStillOwed(DebtInfo d) => d.kind == 'creditCard' || debtBalance(d.id) > 0;
+
+  /// Плановый платёж ещё актуален: не привязан к долгу либо привязанный долг
+  /// ещё не закрыт.
+  bool _plannedDebtActive(PlannedInfo p) {
+    if (p.debtId == null) return true;
+    final debt = bankDebt(p.debtId!);
+    return debt != null && _debtStillOwed(debt);
+  }
 
   /// Постоянные ежемесячные обязательства (раздел 9.11): плановые платежи,
   /// включая платежи по кредитам — они заводятся как планы со ссылкой на долг.
-  int get recurringMonthly => planned.fold(0, (s, p) => s + p.amount);
+  /// Закрытые долги (F10) сюда не попадают.
+  int get recurringMonthly => planned.where(_plannedDebtActive).fold(0, (s, p) => s + p.amount);
 
   /// Средний доход за последние [months] уже закончившихся месяцев (без
-  /// текущего — он не закончился); `0`, если дохода не было.
+  /// текущего — он не закончился), но не раньше начала учёта: месяц без
+  /// операций из-за того, что учёт тогда ещё не велся, не считается нулевым
+  /// доходом (F08). `0`, если ни один из запрошенных месяцев не подходит.
   int avgMonthlyIncome({int months = 3}) {
     if (months <= 0) return 0;
+    final firstMonth = _firstActivityMonth;
     var sum = 0;
+    var counted = 0;
     for (var k = 1; k <= months; k++) {
-      sum += reportFor(monthOf(-k)).income;
+      final m = monthOf(-k);
+      if (firstMonth != null && m.isBefore(firstMonth)) continue;
+      sum += reportFor(m).income;
+      counted++;
     }
-    return sum ~/ months;
+    return counted == 0 ? 0 : sum ~/ counted;
   }
 
   /// Доля постоянных обязательств от среднего дохода; `null` — доход неизвестен.
@@ -735,11 +804,12 @@ class AppState extends ChangeNotifier {
   double get monthElapsedPercent => today.day * 100 / daysInMonth;
 
   /// Долговая нагрузка по банковским долгам (раздел 9.10). Личные долги сюда
-  /// не входят — это не регулярный ежемесячный платёж.
+  /// не входят — это не регулярный ежемесячный платёж. Полностью выплаченные
+  /// займы/рассрочки исключены (F10) — они больше не нагрузка.
   DebtLoadStatus get debtLoadStatus {
     final income = avgMonthlyIncome();
     return debtLoad(
-      [for (final d in bankDebts) _debtLoadInput(d)],
+      [for (final d in bankDebts.where(_debtStillOwed)) _debtLoadInput(d)],
       monthlyIncome: income > 0 ? income : null,
     );
   }
@@ -758,7 +828,7 @@ class AppState extends ChangeNotifier {
   /// минимальных платежей плюс [extraPerMonth] (сценарий «а если платить
   /// больше»); `0` без долгов, `null` — не укладывается в разумный срок.
   int? monthsToPayoffAt({int extraPerMonth = 0}) {
-    final inputs = [for (final d in bankDebts) _debtLoadInput(d)];
+    final inputs = [for (final d in bankDebts.where(_debtStillOwed)) _debtLoadInput(d)];
     if (inputs.isEmpty) return 0;
     final budget = inputs.fold(0, (s, d) => s + d.monthlyPayment) + extraPerMonth;
     return monthsToPayoff(inputs, monthlyBudget: budget);
@@ -785,45 +855,57 @@ class AppState extends ChangeNotifier {
   }
 
   /// Доля свободных трат после 20:00 среди операций с указанным временем
-  /// (раздел 9.12); `null`, если время не указано ни у одной такой операции —
-  /// не показываем наблюдение, которое на самом деле ничего не измеряет.
+  /// (раздел 9.12); `null`, если время указано меньше чем у двух таких
+  /// операций — единственная операция дала бы 0% или 100% и выглядела бы
+  /// как измерение, хотя на самом деле почти ничего не известно (F13).
   double? eveningDiscretionaryShare(DateTime monthStart) {
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
-    var total = 0, evening = 0;
+    var total = 0, evening = 0, known = 0;
     for (final tx in ledger.transactions) {
       if (tx.type != EventType.expense || ledger.isReversed(tx.id) || _isPlannedSpend(tx)) continue;
       if (tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
       final hour = _hourOf(tx);
       if (hour == null) continue;
+      var counted = false;
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind != LedgerKind.expense) continue;
-        if (expenseTypeOf(p.accountId.substring(8)) != ExpenseType.discretionary) continue;
+        if (expenseTypeFor(p.accountId.substring(8)) != ExpenseType.discretionary) continue;
         total += p.amount;
         if (hour >= 20) evening += p.amount;
+        counted = true;
       }
+      if (counted) known++;
     }
-    return total == 0 ? null : evening * 100 / total;
+    return total == 0 || known < 2 ? null : evening * 100 / total;
   }
 
   /// Крупные покупки в категориях без лимита — «не было в плане месяца»:
-  /// лимит на категорию и есть тот самый план (раздел 9.12).
+  /// лимит на категорию и есть тот самый план (раздел 9.12). Оплата планового
+  /// платежа сюда не попадает — она и так известна заранее (F11); порог
+  /// сравнивается с суммой всей покупки, а не с долей одной части разделённого
+  /// чека, иначе крупную покупку можно «спрятать», разбив её на категории.
   List<Transaction> unplannedLargeExpenses(DateTime monthStart, {int threshold = 2000000}) {
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
-    final planned = {for (final l in limits) l.category};
+    final plannedCats = {for (final l in limits) l.category};
     return userTransactions.where((t) {
-      if (t.type != EventType.expense || t.date.isBefore(monthStart) || !t.date.isBefore(end)) return false;
-      for (final p in t.postings) {
-        if (ledger.account(p.accountId).kind != LedgerKind.expense) continue;
-        if (p.amount >= threshold && !planned.contains(p.accountId.substring(8))) return true;
-      }
-      return false;
+      if (t.type != EventType.expense || t.date.isBefore(monthStart) || !t.date.isBefore(end) || _isPlannedSpend(t)) return false;
+      final expenseParts = t.postings.where((p) => ledger.account(p.accountId).kind == LedgerKind.expense);
+      final total = expenseParts.fold(0, (s, p) => s + p.amount);
+      if (total < threshold) return false;
+      return expenseParts.any((p) => !plannedCats.contains(p.accountId.substring(8)));
     }).toList();
   }
 
   /// Во сколько раз траты в дни поступления дохода выше обычных за последние
-  /// [months] месяцев; `null` без доходных дней или без дней для сравнения.
+  /// [months] месяцев (не раньше начала учёта — см. `_firstActivityMonth`,
+  /// F08); `null` без доходных дней или без дней для сравнения. Знаменатель —
+  /// все наблюдаемые дни соответствующего типа, а не только те, где что-то
+  /// потрачено (F13): иначе дни дохода без покупок молча выпадают и меняют
+  /// смысл показателя.
   double? paydaySpendRatio({int months = 3}) {
-    final start = monthOf(-(months - 1));
+    final requestedStart = monthOf(-(months - 1));
+    final firstMonth = _firstActivityMonth;
+    final start = firstMonth != null && firstMonth.isAfter(requestedStart) ? firstMonth : requestedStart;
     final end = monthEnd;
     final incomeDays = <DateTime>{};
     final spendByDay = <DateTime, int>{};
@@ -838,7 +920,8 @@ class AppState extends ChangeNotifier {
     }
     if (incomeDays.isEmpty) return null;
     var onIncome = 0, onIncomeDays = 0, other = 0, otherDays = 0;
-    spendByDay.forEach((d, v) {
+    for (var d = start; d.isBefore(end); d = d.add(const Duration(days: 1))) {
+      final v = spendByDay[d] ?? 0;
       if (incomeDays.contains(d)) {
         onIncome += v;
         onIncomeDays++;
@@ -846,7 +929,7 @@ class AppState extends ChangeNotifier {
         other += v;
         otherDays++;
       }
-    });
+    }
     if (onIncomeDays == 0 || otherDays == 0) return null;
     final avgIncome = onIncome / onIncomeDays;
     final avgOther = other / otherDays;
@@ -946,9 +1029,9 @@ class AppState extends ChangeNotifier {
   /// Категория используется в журнале — удалять нельзя, иначе история потеряет подпись.
   bool categoryInUse(String id) => ledger.hasAccount(expenseAccount(id)) || ledger.hasAccount(incomeAccount(id));
 
-  Future<String> addCategory({required String name, required int iconIndex, required bool income}) async {
+  Future<String> addCategory({required String name, required int iconIndex, required bool income, ExpenseType? expenseType}) async {
     final id = 'c${newId().substring(0, 12)}';
-    await upsert('category', id, {'name': name, 'icon': iconIndex, 'income': income});
+    await upsert('category', id, {'name': name, 'icon': iconIndex, 'income': income, if (expenseType != null) 'expenseType': expenseType.name});
     return id;
   }
 

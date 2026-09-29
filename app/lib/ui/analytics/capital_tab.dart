@@ -21,8 +21,8 @@ class CapitalTab extends StatelessWidget {
     final state = AppScope.of(context).state;
     final nw = state.ledger.netWorth();
     final history = state.netWorthHistory(6);
-    final changed = history.first == history.last ? 0 : nw.capital - history.first.capital;
-    final labels = List<String>.generate(6, (i) => i == 5 ? l.now : '−${5 - i}${l.monthsShort}');
+    final changed = history.length < 2 ? 0 : nw.capital - history.first.capital;
+    final labels = List<String>.generate(history.length, (i) => i == history.length - 1 ? l.now : '−${history.length - 1 - i}${l.monthsShort}');
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
