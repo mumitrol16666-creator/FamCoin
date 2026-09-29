@@ -38,10 +38,8 @@ jobs:
           }
 
           ''', '', '3625b9e92b2a820e8a223ccbe90abb611796b1b3')
-          replace('.github/workflows/quality.yml', '      - name: SDK versions\n', '      - name: SDK versions\n        id: sdk\n')
-          replace('.github/workflows/quality.yml', '      - name: Server and PostgreSQL integration tests\n', "      - name: Server and PostgreSQL integration tests\n        if: ${{ !cancelled() && steps.sdk.outcome == 'success' }}\n")
           PY
           git diff --check
-          git add app/test/audit_regression_test.dart app/test/payment_chart_widget_test.dart app/lib/ui/budget/sheets.dart .github/workflows/quality.yml
+          git add app/test/audit_regression_test.dart app/test/payment_chart_widget_test.dart app/lib/ui/budget/sheets.dart
           git -c user.name='FamCoin audit automation' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: use production UTF-8 error responses and precise button lookup'
           git push origin HEAD:refs/heads/fix/audit-integrity-63eb7df
