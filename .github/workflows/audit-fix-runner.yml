@@ -1,0 +1,30 @@
+name: Apply audit patch
+
+on:
+  push:
+    branches: ['fix/audit-integrity-63eb7df']
+    paths: ['tools/_apply_audit_fixes.py', '.github/workflows/audit-fix-runner.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.repository == 'mumitrol16666-creator/FamCoin' && github.ref == 'refs/heads/fix/audit-integrity-63eb7df'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/audit-integrity-63eb7df
+          fetch-depth: 0
+      - name: Apply guarded changes
+        run: |
+          test "$GITHUB_REF" = 'refs/heads/fix/audit-integrity-63eb7df'
+          git merge-base --is-ancestor 63eb7dfdeb392d1280f5ec2b5da0a7e80df9982b HEAD
+          python3 tools/_apply_audit_fixes.py
+          git diff --check
+          git diff --stat
+          git add app/lib app/test packages/famcoin_core/lib packages/famcoin_core/test server/lib
+          git -c user.name='FamCoin audit automation' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix: close seven audit findings in operation integrity and analytics'
+          git push origin HEAD:refs/heads/fix/audit-integrity-63eb7df
