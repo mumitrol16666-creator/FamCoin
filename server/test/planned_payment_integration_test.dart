@@ -40,7 +40,16 @@ void main() {
       ]});
     });
     tearDown(() async {
-      await db.execute(Sql.named('DELETE FROM users WHERE id = @u'), parameters: {'u': user});
+      // Fixture cleanup is explicit: the schema does not cascade from
+      // ledger_accounts into postings/reservations. Only this test user in
+      // the opt-in disposable database is touched; never change constraints.
+      await db.runTx((s) async {
+        await s.execute(Sql.named('DELETE FROM reservations WHERE user_id = @u'), parameters: {'u': user});
+        await s.execute(Sql.named('DELETE FROM postings WHERE user_id = @u'), parameters: {'u': user});
+        await s.execute(Sql.named('DELETE FROM transactions WHERE user_id = @u'), parameters: {'u': user});
+        await s.execute(Sql.named('DELETE FROM users WHERE id = @u'), parameters: {'u': user});
+      });
+      service.forget(user);
     });
     Map<String, dynamic> payment(String period, String id) => {
       'type': 'payPlannedPeriod', 'commandId': 'command-$id', 'id': id,
