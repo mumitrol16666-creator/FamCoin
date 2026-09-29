@@ -1,0 +1,47 @@
+name: Audit test correction
+on:
+  push:
+    branches: ['fix/audit-integrity-63eb7df']
+    paths: ['.github/workflows/audit-test-correction.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'mumitrol16666-creator/FamCoin' && github.ref == 'refs/heads/fix/audit-integrity-63eb7df'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/audit-integrity-63eb7df
+      - name: Apply guarded corrections
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          def replace(path, old, new, expected=None):
+              p = Path(path)
+              b = p.read_bytes()
+              if expected:
+                  assert hashlib.sha1(b'blob ' + str(len(b)).encode() + b'\0' + b).hexdigest() == expected, path
+              s = b.decode()
+              assert s.count(old) == 1, (path, old)
+              p.write_text(s.replace(old, new))
+          path = 'app/test/audit_regression_test.dart'
+          replace(path, "return http.Response(jsonEncode({'error': 'ledger', 'message': e.message}), 422);", "return http.Response(jsonEncode({'error': 'ledger', 'message': e.message, 'code': e.code}), 422, headers: {'content-type': 'application/json; charset=utf-8'});", '9c378775ebf1d4a3e327131e684cce53f1009ccf')
+          replace(path, 'return http.Response(jsonEncode(_snapshot()), 200);', "return http.Response(jsonEncode(_snapshot()), 200, headers: {'content-type': 'application/json; charset=utf-8'});")
+          replace('app/test/payment_chart_widget_test.dart', "final close = tester.widget<IconButton>(find.byTooltip('Закрыть').last);", "final close = tester.widget<IconButton>(find.byWidgetPredicate((w) => w is IconButton && w.tooltip == 'Закрыть').last);")
+          replace('app/lib/ui/budget/sheets.dart', '''String? _firstAccount(BuildContext context) {
+            final accounts = AppScope.of(context).state.activeAccounts;
+            final liquid = accounts.where((a) => a.liquid);
+            return (liquid.isNotEmpty ? liquid.first : accounts.firstOrNull)?.id;
+          }
+
+          ''', '', '3625b9e92b2a820e8a223ccbe90abb611796b1b3')
+          replace('.github/workflows/quality.yml', '      - name: SDK versions\n', '      - name: SDK versions\n        id: sdk\n')
+          replace('.github/workflows/quality.yml', '      - name: Server and PostgreSQL integration tests\n', "      - name: Server and PostgreSQL integration tests\n        if: ${{ !cancelled() && steps.sdk.outcome == 'success' }}\n")
+          PY
+          git diff --check
+          git add app/test/audit_regression_test.dart app/test/payment_chart_widget_test.dart app/lib/ui/budget/sheets.dart .github/workflows/quality.yml
+          git -c user.name='FamCoin audit automation' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: use production UTF-8 error responses and precise button lookup'
+          git push origin HEAD:refs/heads/fix/audit-integrity-63eb7df
