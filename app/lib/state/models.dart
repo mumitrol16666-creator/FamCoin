@@ -242,6 +242,7 @@ class LimitExplain {
     required this.byMonthEnd,
     required this.guideDaily,
     required this.spent,
+    required this.outside,
     required this.today,
     this.limit,
     this.carry = 0,
@@ -271,6 +272,9 @@ class LimitExplain {
   /// Расчётный ориентир (формула 9.3): свободно на начало дня ÷ дни.
   final int guideDaily;
   final int spent;
+
+  /// Запланированные траты сегодня — не вошли в лимит (D74).
+  final int outside;
   final DateTime today;
   final int? limit;
   final int carry;

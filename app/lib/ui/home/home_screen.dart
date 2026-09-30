@@ -281,6 +281,7 @@ class HomeScreen extends StatelessWidget {
             line(l.explainSpent, money(-ex.spent, sign: true)),
             const Divider(height: 16),
             line(l.explainAvailable, money(ex.available!, bold: true, color: ex.available! < 0 ? fam.expense : null), bold: true),
+            if (ex.outside > 0) note(l.explainOutside(moneyInText(ex.outside))),
             if (ex.shortfall > 0)
               note(l.explainNoteShortfall(moneyInText(ex.shortfall)), color: fam.expense)
             else ...[

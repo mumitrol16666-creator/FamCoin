@@ -8,6 +8,7 @@ import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../budget/sheets.dart';
 import '../widgets/common.dart';
+import '../ops/big_purchase.dart';
 
 /// Быстрые операции (D46): ряд плиток на главной. Тап — расход записан
 /// на основной счёт сегодняшним числом, с возможностью сразу отменить.
@@ -84,9 +85,12 @@ class QuickActionsRow extends StatelessWidget {
     final accounts = state.activeAccounts;
     if (accounts.isEmpty) return addAccountFlow(context);
     final account = (accounts.where((a) => a.liquid).firstOrNull ?? accounts.first).id;
+    // Крупная покупка (D74): спрашиваем, запланирована ли — тогда вне лимита.
+    final planned = await askPlannedPurchase(context, state, q.amount);
+    if (planned == null || !context.mounted) return;
     final ok = await runAction(
       context,
-      () => state.addExpense(amount: q.amount, category: q.category, account: account, date: state.today, note: q.name, time: timeToField(TimeOfDay.now())),
+      () => state.addExpense(amount: q.amount, category: q.category, account: account, date: state.today, note: q.name, time: timeToField(TimeOfDay.now()), plannedPurchase: planned),
     );
     if (!ok) return;
     // Свежая запись — первая в журнале; «Отменить» проводит отмену, история остаётся.

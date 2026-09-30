@@ -158,6 +158,50 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('крупная покупка (D74): от половины лимита спрашиваем — «да» выносит из лимита, «отмена» не сохраняет, мелочь без вопросов', (tester) async {
+    final f = await pumpApp(
+      tester,
+      size: const Size(360, 732),
+      home: Scaffold(body: Builder(builder: (context) => Center(child: FilledButton(onPressed: () => showAddTransactionSheet(context), child: const Text('open'))))),
+    );
+    final s = f.state;
+    await s.setDailyLimit(kzt(10000));
+    Future<void> enter(String amount) async {
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, amount);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+      await tester.pumpAndSettle();
+    }
+
+    // Мелочь (40% лимита) — без вопросов, в лимите.
+    await enter('4000');
+    expect(find.text('Крупная покупка'), findsNothing);
+    expect(s.spentToday(), kzt(4000));
+
+    // 60% лимита — вопрос; «Отмена»: форма осталась, ничего не сохранено.
+    await enter('6000');
+    expect(find.text('Крупная покупка'), findsOneWidget);
+    expect(find.textContaining('60%'), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: 'диалог с тремя кнопками не должен переполняться');
+    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Отмена')));
+    await tester.pumpAndSettle();
+    expect(find.text('Записать операцию'), findsOneWidget);
+    expect(s.ledger.balance('cash'), kzt(96000));
+
+    // «Да, запланированная» — сохранено, но в лимит не входит.
+    await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Да, запланированная'));
+    await tester.pumpAndSettle();
+    expect(find.text('Записать операцию'), findsNothing);
+    expect(s.ledger.balance('cash'), kzt(90000));
+    expect(s.spentToday(), kzt(4000), reason: 'запланированная покупка в лимит не вошла');
+    expect(s.userTransactions.first.meta['plannedPurchase'], isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('настройки открываются с датой рождения раньше 2000 года', (tester) async {
     final f = await pumpApp(tester, home: const SettingsScreen(), size: const Size(390, 844));
     await f.state.setAbout(firstName: 'Владислав', lastName: 'Сидоров', birthDate: DateTime(1999, 3, 24));

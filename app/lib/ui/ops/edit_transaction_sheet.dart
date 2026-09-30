@@ -41,6 +41,7 @@ class _EditSheetState extends State<_EditSheet> {
   late String _account;
   late DateTime _date = widget.tx.date;
   late String _who = widget.tx.meta['who'] as String? ?? 'me';
+  late bool _planned = widget.tx.meta['plannedPurchase'] == true;
   late TimeOfDay _time = timeFromField(widget.tx.meta['time']) ?? TimeOfDay.now();
 
   @override
@@ -86,6 +87,7 @@ class _EditSheetState extends State<_EditSheet> {
         who: _who,
         note: _note.text.trim(),
         time: timeToField(_time),
+        plannedPurchase: _planned,
       );
     });
   }
@@ -191,6 +193,16 @@ class _EditSheetState extends State<_EditSheet> {
               for (final m in state.members) ChoiceChip(label: Text(m.name), selected: _who == m.id, onSelected: (_) => setState(() => _who = m.id)),
             ]),
           ],
+          // Запланированная покупка не входит в дневной лимит (D74). Оплата
+          // планового платежа и так вне лимита — переключатель ей не нужен.
+          if (!_isIncome && widget.tx.meta['planned'] == null && (state.dailyLimit != null || _planned))
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l.plannedPurchaseSwitch),
+              subtitle: Text(l.plannedPurchaseSwitchNote, style: TextStyle(fontSize: 12, color: fam.text2)),
+              value: _planned,
+              onChanged: (v) => setState(() => _planned = v),
+            ),
           const SizedBox(height: 12),
           TextField(controller: _note, maxLength: 120, decoration: InputDecoration(labelText: l.note, counterText: '')),
           const SizedBox(height: 8),

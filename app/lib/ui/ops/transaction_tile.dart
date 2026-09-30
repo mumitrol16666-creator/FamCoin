@@ -67,7 +67,8 @@ class TxView {
       case EventType.expense:
         return TxView(
           title: cats.map((c) => categoryName(l, c)).join(' + '),
-          subtitle: [if (note.isNotEmpty) note, ?accountName, ?whoName],
+          // Отметка первой: подпись в одну строку обрезается с конца, а отметка важнее счёта.
+          subtitle: [if (tx.meta['plannedPurchase'] == true) l.plannedPurchaseTag, if (note.isNotEmpty) note, ?accountName, ?whoName],
           amount: -expense,
           icon: categoryById(cats.first).icon,
           kind: 'expense',

@@ -421,28 +421,49 @@ class AppState extends ChangeNotifier {
     return t.date;
   }
 
-  /// Покупка — оплата планового платежа (или возврат по ней): в дневной
-  /// бюджет не входит, обязательство уже учтено отдельно (раздел 9.3, T33).
+  /// Запланированная трата — вне дневного лимита: оплата планового платежа
+  /// (раздел 9.3, T33) или покупка, которую владелец отметил как
+  /// запланированную (D74; программа предлагает это для крупных покупок). То
+  /// же для возврата по такой покупке. Деньги со счёта такая трата тратит как
+  /// обычно — она не входит только в дневной лимит и в разборы привычек.
   bool _isPlannedSpend(Transaction t) {
-    if (t.meta['planned'] != null) return true;
+    bool planned(Transaction x) => x.meta['planned'] != null || x.meta['plannedPurchase'] == true;
+    if (planned(t)) return true;
     final of = t.meta['refundOf'];
-    return t.type == EventType.refund && of is String && (ledger.currentVersion(of) ?? ledger.byId(of))?.meta['planned'] != null;
+    if (t.type != EventType.refund || of is! String) return false;
+    final original = ledger.currentVersion(of) ?? ledger.byId(of);
+    return original != null && planned(original);
   }
 
   /// Повседневные траты из дневного бюджета за [from]–[to] включительно:
   /// покупки минус возвраты по покупкам этих дней (возврат считается по дню
-  /// покупки, не по дню самого возврата — см. `_spendDay`).
-  int spentBetween(DateTime from, DateTime to) {
+  /// покупки, не по дню самого возврата — см. `_spendDay`). Запланированные
+  /// траты (см. `_isPlannedSpend`) сюда не входят.
+  int spentBetween(DateTime from, DateTime to) => _spent(from, to, planned: false);
+
+  /// Запланированные траты за те же дни — вне лимита; для пояснения «что не
+  /// вошло в лимит», в расчёт доступного не идут.
+  int spentPlannedBetween(DateTime from, DateTime to) => _spent(from, to, planned: true);
+
+  int _spent(DateTime from, DateTime to, {required bool planned}) {
     var sum = 0;
     for (final tx in ledger.transactions) {
       if ((tx.type != EventType.expense && tx.type != EventType.refund) || ledger.isReversed(tx.id)) continue;
       final day = _spendDay(tx); // возврат по удалённой покупке даёт null и сюда не попадает
-      if (day == null || day.isBefore(from) || day.isAfter(to) || _isPlannedSpend(tx)) continue;
+      if (day == null || day.isBefore(from) || day.isAfter(to) || _isPlannedSpend(tx) != planned) continue;
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind == LedgerKind.expense) sum += p.amount;
       }
     }
     return sum < 0 ? 0 : sum;
+  }
+
+  /// Крупная покупка (D74): от половины дневного лимита. Такую покупку
+  /// программа предлагает отметить запланированной — дневной лимит нужен для
+  /// потребительских мелочей, а не для крупных трат.
+  bool isBigPurchase(int amount) {
+    final limit = dailyLimit;
+    return limit != null && limit > 0 && amount * 2 >= limit;
   }
 
   /// Сегодняшние повседневные траты из дневного бюджета.
@@ -496,6 +517,7 @@ class AppState extends ChangeNotifier {
       byMonthEnd: !hasPayDay,
       guideDaily: guide.dailyBudget,
       spent: spentToday(),
+      outside: spentPlannedBetween(today, today),
       limit: dailyLimit,
       carry: dailyLimitCarry,
       planned: dailyLimitPlanned,
@@ -764,8 +786,8 @@ class AppState extends ChangeNotifier {
   /// на дневной бюджет и отчёты не влияет, только показывается и правится.
   /// [id] и [commandId] форма создаёт один раз на попытку сохранения и
   /// повторяет при ошибке сети — повтор не создаёт вторую запись.
-  Future<void> addExpense({required int amount, required String category, required String account, required DateTime date, String who = 'me', String note = '', String? time, String? id, String? commandId}) =>
-      send({'type': 'expense', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'splits': {category: amount.toString()}, 'meta': {'who': who, if (note.isNotEmpty) 'note': note, if (time != null) 'time': time}}, commandId: commandId);
+  Future<void> addExpense({required int amount, required String category, required String account, required DateTime date, String who = 'me', String note = '', String? time, bool plannedPurchase = false, String? id, String? commandId}) =>
+      send({'type': 'expense', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'splits': {category: amount.toString()}, 'meta': {'who': who, if (note.isNotEmpty) 'note': note, if (time != null) 'time': time, if (plannedPurchase) 'plannedPurchase': true}}, commandId: commandId);
 
   Future<void> addIncome({required int amount, required String source, required String account, required DateTime date, String note = '', String? time, String? id, String? commandId}) =>
       send({'type': 'income', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'source': source, 'amount': amount.toString(), 'meta': {if (note.isNotEmpty) 'note': note, if (time != null) 'time': time}}, commandId: commandId);
@@ -808,7 +830,7 @@ class AppState extends ChangeNotifier {
 
   /// Исправление покупки: старая версия отменяется, новая проводится —
   /// одной командой, история сохраняется (F032).
-  Future<void> editExpense(Transaction old, {required Map<String, int> splits, required String account, required DateTime date, required String who, required String note, String? time}) =>
+  Future<void> editExpense(Transaction old, {required Map<String, int> splits, required String account, required DateTime date, required String who, required String note, String? time, bool? plannedPurchase}) =>
       sendBatch([
         {'type': 'reverse', 'txId': old.id, 'id': newId()},
         {
@@ -817,7 +839,14 @@ class AppState extends ChangeNotifier {
           'date': _date(date),
           'account': account,
           'splits': {for (final e in splits.entries) e.key: e.value.toString()},
-          'meta': {...old.meta, 'who': who, 'note': note, if (time != null) 'time': time, 'edited': old.id}..removeWhere((k, v) => v == null || v == ''),
+          'meta': {
+            ...old.meta,
+            'who': who,
+            'note': note,
+            if (time != null) 'time': time,
+            'edited': old.id,
+            if (plannedPurchase != null) 'plannedPurchase': plannedPurchase ? true : null,
+          }..removeWhere((k, v) => v == null || v == ''),
         },
       ]);
 

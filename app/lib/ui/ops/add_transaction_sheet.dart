@@ -11,6 +11,7 @@ import '../budget/sheets.dart';
 import '../more/categories_screen.dart';
 import 'voice_sheet.dart';
 import '../widgets/common.dart';
+import 'big_purchase.dart';
 
 enum FieldsKind { expense, income, transfer, debt }
 
@@ -139,6 +140,12 @@ class _TransactionFieldsState extends State<TransactionFields> {
   final _txId = newId();
   final _commandId = newId();
 
+  /// Ответ на «запланированная ли покупка» (D74) — спрашиваем один раз на сумму,
+  /// повтор сохранения после ошибки сети не переспрашивает.
+  bool _planned = false;
+  int? _plannedFor;
+  bool _asking = false;
+
   /// Категория/счёт/человек не распознаны голосом — не блокирует сохранение,
   /// только подсказывает проверить поле (раздел 10 карты: черновик всегда
   /// можно поправить перед записью).
@@ -211,7 +218,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
   }
 
   Future<void> _save() async {
-    if (_busy) return;
+    if (_busy || _asking) return;
     final l = context.l10n;
     final state = AppScope.of(context).state;
     final messenger = ScaffoldMessenger.of(context);
@@ -223,6 +230,16 @@ class _TransactionFieldsState extends State<TransactionFields> {
     final account = _account!;
     final note = _note.text.trim();
     final time = timeToField(_time);
+    // Крупная покупка (D74): дневной лимит — на мелочи, поэтому спрашиваем,
+    // не запланирована ли она; запланированная в лимит не входит.
+    if (_kind == FieldsKind.expense && _plannedFor != amount) {
+      _asking = true;
+      final answer = await askPlannedPurchase(context, state, amount);
+      _asking = false;
+      if (answer == null || !mounted) return;
+      _planned = answer;
+      _plannedFor = amount;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -230,7 +247,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
     try {
       switch (_kind) {
         case FieldsKind.expense:
-          await state.addExpense(amount: amount, category: _category, account: account, date: _date, who: state.familyMode ? _who : 'me', note: note, time: time, id: _txId, commandId: _commandId);
+          await state.addExpense(amount: amount, category: _category, account: account, date: _date, who: state.familyMode ? _who : 'me', note: note, time: time, plannedPurchase: _planned, id: _txId, commandId: _commandId);
         case FieldsKind.income:
           await state.addIncome(amount: amount, source: _source, account: account, date: _date, note: note, time: time, id: _txId, commandId: _commandId);
         case FieldsKind.transfer:

@@ -191,6 +191,57 @@ void main() {
     expect(f.ledger.balance('cash'), kzt(90000), reason: 'сервер применил ту же команду');
   });
 
+  test('D74: покупка от половины лимита — крупная; запланированная не входит в дневной лимит, но тратит деньги', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    expect(s.isBigPurchase(kzt(50000)), isFalse, reason: 'лимита нет — спрашивать не о чем');
+    await s.setDailyLimit(kzt(10000));
+    expect(s.isBigPurchase(kzt(4999)), isFalse);
+    expect(s.isBigPurchase(kzt(5000)), isTrue, reason: 'ровно половина уже крупная');
+    expect(s.isBigPurchase(kzt(30000)), isTrue);
+
+    await s.addExpense(amount: kzt(4000), category: 'cafe', account: 'cash', date: s.today);
+    await s.addExpense(amount: kzt(30000), category: 'shop', account: 'cash', date: s.today, plannedPurchase: true);
+    expect(s.spentToday(), kzt(4000), reason: 'запланированная покупка в лимит не входит');
+    expect(s.dailyLimitAvailable, kzt(6000));
+    expect(s.limitExplain.outside, kzt(30000), reason: 'в разборе видно, что осталось вне лимита');
+    expect(s.freeMoney, kzt(66000), reason: 'а деньги со счёта она потратила, как обычная');
+    expect(s.ledger.balance('cash'), kzt(66000));
+
+    // Возврат по запланированной покупке тоже вне лимита.
+    final tv = s.userTransactions.firstWhere((t) => t.meta['plannedPurchase'] == true);
+    await s.refund(tv, category: 'shop', amount: kzt(10000), account: 'cash');
+    expect(s.spentToday(), kzt(4000));
+    expect(s.limitExplain.outside, kzt(20000));
+  });
+
+  test('D74: отметку можно снять и поставить при правке; в «неожиданных крупных» запланированная не попадает', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await s.setDailyLimit(kzt(10000));
+    await s.addExpense(amount: kzt(25000), category: 'shop', account: 'cash', date: s.today);
+    expect(s.spentToday(), kzt(25000));
+    expect(s.unplannedLargeExpenses(s.monthStart), hasLength(1));
+
+    var tx = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    await s.editExpense(tx, splits: {'shop': kzt(25000)}, account: 'cash', date: s.today, who: 'me', note: '', plannedPurchase: true);
+    expect(s.spentToday(), 0, reason: 'после отметки покупка вышла из лимита');
+    expect(s.unplannedLargeExpenses(s.monthStart), isEmpty, reason: 'запланированная покупка — не сюрприз месяца');
+
+    tx = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    expect(tx.meta['plannedPurchase'], isTrue);
+    await s.editExpense(tx, splits: {'shop': kzt(25000)}, account: 'cash', date: s.today, who: 'me', note: 'куртка', plannedPurchase: false);
+    expect(s.spentToday(), kzt(25000), reason: 'отметку сняли — снова в лимите');
+    expect(s.userTransactions.firstWhere((t) => t.type == EventType.expense).meta.containsKey('plannedPurchase'), isFalse);
+
+    // Правка без указания отметки её не трогает.
+    await s.editExpense(s.userTransactions.firstWhere((t) => t.type == EventType.expense), splits: {'shop': kzt(25000)}, account: 'cash', date: s.today, who: 'me', note: 'куртка!', plannedPurchase: true);
+    await s.editExpense(s.userTransactions.firstWhere((t) => t.type == EventType.expense), splits: {'shop': kzt(25000)}, account: 'cash', date: s.today, who: 'me', note: 'куртка!!');
+    expect(s.spentToday(), 0);
+  });
+
   test('D73: доступное не больше свободных денег, а вклад прошлых дней от этого не зависит', () async {
     final f = FakeServer();
     await f.init();
