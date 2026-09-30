@@ -1,0 +1,60 @@
+name: Quality
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: famcoin_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d famcoin_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - name: SDK versions
+        id: sdk
+        run: flutter --version && dart --version
+      - name: Core tests
+        working-directory: packages/famcoin_core
+        run: dart pub get && dart test --reporter expanded
+      - name: Flutter analysis and tests
+        if: ${{ !cancelled() && steps.sdk.outcome == 'success' }}
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter test --reporter expanded
+      - name: Server and PostgreSQL integration tests
+        if: ${{ !cancelled() && steps.sdk.outcome == 'success' }}
+        working-directory: server
+        env:
+          FAMCOIN_INTEGRATION: '1'
+        run: dart pub get && dart test --reporter expanded

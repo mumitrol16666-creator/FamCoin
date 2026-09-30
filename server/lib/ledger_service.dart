@@ -210,6 +210,24 @@ class LedgerService {
       }
       return;
     }
+    if (plannedCommandTypes.contains(type)) {
+      final id = c['plannedId'];
+      if (id is! String || id.isEmpty || id.length > maxIdLength) {
+        throw ApiError(400, 'bad_request');
+      }
+      final rows = await ctx.s.execute(
+        Sql.named("SELECT data FROM entities WHERE user_id = @u AND kind = 'planned' AND id = @id FOR UPDATE"),
+        parameters: {'u': ctx.userId, 'id': id},
+      );
+      if (rows.isEmpty) {
+        throw LedgerException('План платежа не найден', code: 'plannedNotFound');
+      }
+      final latest = Map<String, dynamic>.from(rows.single[0] as Map);
+      for (final part in expandPlannedCommand(c, latest)) {
+        await _apply(ctx, part, depth: depth + 1);
+      }
+      return;
+    }
     if (ledgerCommandTypes.contains(type)) {
       if (type == 'addMoneyAccount' && ctx.plan == 'free') {
         final newId = c['accountId'];

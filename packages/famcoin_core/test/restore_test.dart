@@ -39,9 +39,9 @@ void main() {
       () => applyLedgerCommand(l, {'type': 'restore', 'txId': 'e1', 'id': 'e1-back-2'}),
       throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'alreadyRestored')),
     );
-    // Удалили восстановленную копию — исходная снова в корзине.
+    // Only the latest version of this logical operation belongs in Trash.
     applyLedgerCommand(l, {'type': 'reverse', 'txId': 'e1-back', 'id': 'e1-back-rev'});
-    expect(l.isDeleted('e1'), isTrue);
+    expect(l.isDeleted('e1'), isFalse);
     expect(l.isDeleted('e1-back'), isTrue);
   });
 

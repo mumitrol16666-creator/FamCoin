@@ -294,12 +294,16 @@ class Ledger {
   /// всей цепочке версий, поэтому не теряются после правки.
   String purchaseRoot(String txId) {
     var id = txId;
-    for (var i = 0; i < 1000; i++) {
-      final prev = _byId[id]?.meta['edited'];
-      if (prev is! String || prev.isEmpty || !_byId.containsKey(prev)) break;
+    final visited = <String>{};
+    while (visited.add(id)) {
+      final meta = _byId[id]?.meta;
+      // An edit of a restored record has both links. Both lead to the
+      // same family; the immediate edit takes precedence.
+      final prev = meta?['edited'] ?? meta?['restoredFrom'];
+      if (prev is! String || prev.isEmpty || !_byId.containsKey(prev)) return id;
       id = prev;
     }
-    return id;
+    throw LedgerException('Цикл в истории версий операции', code: 'invalidVersionChain');
   }
 
   /// Действующая (не отменённая) версия покупки из цепочки правок [txId].
@@ -345,8 +349,12 @@ class Ledger {
   }
 
   /// Удалённая операция уже восстановлена действующей копией.
-  bool isRestored(String txId) =>
-      _transactions.any((t) => t.meta['restoredFrom'] == txId && !_reversed.contains(t.id));
+  bool isRestored(String txId) {
+    final root = purchaseRoot(txId);
+    return _transactions.any((t) =>
+        t.id != txId && t.type != EventType.reversal &&
+        !_reversed.contains(t.id) && purchaseRoot(t.id) == root);
+  }
 
   /// `true`, если [txId] отменена не настоящим удалением, а как шаг правки:
   /// где-то есть более новая версия с `meta.edited == txId`. Такую старую
@@ -354,13 +362,26 @@ class Ledger {
   /// операцию — иначе правка «10 000 → 12 000» плюс восстановление старой
   /// версии дают задвоенные 22 000 вместо одной покупки на 12 000 (повторный
   /// аудит, F01).
-  bool _supersededByEdit(String txId) => _transactions.any((t) => t.meta['edited'] == txId);
+  bool _hasNewerVersion(String txId) {
+    // Only the most recent version may be offered in Trash. This also
+    // covers restore -> delete -> restore chains, not just direct edits.
+    final root = purchaseRoot(txId);
+    var seen = false;
+    for (final t in _transactions) {
+      if (t.id == txId) {
+        seen = true;
+      } else if (seen && t.type != EventType.reversal && purchaseRoot(t.id) == root) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /// В корзине: удалена и ещё не восстановлена (сами отмены и старые версии
   /// правок не считаются).
   bool isDeleted(String txId) {
     final t = _byId[txId];
-    return t != null && t.type != EventType.reversal && _reversed.contains(txId) && !isRestored(txId) && !_supersededByEdit(txId);
+    return t != null && t.type != EventType.reversal && _reversed.contains(txId) && !isRestored(txId) && !_hasNewerVersion(txId);
   }
 
   /// Восстановление удалённой операции: новая запись с теми же проводками и
@@ -374,10 +395,15 @@ class Ledger {
     if (!_reversed.contains(txId) || original.type == EventType.reversal) {
       throw LedgerException('Восстановить можно только удалённую операцию', code: 'restoreNotReversed');
     }
+    // Preserve the public distinction between an edit replacement and
+    // an already restored record, while both remain non-restorable.
+    if (_transactions.any((t) => t.meta['edited'] == txId)) {
+      throw LedgerException('Эта версия операции заменена более новой правкой', code: 'restoreSuperseded');
+    }
     if (isRestored(txId)) {
       throw LedgerException('Операция уже восстановлена', code: 'alreadyRestored');
     }
-    if (_supersededByEdit(txId)) {
+    if (_hasNewerVersion(txId)) {
       throw LedgerException('Эта версия операции заменена более новой правкой', code: 'restoreSuperseded');
     }
     _revalidateForRestore(original);
@@ -411,6 +437,15 @@ class Ledger {
           final already = refundedFor(of, p.accountId);
           if (amount + already > bought) {
             throw LedgerException('Возврат больше суммы покупки в этой категории', code: 'refundExceeds');
+          }
+        }
+      case EventType.repaymentReceived:
+        for (final p in original.postings) {
+          if (_accounts[p.accountId]?.assetClass != AssetClass.receivable) continue;
+          final principal = -p.amount;
+          final owed = balance(p.accountId);
+          if (principal > owed) {
+            throw LedgerException('Возврат $principal больше требования $owed', code: 'repaymentExceeds');
           }
         }
       case EventType.loanPayment:

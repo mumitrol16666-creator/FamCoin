@@ -189,13 +189,9 @@ void main() {
     await s.addExpense(amount: kzt(40000), category: 'fun', account: 'cash', date: incomeDay);
     await s.addExpense(amount: kzt(10000), category: 'food', account: 'cash', date: otherDay1);
     await s.addExpense(amount: kzt(10000), category: 'food', account: 'cash', date: otherDay2);
-    // Знаменатель — все наблюдаемые дни месяца с начала учёта ДО СЕГОДНЯ
-    // включительно (сегодня 20 сентября, F13 и повторный аудит F04 — дни
-    // после сегодня ещё не наступили и не могут быть «обычными днями без
-    // трат»), а не только дни, когда что-то потрачено: 1 день дохода
-    // (40000 ₸), 19 обычных (20000 ₸ на двоих, остальные 17 — без трат, но
-    // считаются).
-    expect(s.paydaySpendRatio(), closeTo(40000 / (20000 / 19), 0.001));
+    // First observed day is September 10, today is September 20:
+    // one income day and ten other observed days. September 1-9 is unknown.
+    expect(s.paydaySpendRatio(), closeTo(40000 / (20000 / 10), 0.001));
   });
 
   test('paydaySpendRatio: null без доходных дней в окне', () async {

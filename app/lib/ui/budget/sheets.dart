@@ -9,6 +9,7 @@ import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../widgets/common.dart';
+import 'payment_sheet.dart';
 
 /// Кнопка отправки формы: блокируется на время запроса, чтобы повторное
 /// нажатие не создало вторую операцию.
@@ -44,126 +45,14 @@ class _SubmitButtonState extends State<SubmitButton> {
   }
 }
 
-String? _firstAccount(BuildContext context) {
-  final accounts = AppScope.of(context).state.activeAccounts;
-  final liquid = accounts.where((a) => a.liquid);
-  return (liquid.isNotEmpty ? liquid.first : accounts.firstOrNull)?.id;
-}
+/// Payment forms keep one immutable attempt until its outcome is known.
+Future<void> showPayDueSheet(BuildContext context, DueItem due) => showPaymentSheet(context, due: due);
 
-/// Оплата срока планового платежа (факт отдельно от плана, D14).
-Future<void> showPayDueSheet(BuildContext context, DueItem due) {
-  final l = context.l10n;
-  final state = AppScope.of(context).state;
-  final p = due.planned;
-  final amount = TextEditingController(text: amountToField(p.amount));
-  final interest = TextEditingController();
-  var account = _firstAccount(context);
-  return showFormSheet<void>(
-    context,
-    title: '${l.pay}: ${p.name}',
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        AmountField(controller: amount, label: l.amount),
-        const SizedBox(height: 12),
-        if (p.debtId != null) ...[
-          AmountField(controller: interest, label: l.interestPart, hint: '0'),
-          const SizedBox(height: 4),
-          Text(l.interestPartNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
-          const SizedBox(height: 12),
-        ],
-        AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
-        const SizedBox(height: 20),
-        SubmitButton(
-          label: l.pay,
-          onSubmit: () async {
-            final a = parseAmount(amount.text);
-            final i = parseAmount(interest.text, allowZero: true) ?? 0;
-            if (a == null || account == null || i > a) return false;
-            return runAction(ctx, () => state.payDue(due, account: account!, amount: a, interest: i));
-          },
-        ),
-        TextButton(
-          onPressed: () async {
-            final nav = Navigator.of(ctx);
-            if (await runAction(ctx, () => state.upsert('planned', p.id, p.toJson(paid: {...p.paid, due.period})))) nav.pop();
-          },
-          child: Text(l.markPaidOnly),
-        ),
-      ]),
-    ),
-  );
-}
+Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? principal}) =>
+    showPaymentSheet(context, bankDebt: debt, principal: principal);
 
-/// Погашение банковского долга вне графика или досрочно.
-Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? principal}) {
-  final l = context.l10n;
-  final state = AppScope.of(context).state;
-  final principalField = TextEditingController(text: principal == null ? '' : amountToField(principal));
-  final interest = TextEditingController();
-  var account = _firstAccount(context);
-  return showFormSheet<void>(
-    context,
-    title: '${l.pay}: ${debt.name}',
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('${l.balanceLeft}: ${formatMoney(state.debtBalance(debt.id))}', style: TextStyle(color: ctx.fam.text2)),
-        const SizedBox(height: 12),
-        AmountField(controller: principalField, label: l.principalPart),
-        const SizedBox(height: 12),
-        AmountField(controller: interest, label: l.interestPart, hint: '0'),
-        const SizedBox(height: 12),
-        AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
-        const SizedBox(height: 20),
-        SubmitButton(
-          label: l.pay,
-          onSubmit: () async {
-            final pr = parseAmount(principalField.text, allowZero: true) ?? 0;
-            final i = parseAmount(interest.text, allowZero: true) ?? 0;
-            if (pr + i == 0 || account == null) return false;
-            return runAction(ctx, () => state.payDebt(debtId: debt.id, account: account!, principal: pr, interest: i));
-          },
-        ),
-      ]),
-    ),
-  );
-}
-
-/// Возврат личного долга в любую сторону.
-Future<void> showPersonRepaySheet(BuildContext context, PersonDebt debt) {
-  final l = context.l10n;
-  final state = AppScope.of(context).state;
-  final amount = TextEditingController(text: amountToField(debt.amount));
-  var account = _firstAccount(context);
-  return showFormSheet<void>(
-    context,
-    title: debt.oweMe ? '${l.returnedToMe}: ${debt.person}' : '${l.iReturned}: ${debt.person}',
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        AmountField(controller: amount, label: l.amount),
-        const SizedBox(height: 12),
-        AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
-        const SizedBox(height: 20),
-        SubmitButton(
-          label: l.save,
-          onSubmit: () async {
-            final a = parseAmount(amount.text);
-            if (a == null || account == null) return false;
-            return runAction(
-              ctx,
-              () => state.addPersonDebt(
-                kind: debt.oweMe ? 'repaymentReceived' : 'repaymentMade',
-                amount: a,
-                person: debt.person,
-                account: account!,
-                date: state.today,
-              ),
-            );
-          },
-        ),
-      ]),
-    ),
-  );
-}
+Future<void> showPersonRepaySheet(BuildContext context, PersonDebt debt) =>
+    showPaymentSheet(context, personDebt: debt);
 
 /// Новая цель: вместе с ней создаётся копилка — отдельный счёт.
 /// В обычной версии — одна цель (D05).
