@@ -1,0 +1,51 @@
+# Проверки на каждый пуш: тесты ядра, сервера и приложения, а затем сервер с
+# настоящей базой — параллельные запросы, повторы и небольшая нагрузка.
+# Именно здесь ловятся ошибки, которые юнит-тесты не видят: гонки при
+# одновременных командах и «зависание» приложения при пачке входов.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0' # как в app/Dockerfile
+          cache: true
+      - name: Ядро
+        run: cd packages/famcoin_core && dart pub get && dart analyze && dart test
+      - name: Сервер
+        run: cd server && dart pub get && dart analyze && dart test
+      - name: Приложение
+        run: cd app && flutter pub get && flutter analyze lib test && flutter test
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Сервер и база
+        run: docker compose up -d --build db api
+      - name: Ждём, пока API ответит
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8080/health && exit 0
+            sleep 2
+          done
+          docker compose logs api
+          exit 1
+      - name: Параллельные запросы и повторы
+        run: python3 deploy/concurrency_check.py
+      - name: Нагрузка (100 пользователей, шторм входов)
+        run: python3 deploy/loadtest.py --users 100 --heavy 1 --heavy-tx 1000 --workers 30 --check
+      - name: Журнал сервера при сбое
+        if: failure()
+        run: docker compose logs api db | tail -200

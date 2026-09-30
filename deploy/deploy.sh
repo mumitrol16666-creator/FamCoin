@@ -26,6 +26,10 @@ ssh "$TARGET" bash -s "$DIR" "$HOST" "$ANDROID" <<'EOF'
 set -euo pipefail
 DIR="$1"; HOST="$2"; ANDROID="$3"
 cd "$DIR"
+# Пока идёт выкладка, сторож молчит: контейнеры пересоздаются.
+PAUSE=/var/tmp/famcoin-watchdog/paused
+mkdir -p "$(dirname "$PAUSE")"; touch "$PAUSE"
+trap 'rm -f "$PAUSE"' EXIT
 if [ ! -f .env ]; then
   echo "→ создаю .env с новым паролем базы"
   printf 'POSTGRES_PASSWORD=%s\nPUBLIC_URL=http://%s\n' "$(openssl rand -hex 24)" "$HOST" > .env
@@ -38,8 +42,17 @@ fi
 echo "→ резервные копии: ежедневно в 03:00 (см. deploy/backup.sh)"
 chmod +x deploy/backup.sh deploy/restore.sh deploy/build-android.sh
 mkdir -p dist
-( crontab -l 2>/dev/null | grep -v 'famcoin/deploy/backup.sh' || true; echo "0 3 * * * $DIR/deploy/backup.sh $DIR >> $DIR/backups/backup.log 2>&1" ) | crontab -
+echo "→ сторож: каждую минуту (см. deploy/watchdog.sh)"
+chmod +x deploy/watchdog.sh deploy/verify-backup.sh deploy/rollback.sh
 mkdir -p backups
+( crontab -l 2>/dev/null | grep -v 'famcoin/deploy/backup.sh' | grep -v 'famcoin/deploy/watchdog.sh' || true
+  echo "0 3 * * * $DIR/deploy/backup.sh $DIR >> $DIR/backups/backup.log 2>&1"
+  echo "* * * * * $DIR/deploy/watchdog.sh $DIR >> $DIR/backups/watchdog.log 2>&1" ) | crontab -
+echo "→ запоминаю текущие образы для отката (deploy/rollback.sh)"
+for svc in api web; do
+  img="$(docker compose images -q "$svc" 2>/dev/null | head -1)"
+  if [ -n "$img" ]; then docker tag "$img" "famcoin-$svc:previous" || true; fi
+done
 echo "→ собираю и запускаю контейнеры"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
 docker image prune -f >/dev/null

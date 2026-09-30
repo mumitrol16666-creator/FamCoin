@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:famcoin_server/admin.dart';
@@ -5,6 +6,7 @@ import 'package:famcoin_server/api.dart';
 import 'package:famcoin_server/auth_service.dart';
 import 'package:famcoin_server/billing.dart';
 import 'package:famcoin_server/ledger_service.dart';
+import 'package:famcoin_server/maintenance.dart';
 import 'package:famcoin_server/notifications.dart';
 import 'package:famcoin_server/telegram.dart';
 import 'package:famcoin_server/webpush.dart';
@@ -12,6 +14,13 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf_io.dart' as io;
 
 Future<void> main() async {
+  // Неперехваченная ошибка в фоновой задаче (таймер, опрос бота) раньше
+  // роняла бы весь процесс вместе с обычными запросами. Теперь она попадает
+  // в журнал, а сервер продолжает работать.
+  await runZonedGuarded(_run, (e, st) => stderr.writeln('uncaught: ${e.runtimeType}: $e\n$st'));
+}
+
+Future<void> _run() async {
   final env = Platform.environment;
   final db = Pool.withEndpoints(
     [
@@ -23,7 +32,17 @@ Future<void> main() async {
         password: env['DB_PASSWORD'] ?? 'famcoin',
       ),
     ],
-    settings: const PoolSettings(maxConnectionCount: 10, sslMode: SslMode.disable),
+    settings: PoolSettings(
+      maxConnectionCount: 16,
+      sslMode: SslMode.disable,
+      // Предохранители на каждом соединении API (резервное копирование и
+      // восстановление подключаются отдельно и без них): зависший запрос не
+      // должен держать блокировку пользователя и соединение бесконечно.
+      onOpen: (c) => c.execute(
+        "SET statement_timeout = '60s'; SET lock_timeout = '15s'; SET idle_in_transaction_session_timeout = '30s'",
+        queryMode: QueryMode.simple,
+      ),
+    ),
   );
 
   await _migrate(db);
@@ -39,6 +58,7 @@ Future<void> main() async {
     stars: int.tryParse(env['PRO_STARS'] ?? ''),
     days: int.tryParse(env['PRO_DAYS'] ?? ''),
   )..start();
+  Maintenance(db).start();
   final admin = AdminService(db, password: env['ADMIN_PASSWORD']);
   final handler = buildHandler(auth, ledger, notifications, admin, telegram: telegram, billing: billing, allowedOrigin: env['CORS_ORIGIN'] ?? '*');
 

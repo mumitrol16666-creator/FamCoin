@@ -13,6 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY --from=build /server /app/server
 COPY server/migrations /app/migrations
+COPY server/healthcheck.sh /app/healthcheck.sh
+RUN chmod +x /app/healthcheck.sh
 ENV MIGRATIONS_DIR=/app/migrations
 EXPOSE 8080
+# docker показывает здоров ли API (запрос доходит до базы); перезапускает его сторож.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["/app/healthcheck.sh"]
 CMD ["/app/server"]

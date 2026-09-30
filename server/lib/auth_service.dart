@@ -10,6 +10,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:postgres/postgres.dart';
+import 'gate.dart';
 
 const maxFailedAttempts = 3;
 const lockMinutes = 15;
@@ -41,10 +42,16 @@ class ApiError implements Exception {
 }
 
 class AuthService {
-  AuthService(this.db, {Random? random}) : _random = random ?? Random.secure();
+  AuthService(this.db, {Random? random, Gate? hashGate})
+      : _random = random ?? Random.secure(),
+        hashGate = hashGate ?? Gate(3, overflow: () => ApiError(503, 'busy', retryAfterSeconds: 5));
 
   final Pool db;
   final Random _random;
+
+  /// Не больше трёх одновременных операций с bcrypt: пачка входов не должна
+  /// занимать все соединения пула и тормозить остальных.
+  final Gate hashGate;
 
   static final _emailRe = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
@@ -64,7 +71,7 @@ class AuthService {
     email = email.trim();
     validateCredentials(email, password);
     if (locale != 'ru' && locale != 'kk') locale = 'ru';
-    return db.runTx((tx) async {
+    return hashGate.run(() => db.runTx((tx) async {
       final existing = await tx.execute(
         Sql.named('SELECT 1 FROM users WHERE lower(email) = lower(@email)'),
         parameters: {'email': email},
@@ -75,14 +82,14 @@ class AuthService {
         parameters: {'email': email, 'pw': password, 'locale': locale},
       );
       return _openSession(tx, rows.first[0].toString(), email, locale);
-    });
+    }));
   }
 
   Future<Map<String, Object?>> login(String email, String password) async {
     email = email.trim();
     // Счётчик и блокировка меняются в одной транзакции с блокировкой строки:
     // параллельные попытки не обходят лимит.
-    final result = await db.runTx<Object>((tx) async {
+    final result = await hashGate.run(() => db.runTx<Object>((tx) async {
       final rows = await tx.execute(
         Sql.named('''
           SELECT id, email, locale, failed_attempts,
@@ -120,7 +127,7 @@ class AuthService {
         parameters: {'id': userId},
       );
       return _openSession(tx, userId, r[1] as String, r[2] as String);
-    });
+    }));
     // Ошибка возвращается после коммита, чтобы счётчик попыток сохранился.
     if (result is ApiError) throw result;
     return result as Map<String, Object?>;
@@ -212,7 +219,7 @@ class AuthService {
   /// есть восстановление (D49).
   Future<void> changePassword(String userId, String token, String current, String next) async {
     if (next.length < 8 || next.length > 128) throw ApiError(400, 'weak_password');
-    await db.runTx((tx) async {
+    await hashGate.run(() => db.runTx((tx) async {
       final via = await tx.execute(Sql.named('SELECT via FROM sessions WHERE token_hash = @h'), parameters: {'h': sha256Hex(token)});
       final trusted = via.isNotEmpty && via.first[0] == 'telegram';
       final rows = await tx.execute(
@@ -228,7 +235,7 @@ class AuthService {
         Sql.named('DELETE FROM sessions WHERE user_id = @id AND token_hash <> @h'),
         parameters: {'id': userId, 'h': sha256Hex(token)},
       );
-    });
+    }));
   }
 
   /// Выход на всех устройствах, кроме текущего.

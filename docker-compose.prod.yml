@@ -8,14 +8,39 @@
 # Наружу смотрит только caddy (80/443): HTTPS, приложение, API по /api,
 # установочные файлы по /download.
 
+# Журналы контейнеров без ограничения росли бы, пока не займут диск: храним
+# до 3 файлов по 10 МБ на сервис.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
+    logging: *logging
+    # Настройки под 8 ГБ памяти сервера (общего с другим проектом) и разбор
+    # медленных запросов: всё, что дольше 0,5 с или ждало блокировку, — в журнал.
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
+      -c work_mem=8MB
+      -c max_connections=100
+      -c checkpoint_completion_target=0.9
+      -c log_min_duration_statement=500
+      -c log_lock_waits=on
+      -c deadlock_timeout=2s
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
     ports: !override []
     restart: unless-stopped
 
   api:
+    logging: *logging
+    # Потолок памяти: утечка в API не должна съесть сервер, общий с другим
+    # проектом, — контейнер перезапустится сам (restart: unless-stopped).
+    mem_limit: 1g
     environment:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       CORS_ORIGIN: ${PUBLIC_URL:?задайте PUBLIC_URL в .env}
@@ -28,6 +53,8 @@ services:
     restart: unless-stopped
 
   web:
+    logging: *logging
+    mem_limit: 256m
     build:
       args:
         API_URL: ${PUBLIC_URL}/api
@@ -35,6 +62,7 @@ services:
     restart: unless-stopped
 
   caddy:
+    logging: *logging
     image: caddy:2-alpine
     depends_on:
       - web

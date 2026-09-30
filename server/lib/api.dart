@@ -1,6 +1,7 @@
 /// HTTP-маршруты API.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:shelf/shelf.dart';
@@ -61,7 +62,16 @@ Handler buildHandler(
   final exports = ExportLinks();
 
   final router = Router()
-    ..get('/health', (Request _) => _json(200, {'ok': true}))
+    // Проверка живости с запросом к базе: по ней следит внешний сторож
+    // (deploy/watchdog.sh), поэтому недоступная база должна давать ошибку.
+    ..get('/health', (Request _) async {
+      try {
+        await auth.db.execute('SELECT 1').timeout(const Duration(seconds: 3));
+        return _json(200, {'ok': true});
+      } catch (_) {
+        return _json(503, {'ok': false, 'error': 'db'});
+      }
+    })
     ..post('/auth/register', (Request req) async {
       final b = await _body(req);
       return _json(201, await auth.register('${b['email'] ?? ''}', '${b['password'] ?? ''}', '${b['locale'] ?? 'ru'}'));
@@ -268,7 +278,11 @@ Handler buildHandler(
 
   Middleware errors() => (inner) => (req) async {
         try {
-          return await inner(req);
+          // Клиент ждёт 20 секунд; дольше держать сокет открытым незачем.
+          return await Future.sync(() => inner(req)).timeout(const Duration(seconds: 30));
+        } on TimeoutException {
+          print('timeout on ${req.method} ${req.url.path}');
+          return _json(504, {'error': 'timeout'});
         } on ApiError catch (e) {
           return _json(e.status, e.toJson());
         } catch (e, st) {

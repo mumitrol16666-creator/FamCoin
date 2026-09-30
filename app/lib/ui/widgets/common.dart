@@ -83,6 +83,8 @@ String errorText(AppLocalizations l, Object e) {
     'plan_limit' => l.errPlanLimit,
     'ledger' => ledgerErrorText(l, e.ledgerCode) ?? e.message ?? l.errUnknown,
     'network' => l.errNetwork,
+    'busy' || 'timeout' => l.errBusy,
+    'rate_limited' => l.errRateLimited,
     _ => l.errUnknown,
   };
 }

@@ -19,6 +19,10 @@ const kzOffset = Duration(hours: 5);
 const morningHour = 8;
 const eveningHour = 21;
 
+/// Сколько сводок берём за одну минутную проверку и сколько шлём одновременно.
+const batchSize = 500;
+const concurrency = 8;
+
 class NotificationService {
   NotificationService(this.db, this.ledger, this.telegram, this.push);
 
@@ -59,20 +63,26 @@ class NotificationService {
         WHERE (profile->>'onboarded') = 'true'
           AND coalesce((notif->>@kind)::boolean, true)
           AND coalesce(notif->>@flag, '') <> @today
-        LIMIT 200'''),
+        LIMIT $batchSize'''),
       parameters: {'kind': kind, 'flag': flag, 'today': today},
     );
-    for (final r in users) {
-      final userId = r[0].toString();
+    // По нескольку человек одновременно: последовательная отправка 1000
+    // сводок (запрос к базе, Telegram, push) растягивалась бы на минуты.
+    final ids = [for (final r in users) r[0].toString()];
+    for (var i = 0; i < ids.length; i += concurrency) {
+      await Future.wait([for (final id in ids.skip(i).take(concurrency)) _deliver(kind, flag, today, now, id)]);
+    }
+  }
+
+  Future<void> _deliver(String kind, String flag, String today, DateTime now, String userId) async {
+    try {
       await db.execute(
         Sql.named('UPDATE users SET notif = notif || jsonb_build_object(@flag::text, @today::text) WHERE id = @u'),
         parameters: {'flag': flag, 'today': today, 'u': userId},
       );
-      try {
-        await sendBrief(userId, kind, DateTime(now.year, now.month, now.day));
-      } catch (e) {
-        stderr.writeln('brief $kind for $userId: ${e.runtimeType}');
-      }
+      await sendBrief(userId, kind, DateTime(now.year, now.month, now.day)).timeout(const Duration(seconds: 90));
+    } catch (e) {
+      stderr.writeln('brief $kind for $userId: ${e.runtimeType}');
     }
   }
 

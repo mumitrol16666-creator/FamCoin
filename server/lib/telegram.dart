@@ -35,21 +35,28 @@ class Telegram {
   Future<Map<String, dynamic>?> call(String method, Map<String, Object?> body) async {
     if (!enabled) return null;
     try {
-      final req = await _client.postUrl(Uri.parse('https://api.telegram.org/bot$token/$method'));
-      req.headers.contentType = ContentType.json;
-      req.write(jsonEncode(body));
-      final res = await req.close();
-      final text = await res.transform(utf8.decoder).join();
-      final data = jsonDecode(text) as Map<String, dynamic>;
-      if (data['ok'] != true) {
-        stderr.writeln('telegram $method: ${data['description']}');
-        return null;
-      }
-      return data;
+      // Без общего таймаута оборванное соединение подвешивало бы опрос бота
+      // навсегда — без ошибки в журнале. Длинный опрос сам ждёт до 25 секунд.
+      final limit = Duration(seconds: method == 'getUpdates' ? 45 : 20);
+      return await _post(method, body).timeout(limit);
     } catch (e) {
       stderr.writeln('telegram $method: ${e.runtimeType}');
       return null;
     }
+  }
+
+  Future<Map<String, dynamic>?> _post(String method, Map<String, Object?> body) async {
+    final req = await _client.postUrl(Uri.parse('https://api.telegram.org/bot$token/$method'));
+    req.headers.contentType = ContentType.json;
+    req.write(jsonEncode(body));
+    final res = await req.close();
+    final text = await res.transform(utf8.decoder).join();
+    final data = jsonDecode(text) as Map<String, dynamic>;
+    if (data['ok'] != true) {
+      stderr.writeln('telegram $method: ${data['description']}');
+      return null;
+    }
+    return data;
   }
 
   Future<bool> send(int chatId, String text) async =>
@@ -110,7 +117,12 @@ class Telegram {
         await Future<void>.delayed(const Duration(seconds: 10));
         continue;
       }
-      for (final u in (data['result'] as List).cast<Map<String, dynamic>>()) {
+      final updates = data['result'];
+      if (updates is! List) {
+        await Future<void>.delayed(const Duration(seconds: 10));
+        continue;
+      }
+      for (final u in updates.cast<Map<String, dynamic>>()) {
         _offset = (u['update_id'] as int) + 1;
         try {
           final pre = u['pre_checkout_query'] as Map<String, dynamic>?;
