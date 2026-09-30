@@ -191,6 +191,77 @@ void main() {
     expect(f.ledger.balance('cash'), kzt(90000), reason: 'сервер применил ту же команду');
   });
 
+  test('D73: доступное не больше свободных денег, а вклад прошлых дней от этого не зависит', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await s.setDailyLimit(kzt(5000));
+    await s.setDailyLimitCarryOn(true);
+    f.now = f.now.add(const Duration(days: 9)); // десятый день переноса
+    expect(s.freeMoney, kzt(100000));
+    expect(s.dailyLimitAvailable, kzt(50000), reason: 'денег хватает — доступно всё, что накопил перенос');
+    expect(s.limitExplain.capped, isFalse);
+
+    // 60 000 ушли в копилку цели: свободно 40 000, и доступное упирается в деньги.
+    await s.reserve('trip', 'cash', kzt(60000));
+    expect(s.freeMoney, kzt(40000));
+    expect(s.dailyLimitPlanned, kzt(50000));
+    expect(s.dailyLimitAvailable, kzt(40000));
+    expect(s.limitExplain.capped, isTrue);
+    expect(s.dailyLimitCarry, kzt(45000), reason: 'перенос считается по лимиту, а не по остатку денег');
+  });
+
+  test('D73: платежи до дохода уменьшают свободные деньги; не хватает на платежи — доступно 0', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await f.plan(); // аренда 10 000, срок 10 сентября не оплачен — просрочен
+    await s.setDailyLimit(kzt(5000));
+    expect(s.limitExplain.obligations, kzt(10000));
+    expect(s.limitExplain.overdue, kzt(10000));
+    expect(s.freeMoney, kzt(90000));
+    expect(s.dailyLimitAvailable, kzt(5000));
+
+    await s.reserve('trip', 'cash', kzt(95000)); // осталось 5 000, а платёж 10 000
+    expect(s.freeMoney, -kzt(5000));
+    expect(s.limitExplain.shortfall, kzt(5000));
+    expect(s.dailyLimitAvailable, 0, reason: 'свободно нечего — тратить «по лимиту» нельзя');
+    expect(s.limitExplain.capped, isTrue);
+  });
+
+  test('D73: перерасход остаётся отрицательным — ограничение срезает только плюс', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await s.setDailyLimit(kzt(5000));
+    await s.addExpense(amount: kzt(7000), category: 'cafe', account: 'cash', date: s.today);
+    expect(s.dailyLimitAvailable, -kzt(2000));
+    expect(s.limitExplain.capped, isFalse);
+  });
+
+  test('D73: разбор — ориентир по формуле 9.3, на сколько дней хватит денег при лимите', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await f.plan();
+    await s.send({'type': 'updateProfile', 'profile': {'incomeDay': 5}}); // следующий доход — 5 октября
+    final ex = s.limitExplain;
+    expect(ex.days, 7);
+    expect(ex.free, kzt(90000));
+    expect(ex.guideDaily, kzt(12857), reason: '90 000 ÷ 7 дней, вниз до целого тенге');
+    expect(ex.limit, isNull);
+    expect(ex.available, isNull);
+
+    await s.setDailyLimit(kzt(15000));
+    expect(s.limitExplain.coverDays, 6);
+    expect(s.limitExplain.limitTooHigh, isTrue, reason: '6 дней хватит, а до дохода 7');
+    expect(s.limitExplain.runOutDate, DateTime(2026, 10, 4));
+
+    await s.setDailyLimit(kzt(12000));
+    expect(s.limitExplain.coverDays, 7);
+    expect(s.limitExplain.limitTooHigh, isFalse);
+  });
+
   test('D71: смена суммы лимита не пересчитывает прошлые дни по новой ставке', () async {
     final f = FakeServer();
     await f.init();

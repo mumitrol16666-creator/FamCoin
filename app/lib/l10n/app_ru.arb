@@ -758,6 +758,68 @@
       }
     }
   },
+  "explainOpen": "Как посчитано",
+  "explainTitle": "Как посчитано",
+  "explainObligationsUntil": "Платежи до {date}",
+  "@explainObligationsUntil": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "explainOverdue": "из них просрочено {amount}",
+  "@explainOverdue": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "explainGuideHint": "свободно ÷ дни до конца периода",
+  "explainLimitDay": "Ваш лимит на день",
+  "explainCarry": "Перенос прошлых дней",
+  "explainSpent": "Потрачено сегодня",
+  "explainAvailable": "Доступно сегодня",
+  "explainNoteCapped": "Доступное ограничено свободными деньгами: больше, чем свободно после платежей и целей, потратить нельзя. По лимиту и переносу было бы {amount}.",
+  "@explainNoteCapped": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "explainNoteShortfall": "Не хватает {amount} на платежи до следующего дохода. Оплатите или отметьте платежи, либо пересмотрите план.",
+  "@explainNoteShortfall": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "explainNoteHigh": "При таком лимите свободных денег хватит до {runOut}, а следующий доход — {income}. Лимит выше расчётного ориентира.",
+  "@explainNoteHigh": {
+    "placeholders": {
+      "runOut": {
+        "type": "String"
+      },
+      "income": {
+        "type": "String"
+      }
+    }
+  },
+  "explainNoteOk": "Свободных денег хватает на весь период при вашем лимите.",
+  "explainNoLimit": "Лимит не задан. Свободные деньги можно разделить на дни — задайте лимит сами.",
+  "explainChangeLimit": "Изменить лимит",
+  "cardCapped": "ограничено свободными деньгами",
+  "cardShortfall": "не хватает {amount} на платежи",
+  "@cardShortfall": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "carryReset": "Начать перенос заново",
   "tabOverview": "Обзор",
   "tabExpenses": "Расходы",

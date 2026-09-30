@@ -448,19 +448,60 @@ class AppState extends ChangeNotifier {
   /// Сегодняшние повседневные траты из дневного бюджета.
   int spentToday() => spentBetween(today, today);
 
-  /// Сколько доступно сегодня с учётом переноса (D64): за каждый день с
-  /// начала копления (`dailyLimitSince`) лимит либо остаётся неизрасходован
-  /// и добавляется к завтрашнему дню, либо превышен — и настолько же
-  /// уменьшает доступное на будущее. Эквивалентно «выдано лимитов за N дней
-  /// минус потрачено за N дней»; ежедневно ничего не сохраняется отдельно —
-  /// значение всегда считается заново по журналу.
-  int? get dailyLimitAvailable {
+  /// Сколько доступно сегодня по лимиту и переносу (D64), без оглядки на
+  /// деньги: за каждый день с начала копления (`dailyLimitSince`) лимит либо
+  /// остаётся неизрасходован и добавляется к завтрашнему дню, либо превышен —
+  /// и настолько же уменьшает доступное на будущее. Эквивалентно «выдано
+  /// лимитов за N дней минус потрачено за N дней»; ежедневно ничего не
+  /// сохраняется отдельно — значение всегда считается заново по журналу.
+  int? get dailyLimitPlanned {
     final limit = dailyLimit;
     if (limit == null) return null;
     if (!dailyLimitCarryOn) return limit - spentToday();
     final since = dailyLimitSince ?? today;
     final start = since.isAfter(today) ? today : since;
     return _granted(start, today, limit) - spentBetween(start, today);
+  }
+
+  /// Свободные деньги сейчас (D73): ликвидные минус отложенное на цели минус
+  /// ещё не оплаченные платежи до следующего дохода. Отрицательные — платежи
+  /// нечем покрыть.
+  int get freeMoney => ledger.freeLiquid() - obligationsUntilIncome;
+
+  /// Доступно на свободные траты сегодня (D73): по лимиту и переносу, но не
+  /// больше свободных денег — потратить можно только то, что не занято
+  /// платежами и целями. Так накопленный перенос не превращается в «право»
+  /// потратить деньги, которых уже нет. Перерасход остаётся отрицательным:
+  /// ограничение срезает только плюс.
+  int? get dailyLimitAvailable {
+    final planned = dailyLimitPlanned;
+    if (planned == null) return null;
+    final cap = freeMoney < 0 ? 0 : freeMoney;
+    return planned > cap ? cap : planned;
+  }
+
+  /// Разбор «доступно сегодня» для экрана «Как посчитано» (D73):
+  /// деньги → свободно → ориентир → лимит и перенос → доступно.
+  LimitExplain get limitExplain {
+    final until = nextIncomeDate;
+    final due = dueItems(until.subtract(const Duration(days: 1)));
+    final unpaid = due.fold<int>(0, (sum, d) => sum + d.planned.amount);
+    return LimitExplain(
+      liquid: ledger.liquid(),
+      reserves: liquidReserves,
+      obligations: unpaid,
+      overdue: due.where((d) => d.date.isBefore(today)).fold<int>(0, (sum, d) => sum + d.planned.amount),
+      days: daysToIncome < 1 ? 1 : daysToIncome,
+      until: until,
+      byMonthEnd: !hasPayDay,
+      guideDaily: guide.dailyBudget,
+      spent: spentToday(),
+      limit: dailyLimit,
+      carry: dailyLimitCarry,
+      planned: dailyLimitPlanned,
+      available: dailyLimitAvailable,
+      today: today,
+    );
   }
 
   /// Сколько лимита выдано за дни [from]–[to] включительно по истории сумм.
@@ -493,9 +534,9 @@ class AppState extends ChangeNotifier {
   /// уменьшил сегодняшнюю сумму. `0` в первый день лимита или без переноса.
   int get dailyLimitCarry {
     final limit = dailyLimit;
-    final available = dailyLimitAvailable;
-    if (limit == null || available == null) return 0;
-    return available - (limit - spentToday());
+    final planned = dailyLimitPlanned; // ограничение деньгами — не вклад прошлых дней
+    if (limit == null || planned == null) return 0;
+    return planned - (limit - spentToday());
   }
 
   static DateTime _onDay(int year, int month, int day) {

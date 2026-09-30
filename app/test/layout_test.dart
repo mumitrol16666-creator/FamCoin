@@ -60,6 +60,31 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('«Как посчитано» (D73): карточка говорит, что доступное ограничено деньгами; разбор открывается без переполнений', (tester) async {
+    // Обычный телефон: в тестах шрифт Ahem вдвое шире настоящего, поэтому крайний
+    // случай «320 px и 200 %» здесь дал бы ложные переполнения в старых строках.
+    final f = await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
+    final s = f.state;
+    await s.setDailyLimit(kzt(5000));
+    await s.setDailyLimitCarryOn(true);
+    f.now = f.now.add(const Duration(days: 9)); // перенос накопил 50 000
+    await s.reserve('trip', 'cash', kzt(60000)); // свободно осталось 40 000
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('ограничено свободными деньгами'), findsOneWidget);
+    await tester.ensureVisible(find.text('Как посчитано ›'));
+    await tester.tap(find.text('Как посчитано ›'));
+    // На главной крутится фон сезона — pumpAndSettle не дождался бы конца.
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(tester.takeException(), isNull, reason: 'карточка и разбор не должны переполняться');
+    for (final label in ['Деньги на счетах', 'Отложено на цели', 'Свободно', 'Ваш лимит на день', 'Доступно сегодня']) {
+      expect(find.text(label, skipOffstage: false), findsOneWidget, reason: label);
+    }
+    expect(find.textContaining('Доступное ограничено свободными деньгами', skipOffstage: false), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('форма операции на 360×732: подписи в строку, «Сохранить» видна, черновик защищён', (tester) async {
     await pumpApp(
       tester,

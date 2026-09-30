@@ -228,3 +228,82 @@ class DueItem {
   final DateTime date;
   final String period;
 }
+
+/// Как получено «доступно сегодня» (D73): деньги на счетах → свободные деньги
+/// → расчётный ориентир → лимит владельца с переносом → доступно.
+class LimitExplain {
+  const LimitExplain({
+    required this.liquid,
+    required this.reserves,
+    required this.obligations,
+    required this.overdue,
+    required this.days,
+    required this.until,
+    required this.byMonthEnd,
+    required this.guideDaily,
+    required this.spent,
+    required this.today,
+    this.limit,
+    this.carry = 0,
+    this.planned,
+    this.available,
+  });
+
+  /// Ликвидные деньги сейчас.
+  final int liquid;
+
+  /// Отложено на цели.
+  final int reserves;
+
+  /// Неоплаченные платежи до следующего дохода (в том числе просроченные).
+  final int obligations;
+
+  /// Из них просрочено.
+  final int overdue;
+
+  /// Дней до следующего дохода (не меньше одного, считая сегодня).
+  final int days;
+  final DateTime until;
+
+  /// Дата дохода не задана: считаем до конца месяца.
+  final bool byMonthEnd;
+
+  /// Расчётный ориентир (формула 9.3): свободно на начало дня ÷ дни.
+  final int guideDaily;
+  final int spent;
+  final DateTime today;
+  final int? limit;
+  final int carry;
+
+  /// Доступно по лимиту и переносу без оглядки на деньги.
+  final int? planned;
+
+  /// Доступно с ограничением свободными деньгами.
+  final int? available;
+
+  /// Свободные деньги сейчас; отрицательные — платежи нечем покрыть.
+  int get free => liquid - reserves - obligations;
+
+  /// Свободно на начало дня: сегодняшние траты возвращаются в базу, иначе
+  /// «хватит на N дней» уменьшалось бы после каждой покупки.
+  int get freeAtDayStart => free + spent;
+
+  /// Сколько не хватает на платежи до дохода.
+  int get shortfall => free < 0 ? -free : 0;
+
+  /// Доступное срезано свободными деньгами.
+  bool get capped => planned != null && available != null && planned! > available!;
+
+  /// На сколько дней при этом лимите хватит свободных денег.
+  int? get coverDays {
+    final l = limit;
+    if (l == null || l <= 0) return null;
+    return freeAtDayStart <= 0 ? 0 : freeAtDayStart ~/ l;
+  }
+
+  /// Лимит выше того, что позволяют свободные деньги до дохода.
+  bool get limitTooHigh => coverDays != null && coverDays! < days;
+
+  /// Когда закончатся свободные деньги при таком лимите.
+  DateTime? get runOutDate => coverDays == null ? null : today.add(Duration(days: coverDays!));
+}

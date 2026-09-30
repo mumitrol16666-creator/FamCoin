@@ -74,7 +74,11 @@ class HomeScreen extends StatelessWidget {
                 // сегодня; переключатель «Всего» показывает всю сумму,
                 // свободную до зарплаты/конца месяца, без деления на дни —
                 // не у всех бюджет живёт строго от выплаты до выплаты.
-                _GuideCard(state: state, onSetLimit: () => _showLimitSheet(context, state)),
+                _GuideCard(
+                  state: state,
+                  onSetLimit: () => _showLimitSheet(context, state),
+                  onExplain: () => _showExplainSheet(context, state),
+                ),
                 const QuickActionsRow(),
 
                 SectionHeader(l.accounts, action: '${l.all} ›', onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountsScreen()))),
@@ -185,6 +189,12 @@ class HomeScreen extends StatelessWidget {
       builder: (ctx) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         AmountField(controller: amount, label: l.limitAmountDay, autofocus: true),
         const SizedBox(height: 8),
+        // Сколько в день позволяют свободные деньги до дохода (D73) — чтобы
+        // выбирать лимит, зная, на что хватит денег.
+        if (state.guide.dailyBudget > 0) ...[
+          Text(l.dailyLimitHint(moneyInText(state.guide.dailyBudget)), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ctx.fam.text2)),
+          const SizedBox(height: 4),
+        ],
         Text(state.dailyLimitCarryOn ? l.dailyLimitNote : l.dailyLimitNoteNoCarry, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
         const SizedBox(height: 12),
         SubmitButton(
@@ -215,6 +225,85 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+
+  /// «Как посчитано» (D73): от денег на счетах до суммы, доступной сегодня.
+  void _showExplainSheet(BuildContext context, AppState state) {
+    final l = context.l10n;
+    final ex = state.limitExplain;
+    final locale = Localizations.localeOf(context).toString();
+    String date(DateTime d) => DateFormat.MMMd(locale).format(d);
+
+    showFormSheet<void>(
+      context,
+      title: l.explainTitle,
+      builder: (ctx) {
+        final fam = ctx.fam;
+        Widget line(String label, Widget value, {String? hint, bool bold = false}) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(label, style: TextStyle(fontWeight: bold ? FontWeight.w700 : null)),
+                    if (hint != null) Text(hint, style: TextStyle(fontSize: 12, color: fam.text2)),
+                  ]),
+                ),
+                value,
+              ]),
+            );
+        Widget money(int minor, {bool sign = false, bool bold = false, Color? color}) =>
+            MoneyText(minor, sign: sign, color: color, style: TextStyle(fontWeight: bold ? FontWeight.w700 : null));
+        Widget note(String text, {Color? color}) => Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(text, style: TextStyle(fontSize: 13, color: color ?? fam.text2)),
+            );
+
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          line(l.guideLiquid, money(ex.liquid)),
+          if (ex.reserves > 0) line(l.guideReserves, money(-ex.reserves, sign: true)),
+          if (ex.obligations > 0)
+            line(
+              l.explainObligationsUntil(date(ex.until)),
+              money(-ex.obligations, sign: true),
+              hint: ex.overdue > 0 ? l.explainOverdue(moneyInText(ex.overdue)) : null,
+            ),
+          const Divider(height: 16),
+          line(l.free, money(ex.free, bold: true, color: ex.free < 0 ? fam.expense : null), bold: true),
+          const SizedBox(height: 8),
+          line(ex.byMonthEnd ? l.guideDaysMonth : l.guideDays, Text('${ex.days}')),
+          line(l.guideFormula, money(ex.guideDaily), hint: l.explainGuideHint),
+          if (ex.limit == null) ...[
+            const Divider(height: 24),
+            note(l.explainNoLimit),
+          ] else ...[
+            const Divider(height: 24),
+            line(l.explainLimitDay, money(ex.limit!)),
+            if (state.dailyLimitCarryOn && ex.carry != 0) line(l.explainCarry, money(ex.carry, sign: true)),
+            line(l.explainSpent, money(-ex.spent, sign: true)),
+            const Divider(height: 16),
+            line(l.explainAvailable, money(ex.available!, bold: true, color: ex.available! < 0 ? fam.expense : null), bold: true),
+            if (ex.shortfall > 0)
+              note(l.explainNoteShortfall(moneyInText(ex.shortfall)), color: fam.expense)
+            else ...[
+              if (ex.capped) note(l.explainNoteCapped(moneyInText(ex.planned!))),
+              if (ex.limitTooHigh)
+                note(l.explainNoteHigh(date(ex.runOutDate!), date(ex.until)), color: fam.warn)
+              else if (!ex.capped)
+                note(l.explainNoteOk, color: fam.income),
+            ],
+          ],
+          const SizedBox(height: 16),
+          OutlinedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showLimitSheet(context, state);
+            },
+            child: Text(ex.limit == null ? l.dailyLimitSet : l.explainChangeLimit),
+          ),
+        ]);
+      },
+    );
+  }
+
 }
 
 /// Главная карточка (D44/D48). «Всего» — остаток на денежных счетах, как в
@@ -222,9 +311,10 @@ class HomeScreen extends StatelessWidget {
 /// сегодня; формула до зарплаты — только подсказка в форме лимита.
 /// Текст всегда белый на своём фоне (`guideBg`), а не на `primary`.
 class _GuideCard extends StatelessWidget {
-  const _GuideCard({required this.state, required this.onSetLimit});
+  const _GuideCard({required this.state, required this.onSetLimit, required this.onExplain});
   final AppState state;
   final VoidCallback onSetLimit;
+  final VoidCallback onExplain;
 
   @override
   Widget build(BuildContext context) {
@@ -236,6 +326,7 @@ class _GuideCard extends StatelessWidget {
     final int? headline = showTotal ? state.ledger.liquid() : state.dailyLimitAvailable;
     final negative = (headline ?? 0) < 0;
     final carry = state.dailyLimitCarry;
+    final ex = (!showTotal && limit != null) ? state.limitExplain : null;
 
     return AppCard(
       color: negative ? fam.guideBad : fam.guideBg,
@@ -259,15 +350,42 @@ class _GuideCard extends StatelessWidget {
               limit == null
                   ? l.dailyLimitPrompt
                   : '${formatMoney(limit)} ${l.perDay} · ${l.spentTodayLabel} ${formatMoney(spent)}'
-                      '${carry == 0 ? '' : carry > 0 ? ' · ${l.carryPositive(formatMoney(carry))}' : ' · ${l.carryNegative(formatMoney(-carry))}'}',
+                      '${carry == 0 ? '' : carry > 0 ? ' · ${l.carryPositive(moneyInText(carry))}' : ' · ${l.carryNegative(moneyInText(-carry))}'}',
               style: const TextStyle(fontSize: 13),
             ),
+            // Доступное упирается в деньги, а не в лимит (D73) — говорим прямо.
+            if (ex != null && (ex.shortfall > 0 || ex.capped))
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  ex.shortfall > 0 ? l.cardShortfall(moneyInText(ex.shortfall)) : l.cardCapped,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
           ],
           const SizedBox(height: 10),
-          Row(children: [
-            _GuideModeChip(label: l.guideModeDaily, selected: !showTotal, onTap: () => runAction(context, () => state.setGuideView('daily'))),
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            // Чипы переносятся, а ссылка сжимается: на узком экране и крупном
+            // шрифте ничего не выходит за карточку.
+            Expanded(
+              flex: 3,
+              child: Wrap(spacing: 8, runSpacing: 6, children: [
+                _GuideModeChip(label: l.guideModeDaily, selected: !showTotal, onTap: () => runAction(context, () => state.setGuideView('daily'))),
+                _GuideModeChip(label: l.guideModeTotal, selected: showTotal, onTap: () => runAction(context, () => state.setGuideView('total'))),
+              ]),
+            ),
             const SizedBox(width: 8),
-            _GuideModeChip(label: l.guideModeTotal, selected: showTotal, onTap: () => runAction(context, () => state.setGuideView('total'))),
+            Flexible(
+              flex: 2,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: onExplain,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Text('${l.explainOpen} ›', textAlign: TextAlign.end, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ),
           ]),
           if (!showTotal && limit != null && limit > 0) ...[
             const SizedBox(height: 10),

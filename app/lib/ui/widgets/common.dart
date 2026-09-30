@@ -152,6 +152,10 @@ Future<bool> runAction(BuildContext context, Future<void> Function() action) asy
 
 /// Оценка (прогноз, модель графика) — до целого тенге: тиыны в прогнозе
 /// создают ложное ощущение точности.
+/// Сумма для вставки в предложение: пробелы неразрывные, чтобы «50 000 ₸» не
+/// рвалось на две строки посреди числа.
+String moneyInText(int minor) => formatMoney(minor).replaceAll(' ', '\u00A0');
+
 String formatEstimate(int minor) => formatMoney(roundHalfUp(minor / minorPerUnit) * minorPerUnit);
 
 /// Время операции для хранения в `meta['time']`: «09:14», всегда 24-часовое —
