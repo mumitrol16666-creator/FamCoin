@@ -14,7 +14,6 @@ import 'package:postgres/postgres.dart';
 import 'auth_service.dart';
 
 const entityKinds = {'account', 'member', 'limit', 'goal', 'planned', 'debt', 'category', 'quick'};
-const profileKeys = {'mode', 'onboarded', 'incomeDay', 'budgetMethod', 'hiddenCategories', 'dailyLimit', 'dailyLimitSince', 'dailyLimitCarry', 'dailyLimitHistory', 'firstName', 'lastName', 'birthDate'};
 const maxEntityBytes = 8 * 1024;
 
 /// Предел размера профиля: он хранится одним JSON, и без предела клиент мог бы

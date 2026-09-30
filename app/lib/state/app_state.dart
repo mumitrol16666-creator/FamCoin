@@ -878,6 +878,91 @@ class AppState extends ChangeNotifier {
   int adjustmentsFor(DateTime monthStart) => ledger.adjustmentsFor(monthStart, DateTime(monthStart.year, monthStart.month + 1, 1));
   int get monthAdjustments => adjustmentsFor(monthStart);
 
+  // ---------------------------------------------- закрытие месяца (D75)
+
+  /// В первые дни месяца прошлый предлагается закрыть; позже карточка на
+  /// главной уходит, но месяц можно закрыть из «Ещё → Сверка месяца».
+  static const closeWindowDays = 15;
+
+  /// Закрытые месяцы `ГГГГ-ММ` (профиль `closedMonths`).
+  Set<String> get closedMonths => {...((profile['closedMonths'] as List?) ?? const []).cast<String>()};
+
+  bool isMonthClosed(DateTime month) => closedMonths.contains(_period(month));
+
+  /// В месяце внесены операции (расход или доход) — есть что сверять.
+  bool hasActivityIn(DateTime month) {
+    final start = DateTime(month.year, month.month, 1);
+    final end = DateTime(month.year, month.month + 1, 1);
+    return ledger.transactions.any((t) => (t.type == EventType.expense || t.type == EventType.income) && !t.date.isBefore(start) && t.date.isBefore(end));
+  }
+
+  /// Прошлый месяц, если его пора закрыть: идут первые дни нового, он не
+  /// закрыт и в нём вёлся учёт. Иначе `null` — карточка на главной не нужна.
+  DateTime? get monthToClose {
+    if (today.day > closeWindowDays) return null;
+    final prev = monthOf(-1);
+    return !isMonthClosed(prev) && hasActivityIn(prev) ? prev : null;
+  }
+
+  /// Отметить месяц закрытым. Закрытие ничего не блокирует: записи по-прежнему
+  /// можно вносить и править, отметка нужна для порядка и напоминаний.
+  Future<void> closeMonth(DateTime month) {
+    final all = {...closedMonths, _period(month)}.toList()..sort();
+    // Последние 60 месяцев — профиль не должен расти бесконечно.
+    final kept = all.length > 60 ? all.sublist(all.length - 60) : all;
+    return send({'type': 'updateProfile', 'profile': {'closedMonths': kept}});
+  }
+
+  /// Сколько месяцев подряд закрыто, считая от [month] назад.
+  int closedStreakFrom(DateTime month) {
+    var n = 0;
+    var m = DateTime(month.year, month.month, 1);
+    while (isMonthClosed(m) && n < 60) {
+      n++;
+      m = DateTime(m.year, m.month - 1, 1);
+    }
+    return n;
+  }
+
+  /// Платёж уже оплачен — внесён обычным расходом или вне приложения: срок
+  /// отмечается оплаченным без новой операции.
+  Future<void> markDuePaid(DueItem due) =>
+      send({'type': 'upsertEntity', 'kind': 'planned', 'entityId': due.planned.id, 'data': due.planned.toJson(paid: {...due.planned.paid, due.period})});
+
+  /// Итоги месяца для сверки: доходы, расходы, куда ушло больше всего, платежи,
+  /// расхождения остатков и средний расход в день из дневного лимита.
+  MonthSummary monthSummary(DateTime month) {
+    final start = DateTime(month.year, month.month, 1);
+    final end = DateTime(month.year, month.month + 1, 1);
+    final r = reportFor(start);
+    final pr = reportFor(DateTime(month.year, month.month - 1, 1));
+    final current = start == monthStart;
+    final days = current ? today.day : end.difference(start).inDays;
+    var total = 0, paid = 0;
+    for (final p in planned) {
+      if (!_plannedDebtActive(p)) continue;
+      final date = _onDay(start.year, start.month, p.day);
+      if (p.start != null && date.isBefore(p.start!)) continue;
+      total++;
+      if (p.paid.contains(_period(start))) paid++;
+    }
+    return MonthSummary(
+      month: start,
+      current: current,
+      income: r.income,
+      expense: r.expense,
+      prevIncome: pr.income,
+      prevExpense: pr.expense,
+      top: categoriesFor(start).take(3).toList(),
+      adjustments: adjustmentsFor(start),
+      paymentsPaid: paid,
+      paymentsTotal: total,
+      days: days,
+      // До целого тенге, как остальные расчётные суммы (D19): «1 433,33 ₸ в день» — лишняя точность.
+      avgDaily: days <= 0 ? 0 : roundHalfUp(spentBetween(start, current ? today : end.subtract(const Duration(days: 1))) / days / minorPerUnit) * minorPerUnit,
+    );
+  }
+
   // ------------------------------------------------------- аналитика (D66)
 
   /// Тип расхода категории: выбор владельца для своей категории (F12) —

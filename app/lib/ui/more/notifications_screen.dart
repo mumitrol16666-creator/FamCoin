@@ -156,6 +156,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     value: s['evening'] == true,
                     onChanged: (v) => _toggle('evening', v),
                   ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l.notifMonthTitle),
+                    subtitle: Text(l.notifMonthDesc, style: TextStyle(fontSize: 12, color: fam.text2)),
+                    value: s['month'] != false,
+                    onChanged: (v) => _toggle('month', v),
+                  ),
                 ]),
               ),
               _pushCard(context),
@@ -214,6 +221,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 const SizedBox(width: 8),
                 Expanded(child: OutlinedButton(onPressed: () => _test('evening'), child: Text(l.sendTestEvening))),
               ]),
+              const SizedBox(height: 8),
+              SizedBox(width: double.infinity, child: OutlinedButton(onPressed: () => _test('month'), child: Text(l.sendTestMonth))),
             ],
             SectionHeader(l.notificationsHistory),
             if (_items == null)

@@ -23,13 +23,20 @@ const eveningHour = 21;
 const batchSize = 500;
 const concurrency = 8;
 
+/// Напоминание закрыть месяц (D75): со скольки часов и в какие дни месяца.
+const monthHour = 9;
+const monthWindowDays = 10;
+
 class NotificationService {
-  NotificationService(this.db, this.ledger, this.telegram, this.push);
+  NotificationService(this.db, this.ledger, this.telegram, this.push, {this.origin});
 
   final Pool db;
   final LedgerService ledger;
   final Telegram telegram;
   final WebPush push;
+
+  /// Адрес сайта (https://…) для ссылки из Telegram; без него ссылки нет.
+  final String? origin;
   Timer? _timer;
   bool _busy = false;
 
@@ -46,6 +53,7 @@ class NotificationService {
       final now = DateTime.now().toUtc().add(kzOffset);
       if (now.hour >= morningHour && now.hour < eveningHour) await _run('morning', now);
       if (now.hour >= eveningHour) await _run('evening', now);
+      if (now.hour >= monthHour && now.day <= monthWindowDays) await runMonth(now);
     } catch (e, st) {
       stderr.writeln('notifications: ${e.runtimeType}\n$st');
     } finally {
@@ -86,13 +94,56 @@ class NotificationService {
     }
   }
 
+  /// Раз в месяц, в первые дни: тем, кто ещё не закрыл прошлый месяц и вёл в нём
+  /// учёт, — «Сверьте сентябрь» (D75). Метка `sentMonth` не даёт повторить.
+  Future<void> runMonth(DateTime now) async {
+    final month = previousMonth(now);
+    final key = monthKey(month);
+    final users = await db.execute(
+      Sql.named('''
+        SELECT u.id FROM users u
+        WHERE (u.profile->>'onboarded') = 'true'
+          AND coalesce((u.notif->>'month')::boolean, true)
+          AND coalesce(u.notif->>'sentMonth', '') <> @key
+          AND NOT (coalesce(u.profile->'closedMonths', '[]'::jsonb) @> to_jsonb(@key::text))
+          AND EXISTS (
+            SELECT 1 FROM transactions t
+            WHERE t.user_id = u.id AND t.type IN ('expense', 'income')
+              AND t.date >= @from::date AND t.date < @to::date)
+        LIMIT $batchSize'''),
+      parameters: {'key': key, 'from': _day(month), 'to': _day(DateTime(now.year, now.month, 1))},
+    );
+    final ids = [for (final r in users) r[0].toString()];
+    for (var i = 0; i < ids.length; i += concurrency) {
+      await Future.wait([for (final id in ids.skip(i).take(concurrency)) _deliverMonth(id, month, key)]);
+    }
+  }
+
+  static String _day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _deliverMonth(String userId, DateTime month, String key) async {
+    try {
+      await db.execute(
+        Sql.named("UPDATE users SET notif = notif || jsonb_build_object('sentMonth', @k::text) WHERE id = @u"),
+        parameters: {'k': key, 'u': userId},
+      );
+      await sendMonthNudge(userId, month).timeout(const Duration(seconds: 90));
+    } catch (e) {
+      stderr.writeln('month nudge for $userId: ${e.runtimeType}');
+    }
+  }
+
+  /// Уведомление «Сверьте <месяц>»: итоги коротко, ссылка открывает сверку в приложении.
+  Future<void> sendMonthNudge(String userId, DateTime month) async {
+    final s = await ledger.state(userId);
+    final r = _ledgerOf(s).report(month, DateTime(month.year, month.month + 1, 1));
+    final brief = monthNudge(month: month, income: r.income, expense: r.expense, locale: s['locale'] as String? ?? 'ru');
+    await notify(userId, 'system', brief.title, brief.body, openQuery: 'close=${monthKey(month)}');
+  }
+
   Future<void> sendBrief(String userId, String kind, DateTime today) async {
     final s = await ledger.state(userId);
-    final l = ledgerFromSnapshot(
-      accounts: (s['accounts'] as List).cast(),
-      transactions: (s['transactions'] as List).cast(),
-      reservations: (s['reservations'] as List).cast(),
-    );
+    final l = _ledgerOf(s);
     final entities = (s['entities'] as List).cast<Map<String, dynamic>>();
     List<Map<String, dynamic>> ofKind(String k) => [for (final e in entities) if (e['kind'] == k) Map<String, dynamic>.from(e['data'] as Map)];
     final input = BriefInput(
@@ -107,16 +158,26 @@ class NotificationService {
     await notify(userId, kind, brief.title, brief.body);
   }
 
+  Ledger _ledgerOf(Map<String, Object?> s) => ledgerFromSnapshot(
+        accounts: (s['accounts'] as List).cast(),
+        transactions: (s['transactions'] as List).cast(),
+        reservations: (s['reservations'] as List).cast(),
+      );
+
   /// Сохраняет уведомление и, если привязан Telegram, отправляет туда.
-  Future<void> notify(String userId, String kind, String title, String body) async {
+  /// [openQuery] — что приложению открыть по нажатию, например `close=2026-09`:
+  /// push ведёт на `./?close=2026-09`, в Telegram уходит ссылка на сайт.
+  Future<void> notify(String userId, String kind, String title, String body, {String? openQuery}) async {
     await db.execute(
       Sql.named('INSERT INTO notifications (user_id, kind, title, body) VALUES (@u, @k, @t, @b)'),
       parameters: {'u': userId, 'k': kind, 't': title, 'b': body},
     );
     final chat = await db.execute(Sql.named('SELECT telegram_chat_id FROM users WHERE id = @u'), parameters: {'u': userId});
     final chatId = chat.isEmpty ? null : chat.first[0] as int?;
-    if (chatId != null) await telegram.send(chatId, '<b>$title</b>\n$body');
-    await push.sendToUser(userId, title, body.replaceAll(RegExp(r'</?b>'), ''), tag: kind);
+    final site = origin;
+    final link = openQuery != null && site != null && site.startsWith('https://') ? '\n$site/?$openQuery' : '';
+    if (chatId != null) await telegram.send(chatId, '<b>$title</b>\n$body$link');
+    await push.sendToUser(userId, title, body.replaceAll(RegExp(r'</?b>'), ''), tag: kind, url: openQuery == null ? null : './?$openQuery');
   }
 
   Future<List<Map<String, Object?>>> list(String userId, {int limit = 50}) async {
@@ -142,6 +203,7 @@ class NotificationService {
     return {
       'morning': notif['morning'] != false,
       'evening': notif['evening'] != false,
+      'month': notif['month'] != false,
       'telegramLinked': r.first[1] == true,
       'telegramAvailable': telegram.enabled,
       'pushDevices': await push.deviceCount(userId),
@@ -150,7 +212,7 @@ class NotificationService {
 
   Future<void> updateSettings(String userId, Map<String, dynamic> body) async {
     final patch = <String, Object?>{};
-    for (final k in ['morning', 'evening']) {
+    for (final k in ['morning', 'evening', 'month']) {
       if (body[k] is bool) patch[k] = body[k];
     }
     if (patch.isEmpty) throw ApiError(400, 'bad_request');

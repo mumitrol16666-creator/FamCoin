@@ -12,6 +12,7 @@ import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'settings_screen.dart';
 import 'tariff_screen.dart';
+import '../budget/month_close_screen.dart';
 
 enum _Badge { none, soon }
 
@@ -29,6 +30,7 @@ class MoreScreen extends StatelessWidget {
     final items = <(IconData, String, _Badge, VoidCallback)>[
       (Icons.account_balance_wallet_outlined, l.accounts, _Badge.none, () => open(const AccountsScreen())),
       (Icons.bar_chart_outlined, l.analytics, _Badge.none, () => open(const AnalyticsScreen())),
+      (Icons.fact_check_outlined, l.monthCloseTitle, _Badge.none, () => open(const MonthCloseListScreen())),
       (Icons.calendar_month_outlined, l.calendar, _Badge.none, () => open(const CalendarScreen())),
       (Icons.family_restroom_outlined, l.family, _Badge.none, () => open(const FamilyScreen())),
       (Icons.label_outline, l.categories, _Badge.none, () => open(const CategoriesScreen())),

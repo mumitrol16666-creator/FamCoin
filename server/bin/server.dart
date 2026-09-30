@@ -50,7 +50,7 @@ Future<void> _run() async {
   final auth = AuthService(db);
   final ledger = LedgerService(db);
   final telegram = Telegram(db, token: env['TELEGRAM_BOT_TOKEN']);
-  final notifications = NotificationService(db, ledger, telegram, WebPush(db, subject: pushSubject(env['CORS_ORIGIN'])))..start();
+  final notifications = NotificationService(db, ledger, telegram, WebPush(db, subject: pushSubject(env['CORS_ORIGIN'])), origin: env['CORS_ORIGIN'])..start();
   final billing = BillingService(
     db,
     telegram,

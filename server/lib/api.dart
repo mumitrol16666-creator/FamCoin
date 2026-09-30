@@ -11,6 +11,7 @@ import 'admin.dart';
 import 'admin_page.dart';
 import 'auth_service.dart';
 import 'billing.dart';
+import 'briefs.dart';
 import 'export.dart';
 import 'ledger_service.dart';
 import 'notifications.dart';
@@ -197,9 +198,13 @@ Handler buildHandler(
     })
     ..post('/notifications/test', (Request req) async {
       final id = await user(req);
-      final kind = (await _body(req))['kind'] == 'evening' ? 'evening' : 'morning';
+      final kind = '${(await _body(req))['kind']}';
       final now = DateTime.now().toUtc().add(kzOffset);
-      await notifications.sendBrief(id, kind, DateTime(now.year, now.month, now.day));
+      if (kind == 'month') {
+        await notifications.sendMonthNudge(id, previousMonth(now));
+      } else {
+        await notifications.sendBrief(id, kind == 'evening' ? 'evening' : 'morning', DateTime(now.year, now.month, now.day));
+      }
       return _json(200, {'status': 'ok'});
     })
     ..get('/push/key', (Request req) async => _json(200, {'key': await notifications.push.publicKey()}))

@@ -202,6 +202,47 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('сверка месяца (D75): карточка на главной, итоги и вопросы сразу, «Закрыть месяц» снимает карточку', (tester) async {
+    final f = await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
+    final s = f.state;
+    await s.addIncome(amount: kzt(300000), source: 'salary', account: 'cash', date: DateTime(2026, 9, 1));
+    await s.addExpense(amount: kzt(20000), category: 'food', account: 'cash', date: DateTime(2026, 9, 4));
+    await f.plan();
+    f.now = DateTime(2026, 10, 2); // начало октября — пора сверить сентябрь
+    await s.load();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Сверьте сентябрь'), findsOneWidget);
+    expect(find.textContaining('300 000'), findsWidgets, reason: 'в карточке уже видны доходы');
+    await tester.tap(find.text('Сверьте сентябрь'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(tester.takeException(), isNull, reason: 'экран сверки не должен переполняться');
+
+    // Итоги и вопросы — сразу, без промежуточных шагов.
+    expect(find.text('Сентябрь 2026'), findsOneWidget);
+    expect(find.text('Доходы'), findsWidgets);
+    expect(find.text('1. Остатки на счетах'), findsOneWidget);
+    expect(find.text('2. Платежи месяца', skipOffstage: false), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('4. Следующий месяц'), 300, scrollable: find.byType(Scrollable).first);
+    expect(find.text('4. Следующий месяц'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('Закрыть месяц'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Закрыть месяц'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(s.isMonthClosed(DateTime(2026, 9, 1)), isTrue);
+    expect(find.text('Молодец: месяц закрыт.', skipOffstage: false), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.scrollUntilVisible(find.text('Готово'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Готово'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Сверьте сентябрь'), findsNothing, reason: 'месяц закрыт — карточка ушла');
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('настройки открываются с датой рождения раньше 2000 года', (tester) async {
     final f = await pumpApp(tester, home: const SettingsScreen(), size: const Size(390, 844));
     await f.state.setAbout(firstName: 'Владислав', lastName: 'Сидоров', birthDate: DateTime(1999, 3, 24));

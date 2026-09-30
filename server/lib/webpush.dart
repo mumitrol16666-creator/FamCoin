@@ -156,14 +156,14 @@ class WebPush {
   }
 
   /// Отправляет на все устройства пользователя; мёртвые подписки удаляет.
-  Future<void> sendToUser(String userId, String title, String body, {String tag = 'famcoin'}) async {
+  Future<void> sendToUser(String userId, String title, String body, {String tag = 'famcoin', String? url}) async {
     final rows = await db.execute(
       Sql.named('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = @u'),
       parameters: {'u': userId},
     );
     if (rows.isEmpty) return;
     final k = await keys();
-    final payload = utf8.encode(jsonEncode({'title': title, 'body': body, 'tag': tag}));
+    final payload = utf8.encode(jsonEncode({'title': title, 'body': body, 'tag': tag, if (url != null) 'url': url}));
     for (final r in rows) {
       final sub = PushSubscription(r[0].toString(), r[1] as String, r[2] as String, r[3] as String);
       try {

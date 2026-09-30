@@ -6,6 +6,26 @@ import 'events.dart';
 import 'ledger.dart';
 import 'serialization.dart';
 
+/// Поля профиля, которые сервер принимает в команде `updateProfile`. Список
+/// общий для сервера и для заглушки сервера в тестах приложения: если
+/// приложение начнёт писать новое поле, а здесь его нет, тесты упадут, а не
+/// боевой сервер ответит отказом (так было бы с `closedMonths`).
+const profileKeys = {
+  'mode',
+  'onboarded',
+  'incomeDay',
+  'budgetMethod',
+  'hiddenCategories',
+  'dailyLimit',
+  'dailyLimitSince',
+  'dailyLimitCarry',
+  'dailyLimitHistory',
+  'closedMonths',
+  'firstName',
+  'lastName',
+  'birthDate',
+};
+
 /// Типы команд, которые меняют журнал.
 const ledgerCommandTypes = {
   'addMoneyAccount',

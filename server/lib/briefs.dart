@@ -124,3 +124,31 @@ Brief eveningBrief(BriefInput i) {
   }
   return Brief(kk ? 'Кешкі есеп' : 'Вечерний отчёт', lines.join('\n'));
 }
+
+const _monthsRu = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+const _monthsKk = ['қаңтар', 'ақпан', 'наурыз', 'сәуір', 'мамыр', 'маусым', 'шілде', 'тамыз', 'қыркүйек', 'қазан', 'қараша', 'желтоқсан'];
+
+/// Название месяца в именительном падеже (для заголовка уведомления).
+String monthName(int month, String locale) => (locale == 'kk' ? _monthsKk : _monthsRu)[month - 1];
+
+/// Ключ месяца `ГГГГ-ММ` — так он записан в `profile.closedMonths`.
+String monthKey(DateTime d) => _period(d);
+
+/// Предыдущий календарный месяц (первое число); январь даёт декабрь прошлого года.
+DateTime previousMonth(DateTime now) => DateTime(now.year, now.month - 1, 1);
+
+/// Напоминание закрыть месяц (D75): итоги — коротко в тексте, остальное
+/// человек увидит в приложении сразу, как откроет.
+Brief monthNudge({required DateTime month, required int income, required int expense, required String locale}) {
+  final kk = locale == 'kk';
+  final name = monthName(month.month, locale);
+  return kk
+      ? Brief(
+          'Айды жабыңыз: $name',
+          'Ай қорытындысы және бірнеше сұрақ — 5 минут. Кіріс ${_kzt(income)}, шығыс ${_kzt(expense)}. FamCoin-ді ашып, айды жабыңыз.',
+        )
+      : Brief(
+          'Сверьте $name',
+          'Итоги месяца и несколько вопросов — 5 минут. Доходы ${_kzt(income)}, расходы ${_kzt(expense)}. Откройте FamCoin и закройте месяц.',
+        );
+}

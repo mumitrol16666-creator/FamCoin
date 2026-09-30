@@ -223,10 +223,10 @@ Future<void> showGoalSheet(BuildContext context, {GoalInfo? initial}) async {
 }
 
 /// Отложить в копилку или забрать из неё — это перевод между своими счетами.
-Future<void> showReserveSheet(BuildContext context, GoalInfo goal, {required bool release}) {
+Future<void> showReserveSheet(BuildContext context, GoalInfo goal, {required bool release, int? initial}) {
   final l = context.l10n;
   final state = AppScope.of(context).state;
-  final amount = TextEditingController();
+  final amount = TextEditingController(text: initial == null ? '' : amountToField(initial));
   final accounts = state.activeAccounts;
   var account = accounts.where((a) => a.liquid).firstOrNull?.id ?? accounts.firstOrNull?.id;
   final inGoal = state.goalSaved(goal);

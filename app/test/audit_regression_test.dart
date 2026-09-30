@@ -63,7 +63,11 @@ class FakeServer {
       case 'deleteEntity':
         entities[c['kind']]?.remove(c['entityId']);
       case 'updateProfile':
-        profile = {...profile, ...(c['profile'] as Map).cast<String, dynamic>()};
+        final patch = (c['profile'] as Map).cast<String, dynamic>();
+        for (final k in patch.keys) {
+          if (!profileKeys.contains(k)) throw StateError('сервер отклонит поле профиля «$k»: его нет в profileKeys ядра');
+        }
+        profile = {...profile, ...patch};
       default:
         applyLedgerCommand(ledger, c);
     }
@@ -189,6 +193,90 @@ void main() {
     final restored = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
     expect(restored.meta['restoredFrom'], payment.id);
     expect(f.ledger.balance('cash'), kzt(90000), reason: 'сервер применил ту же команду');
+  });
+
+  test('D75: прошлый месяц предлагается закрыть в первые дни нового; закрытие снимает предложение', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    expect(s.monthToClose, isNull, reason: 'в сентябре сентябрь ещё не закончился, а августа нет');
+    await s.addIncome(amount: kzt(300000), source: 'salary', account: 'cash', date: DateTime(2026, 9, 1));
+    await s.addExpense(amount: kzt(4000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 5));
+    expect(s.hasActivityIn(DateTime(2026, 9, 1)), isTrue);
+    expect(s.hasActivityIn(DateTime(2026, 8, 1)), isFalse);
+
+    f.now = DateTime(2026, 10, 2);
+    expect(s.monthToClose, DateTime(2026, 9, 1));
+
+    await s.closeMonth(DateTime(2026, 9, 1));
+    expect(s.isMonthClosed(DateTime(2026, 9, 1)), isTrue);
+    expect(s.monthToClose, isNull);
+    expect(s.closedStreakFrom(DateTime(2026, 9, 1)), 1);
+
+    // Месяц без учёта предлагать не нужно; через две недели карточка уходит.
+    f.now = DateTime(2026, 11, 2);
+    expect(s.monthToClose, isNull, reason: 'в октябре операций не было');
+    await s.addExpense(amount: kzt(1000), category: 'cafe', account: 'cash', date: DateTime(2026, 10, 20));
+    expect(s.monthToClose, DateTime(2026, 10, 1));
+    f.now = DateTime(2026, 11, 20);
+    expect(s.monthToClose, isNull, reason: 'после 15-го числа карточка уходит, закрыть можно из «Ещё»');
+
+    // Подряд закрытые месяцы считаются от выбранного назад.
+    await s.closeMonth(DateTime(2026, 10, 1));
+    expect(s.closedStreakFrom(DateTime(2026, 10, 1)), 2);
+    expect(s.closedStreakFrom(DateTime(2026, 8, 1)), 0);
+  });
+
+  test('D75: итоги месяца — доходы, расходы, куда ушло, сравнение, платежи, расхождения; запланированная покупка не в среднем', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await s.addIncome(amount: kzt(300000), source: 'salary', account: 'cash', date: DateTime(2026, 9, 1));
+    await s.addExpense(amount: kzt(6000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 3));
+    await s.addExpense(amount: kzt(20000), category: 'food', account: 'cash', date: DateTime(2026, 9, 4));
+    await s.addExpense(amount: kzt(50000), category: 'shop', account: 'cash', date: DateTime(2026, 9, 6), plannedPurchase: true);
+    await s.addExpense(amount: kzt(10000), category: 'cafe', account: 'cash', date: DateTime(2026, 8, 20)); // прошлый месяц
+    await f.plan(); // аренда 10 000, срок 10 сентября не оплачен
+    f.now = DateTime(2026, 10, 2);
+
+    final sum = s.monthSummary(DateTime(2026, 9, 1));
+    expect(sum.income, kzt(300000));
+    expect(sum.expense, kzt(76000));
+    expect(sum.result, kzt(224000));
+    expect(sum.prevExpense, kzt(10000));
+    expect(sum.expenseChangePercent, 660, reason: 'расходы выросли с 10 000 до 76 000');
+    expect(sum.top.map((e) => e.key).toList(), ['shop', 'food', 'cafe']);
+    expect(sum.top.first.value, kzt(50000));
+    expect(sum.paymentsTotal, 1);
+    expect(sum.paymentsPaid, 0);
+    expect(sum.days, 30);
+    expect(sum.avgDaily, kzt(867), reason: '26 000 за 30 дней = 866,67 → до целого тенге; запланированная покупка в средний расход не входит');
+    expect(sum.current, isFalse);
+    expect(s.monthSummary(DateTime(2026, 10, 1)).current, isTrue);
+    expect(s.monthSummary(DateTime(2026, 10, 1)).expenseChangePercent, isNull, reason: 'идущий месяц с прошлым целым не сравниваем');
+
+    // Расхождение остатка попадает в итоги отдельной строкой, не в расход.
+    await s.adjustBalance(account: 'cash', actualBalance: s.ledger.balance('cash') - kzt(1500), reason: 'сверка сентября', date: DateTime(2026, 9, 30));
+    final after = s.monthSummary(DateTime(2026, 9, 1));
+    expect(after.expense, kzt(76000));
+    expect(after.adjustments, isNot(0));
+  });
+
+  test('D75: платёж, уже оплаченный вручную, отмечается без новой операции', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await f.plan();
+    f.now = DateTime(2026, 10, 2);
+    final before = s.userTransactions.length;
+    final due = s.dueItems(DateTime(2026, 9, 30)).single;
+    expect(due.period, '2026-09');
+
+    await s.markDuePaid(due);
+    expect(s.dueItems(DateTime(2026, 9, 30)), isEmpty);
+    expect(s.planned.single.paid, contains('2026-09'));
+    expect(s.userTransactions.length, before, reason: 'деньги уже потрачены раньше — новую операцию не создаём');
+    expect(s.monthSummary(DateTime(2026, 9, 1)).paymentsPaid, 1);
   });
 
   test('D74: покупка от половины лимита — крупная; запланированная не входит в дневной лимит, но тратит деньги', () async {

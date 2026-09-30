@@ -830,6 +830,141 @@
   "plannedPurchaseTag": "запланированная",
   "plannedPurchaseSwitch": "Запланированная покупка",
   "plannedPurchaseSwitchNote": "Не входит в дневной лимит",
+  "monthCloseTitle": "Сверка месяца",
+  "monthCloseIntro": "Пять минут раз в месяц — и в деньгах порядок. Любой шаг можно пропустить.",
+  "monthPartial": "Месяц ещё идёт — итоги промежуточные.",
+  "monthExpenseLess": "Расходы на {pct}% меньше, чем в прошлом месяце",
+  "@monthExpenseLess": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "monthExpenseMore": "Расходы на {pct}% больше, чем в прошлом месяце",
+  "@monthExpenseMore": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "monthTopTitle": "Больше всего ушло на",
+  "monthPaymentsLine": "Платежей оплачено: {paid} из {total}",
+  "@monthPaymentsLine": {
+    "placeholders": {
+      "paid": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "monthStepBalances": "1. Остатки на счетах",
+  "monthStepBalancesHint": "Сравните с банковским приложением и наличными. Расхождение запишется корректировкой — это не доход и не расход.",
+  "monthMatches": "Совпадает",
+  "monthFix": "Исправить",
+  "monthChecked": "Сверено",
+  "monthAllMatch": "Все остатки совпадают",
+  "monthStepPayments": "2. Платежи месяца",
+  "monthPaymentsHint": "Оплатите или отметьте уже оплаченные — от этого зависит, сколько денег свободно.",
+  "monthPaymentsAllPaid": "Все платежи оплачены ✓",
+  "monthAlreadyPaid": "Уже оплачено",
+  "monthStepLeft": "3. Что осталось",
+  "monthLeftPlus": "В плюсе на {amount}. Отложите часть на цель, пока деньги не потрачены.",
+  "@monthLeftPlus": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "monthLeftMinus": "Месяц в минусе на {amount}. Посмотрите выше, куда ушло больше всего.",
+  "@monthLeftMinus": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "monthToGoal": "В цель «{goal}»",
+  "@monthToGoal": {
+    "placeholders": {
+      "goal": {
+        "type": "String"
+      }
+    }
+  },
+  "monthNewGoal": "Создать цель",
+  "monthStepNext": "4. Следующий месяц",
+  "monthLimitLine": "Дневной лимит {limit} — деньги на мелочи и перекусы. В этом месяце тратили в среднем {avg} в день.",
+  "@monthLimitLine": {
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      },
+      "avg": {
+        "type": "String"
+      }
+    }
+  },
+  "monthLimitOnly": "Дневной лимит {limit} — деньги на мелочи и перекусы.",
+  "@monthLimitOnly": {
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "monthNoLimit": "Дневной лимит не задан — деньги на мелочи и перекусы можно ограничить.",
+  "monthCarryLine": "Перенос лимита: {amount}.",
+  "@monthCarryLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "monthCheckLimits": "Проверить лимиты по категориям",
+  "monthCloseAction": "Закрыть месяц",
+  "monthClosed": "Месяц закрыт ✓",
+  "monthClosedDone": "Молодец: месяц закрыт.",
+  "monthClosedStreak": "Закрыто месяцев подряд: {n}",
+  "@monthClosedStreak": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "monthNextRecon": "Следующая сверка — в начале следующего месяца, напомним.",
+  "monthDone": "Готово",
+  "monthListStatusClosed": "закрыт ✓",
+  "monthListStatusOpen": "не закрыт",
+  "monthListStatusNow": "идёт",
+  "notifMonthTitle": "Сверка месяца",
+  "notifMonthDesc": "В начале месяца — итоги прошлого и несколько вопросов.",
+  "sendTestMonth": "Тест: сверка месяца",
+  "monthCardTitle": "Сверьте {month}",
+  "@monthCardTitle": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "monthCardBody": "Доходы {income} · расходы {expense}. Итоги и несколько вопросов — 5 минут.",
+  "@monthCardBody": {
+    "placeholders": {
+      "income": {
+        "type": "String"
+      },
+      "expense": {
+        "type": "String"
+      }
+    }
+  },
   "explainOutside": "Вне лимита сегодня: {amount} — запланированные покупки и платежи.",
   "@explainOutside": {
     "placeholders": {

@@ -10,6 +10,7 @@ import 'ops/voice_sheet.dart';
 import 'ops/journal_screen.dart';
 import 'widgets/common.dart';
 import 'widgets/season_background.dart';
+import 'budget/month_close_screen.dart';
 
 /// Оболочка с нижней панелью: Главная · Операции · ＋ · Бюджет · Ещё.
 /// «＋» открывает форму, не переключает вкладку (раздел 3 карты).
@@ -22,6 +23,27 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   int _tab = 0;
+
+  /// Одна попытка на запуск приложения: ссылка из уведомления открывается один раз.
+  static bool _linkHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openLink());
+  }
+
+  /// Нажатие на уведомление «Сверьте сентябрь» открывает `/?close=2026-09` —
+  /// сразу показываем сверку этого месяца (D75).
+  void _openLink() {
+    if (_linkHandled || !mounted) return;
+    _linkHandled = true;
+    final match = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(Uri.base.queryParameters['close'] ?? '');
+    if (match == null) return;
+    final year = int.parse(match[1]!), month = int.parse(match[2]!);
+    if (month < 1 || month > 12) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => MonthCloseScreen(month: DateTime(year, month, 1))));
+  }
 
   void _openAdd() => showAddTransactionSheet(context);
 

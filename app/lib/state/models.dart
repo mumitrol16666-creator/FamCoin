@@ -311,3 +311,51 @@ class LimitExplain {
   /// Когда закончатся свободные деньги при таком лимите.
   DateTime? get runOutDate => coverDays == null ? null : today.add(Duration(days: coverDays!));
 }
+
+/// Итоги месяца для сверки (D75).
+class MonthSummary {
+  const MonthSummary({
+    required this.month,
+    required this.current,
+    required this.income,
+    required this.expense,
+    required this.prevIncome,
+    required this.prevExpense,
+    required this.top,
+    required this.adjustments,
+    required this.paymentsPaid,
+    required this.paymentsTotal,
+    required this.days,
+    required this.avgDaily,
+  });
+
+  final DateTime month;
+
+  /// Месяц ещё идёт — итоги промежуточные.
+  final bool current;
+  final int income;
+  final int expense;
+  final int prevIncome;
+  final int prevExpense;
+
+  /// Три категории, на которые ушло больше всего: id категории → сумма.
+  final List<MapEntry<String, int>> top;
+
+  /// Корректировки остатков за месяц (сверка): не доход и не расход.
+  final int adjustments;
+  final int paymentsPaid;
+  final int paymentsTotal;
+
+  /// За сколько дней считан средний расход.
+  final int days;
+
+  /// Средний расход в день из дневного лимита (без запланированных покупок).
+  final int avgDaily;
+
+  int get result => income - expense;
+  bool get hasPrev => prevExpense != 0;
+
+  /// На сколько процентов расходы отличаются от прошлого месяца (минус — меньше).
+  /// Для идущего месяца `null`: неполный месяц с целым сравнивать нечестно.
+  int? get expenseChangePercent => hasPrev && !current ? ((expense - prevExpense) * 100 / prevExpense).round() : null;
+}

@@ -8,6 +8,7 @@ import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../analytics/analytics_screen.dart';
 import '../budget/calendar_screen.dart';
+import '../budget/month_close_screen.dart';
 import '../budget/sheets.dart';
 import '../more/accounts_screen.dart';
 import '../more/settings_screen.dart';
@@ -70,13 +71,20 @@ class HomeScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
               // Секции появляются каскадом при первом показе.
               children: [for (final (i, w) in <Widget>[
+                // Первые дни месяца: предлагаем сверить прошлый (D75).
+                if (state.monthToClose != null)
+                  _CloseMonthCard(
+                    state: state,
+                    month: state.monthToClose!,
+                    onOpen: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MonthCloseScreen(month: state.monthToClose!))),
+                  ),
                 // Ориентир на сегодня — главная цифра. По умолчанию доля на
                 // сегодня; переключатель «Всего» показывает всю сумму,
                 // свободную до зарплаты/конца месяца, без деления на дни —
                 // не у всех бюджет живёт строго от выплаты до выплаты.
                 _GuideCard(
                   state: state,
-                  onSetLimit: () => _showLimitSheet(context, state),
+                  onSetLimit: () => showLimitSheet(context, state),
                   onExplain: () => _showExplainSheet(context, state),
                 ),
                 const QuickActionsRow(),
@@ -180,7 +188,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   /// Дневной лимит задаёт сам владелец (D48); расчёт до зарплаты — подсказка.
-  void _showLimitSheet(BuildContext context, AppState state) {
+  static void showLimitSheet(BuildContext context, AppState state) {
     final l = context.l10n;
     final amount = TextEditingController(text: state.dailyLimit == null ? '' : amountToField(state.dailyLimit!));
     showFormSheet<void>(
@@ -296,7 +304,7 @@ class HomeScreen extends StatelessWidget {
           OutlinedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _showLimitSheet(context, state);
+              showLimitSheet(context, state);
             },
             child: Text(ex.limit == null ? l.dailyLimitSet : l.explainChangeLimit),
           ),
@@ -394,6 +402,39 @@ class _GuideCard extends StatelessWidget {
           ],
         ]),
       ),
+    );
+  }
+}
+
+/// «Сверьте сентябрь» (D75): в первые дни месяца — итоги прошлого и путь к
+/// сверке. Уходит, когда месяц закрыт.
+class _CloseMonthCard extends StatelessWidget {
+  const _CloseMonthCard({required this.state, required this.month, required this.onOpen});
+  final AppState state;
+  final DateTime month;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final fam = context.fam;
+    final locale = Localizations.localeOf(context).toString();
+    final sum = state.monthSummary(month);
+    return AppCard(
+      color: fam.warnBg,
+      onTap: onOpen,
+      child: Row(children: [
+        const Icon(Icons.fact_check_outlined),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(l.monthCardTitle(DateFormat.LLLL(locale).format(month)), style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text(l.monthCardBody(moneyInText(sum.income), moneyInText(sum.expense)), style: TextStyle(fontSize: 12, color: fam.text2)),
+          ]),
+        ),
+        const Icon(Icons.chevron_right),
+      ]),
     );
   }
 }
