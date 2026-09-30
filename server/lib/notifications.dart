@@ -133,6 +133,18 @@ class NotificationService {
     }
   }
 
+  /// Пробное уведомление по кнопке в настройках: показывает то, что придёт
+  /// в начале месяца. Берёт текущий месяц, если в нём уже есть операции
+  /// (так видно живые цифры), иначе прошлый.
+  Future<void> sendMonthNudgePreview(String userId, DateTime now) async {
+    final current = DateTime(now.year, now.month, 1);
+    final r = await db.execute(
+      Sql.named("SELECT EXISTS (SELECT 1 FROM transactions WHERE user_id = @u AND type IN ('expense', 'income') AND date >= @from::date AND date < @to::date)"),
+      parameters: {'u': userId, 'from': _day(current), 'to': _day(DateTime(now.year, now.month + 1, 1))},
+    );
+    await sendMonthNudge(userId, r.first[0] == true ? current : previousMonth(now));
+  }
+
   /// Уведомление «Сверьте <месяц>»: итоги коротко, ссылка открывает сверку в приложении.
   Future<void> sendMonthNudge(String userId, DateTime month) async {
     final s = await ledger.state(userId);

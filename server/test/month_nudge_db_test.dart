@@ -91,6 +91,15 @@ void main() {
       await db.execute(Sql.named("UPDATE users SET notif = notif - 'sentMonth' WHERE id = @u"), parameters: {'u': active});
       await svc.runMonth(DateTime(2026, 9, 3, 12));
       expect(await rows(active), hasLength(2), reason: 'после сброса метки уходит снова — метка и есть защита от повтора');
+
+      // Пробное уведомление: сегодня (сентябрь) операций нет — берём прошлый месяц с учётом;
+      // а если в текущем месяце операции есть — текущий.
+      final preview = await user();
+      await svc.sendMonthNudgePreview(preview, DateTime(2026, 9, 5, 12));
+      expect((await rows(preview)).single[0], 'Сверьте август', reason: 'в сентябре учёта нет — предпросмотр по августу');
+      final now = DateTime(2026, 8, 20, 12);
+      await svc.sendMonthNudgePreview(preview, now);
+      expect((await rows(preview)).map((r) => r[0]), ['Сверьте август', 'Сверьте август'], reason: 'в августе есть операции — предпросмотр по идущему месяцу');
     } finally {
       for (final id in ids) {
         await deleteUserData(db, id);

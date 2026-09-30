@@ -11,7 +11,6 @@ import 'admin.dart';
 import 'admin_page.dart';
 import 'auth_service.dart';
 import 'billing.dart';
-import 'briefs.dart';
 import 'export.dart';
 import 'ledger_service.dart';
 import 'notifications.dart';
@@ -201,7 +200,7 @@ Handler buildHandler(
       final kind = '${(await _body(req))['kind']}';
       final now = DateTime.now().toUtc().add(kzOffset);
       if (kind == 'month') {
-        await notifications.sendMonthNudge(id, previousMonth(now));
+        await notifications.sendMonthNudgePreview(id, now);
       } else {
         await notifications.sendBrief(id, kind == 'evening' ? 'evening' : 'morning', DateTime(now.year, now.month, now.day));
       }
