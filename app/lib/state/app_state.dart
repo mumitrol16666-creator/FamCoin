@@ -85,8 +85,8 @@ class AppState extends ChangeNotifier {
   DateTime? get dailyLimitSince => profile['dailyLimitSince'] == null ? null : dateFromJson(profile['dailyLimitSince']);
 
   /// Переносить ли остаток дневного лимита на следующий день (D70). Пока
-  /// владелец не трогал переключатель — включено, как было с D64.
-  bool get dailyLimitCarryOn => profile['dailyLimitCarry'] != false;
+  /// владелец не включил переключатель — выключено.
+  bool get dailyLimitCarryOn => profile['dailyLimitCarry'] == true;
 
   /// Включение начинает перенос с сегодняшнего дня: старый накопленный
   /// плюс или минус не «оживает» после выключения и повторного включения.

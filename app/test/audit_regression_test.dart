@@ -196,9 +196,8 @@ void main() {
     await f.init();
     final s = f.state;
     await s.setDailyLimit(kzt(4000));
-    expect(s.dailyLimitCarryOn, isTrue, reason: 'по умолчанию включено, как было с D64');
+    expect(s.dailyLimitCarryOn, isFalse, reason: 'по умолчанию выключено');
     await s.addExpense(amount: kzt(6200), category: 'cafe', account: 'cash', date: s.today);
-    await s.setDailyLimitCarryOn(false);
     expect(s.dailyLimitAvailable, kzt(4000 - 6200));
 
     f.now = f.now.add(const Duration(days: 1));
@@ -218,6 +217,7 @@ void main() {
     await f.init();
     final s = f.state;
     await s.setDailyLimit(kzt(4000));
+    await s.setDailyLimitCarryOn(true);
     expect(s.dailyLimitSince, s.today);
     expect(s.dailyLimitAvailable, kzt(4000));
     expect(s.dailyLimitCarry, 0);
