@@ -90,24 +90,82 @@ class AppState extends ChangeNotifier {
 
   /// Включение начинает перенос с сегодняшнего дня: старый накопленный
   /// плюс или минус не «оживает» после выключения и повторного включения.
-  Future<void> setDailyLimitCarryOn(bool on) => send({
-        'type': 'updateProfile',
-        'profile': {'dailyLimitCarry': on, if (on) 'dailyLimitSince': _date(today)},
-      });
+  Future<void> setDailyLimitCarryOn(bool on) {
+    final limit = dailyLimit;
+    return send({
+      'type': 'updateProfile',
+      'profile': {
+        'dailyLimitCarry': on,
+        if (on) 'dailyLimitSince': _date(today),
+        if (on && limit != null) 'dailyLimitHistory': _historyJson([(from: today, amount: limit)]),
+      },
+    });
+  }
 
-  /// Меняет сумму лимита. Включение лимита (был не задан) запускает перенос
-  /// с сегодняшнего дня; выключение — снимает перенос совсем.
-  Future<void> setDailyLimit(int? minor) => send({
+  /// История суммы лимита по датам (D71): каждая запись действует со своей
+  /// даты до следующей. Поэтому смена суммы не пересчитывает прошлые дни по
+  /// новой ставке: без истории переход с 5 000 на 8 000 ₸ на десятый день
+  /// переноса добавил бы 30 000 ₸, которых никто не выдавал.
+  List<({DateTime from, int amount})> get dailyLimitHistory {
+    final raw = profile['dailyLimitHistory'];
+    if (raw is! List) return const [];
+    final out = <({DateTime from, int amount})>[
+      for (final e in raw)
+        if (e is Map && e['from'] != null && e['amount'] != null) (from: dateFromJson(e['from']), amount: parseMinor(e['amount'])),
+    ]..sort((a, b) => a.from.compareTo(b.from));
+    return out;
+  }
+
+  List<Map<String, String>> _historyJson(List<({DateTime from, int amount})> h) =>
+      [for (final e in h) {'from': _date(e.from), 'amount': e.amount.toString()}];
+
+  /// Записи, целиком лежащие до начала переноса, не нужны — кроме той,
+  /// что действовала в его первый день.
+  static List<({DateTime from, int amount})> _pruned(List<({DateTime from, int amount})> h, DateTime since) {
+    final inEffect = h.lastIndexWhere((e) => !e.from.isAfter(since));
+    return inEffect <= 0 ? h : h.sublist(inEffect);
+  }
+
+  /// Меняет сумму лимита с сегодняшнего дня. Включение лимита (был не задан)
+  /// запускает перенос с сегодняшнего дня; выключение — снимает перенос совсем.
+  Future<void> setDailyLimit(int? minor) {
+    if (minor == null) {
+      return send({
         'type': 'updateProfile',
-        'profile': {
-          'dailyLimit': minor?.toString(),
-          if (minor == null) 'dailyLimitSince': null else if (dailyLimit == null) 'dailyLimitSince': _date(today),
-        },
+        'profile': {'dailyLimit': null, 'dailyLimitSince': null, 'dailyLimitHistory': null},
       });
+    }
+    final old = dailyLimit;
+    final since = dailyLimitSince ?? today;
+    var h = [...dailyLimitHistory];
+    // Профили до D71 истории не хранят: все прошлые дни шли по прежней сумме.
+    if (h.isEmpty && old != null) h = [(from: since.isAfter(today) ? today : since, amount: old)];
+    h.removeWhere((e) => e.from == today); // повторная правка в тот же день заменяет прежнюю
+    if (h.isEmpty || h.last.amount != minor) h.add((from: today, amount: minor));
+    return send({
+      'type': 'updateProfile',
+      'profile': {
+        'dailyLimit': minor.toString(),
+        if (old == null) 'dailyLimitSince': _date(today),
+        'dailyLimitHistory': _historyJson(_pruned(h, dailyLimitSince ?? today)),
+      },
+    });
+  }
 
   /// Обнулить перенос: начать копить заново с сегодняшнего дня, сумму
   /// лимита не трогая. Для «слишком большой минус, хочу начать с нуля».
-  Future<void> resetDailyLimitCarry() => send({'type': 'updateProfile', 'profile': {'dailyLimitSince': _date(today)}});
+  Future<void> resetDailyLimitCarry() => _restartCarry();
+
+  Future<void> _restartCarry() {
+    final limit = dailyLimit;
+    return send({
+      'type': 'updateProfile',
+      'profile': {
+        'dailyLimitSince': _date(today),
+        if (limit != null) 'dailyLimitHistory': _historyJson([(from: today, amount: limit)]),
+      },
+    });
+  }
 
   /// Встроенные категории, скрытые из выбора (свои удаляются иначе — см. D41).
   Set<String> get hiddenCategories => {...((profile['hiddenCategories'] as List?) ?? const []).cast<String>()};
@@ -401,9 +459,34 @@ class AppState extends ChangeNotifier {
     if (limit == null) return null;
     if (!dailyLimitCarryOn) return limit - spentToday();
     final since = dailyLimitSince ?? today;
-    final days = today.difference(since.isAfter(today) ? today : since).inDays + 1;
-    return limit * days - spentBetween(since, today);
+    final start = since.isAfter(today) ? today : since;
+    return _granted(start, today, limit) - spentBetween(start, today);
   }
+
+  /// Сколько лимита выдано за дни [from]–[to] включительно по истории сумм.
+  int _granted(DateTime from, DateTime to, int currentLimit) {
+    final h = dailyLimitHistory;
+    if (h.isEmpty) return currentLimit * (_daysBetween(from, to) + 1); // профиль до D71
+    var sum = 0;
+    if (h.first.from.isAfter(from)) {
+      // дни до первой записи истории — по её сумме (действующей раньше нет)
+      final end = h.first.from.isAfter(to) ? to : h.first.from.subtract(const Duration(days: 1));
+      final days = _daysBetween(from, end) + 1;
+      if (days > 0) sum += h.first.amount * days;
+    }
+    for (var i = 0; i < h.length; i++) {
+      final segStart = h[i].from.isAfter(from) ? h[i].from : from;
+      final next = i + 1 < h.length ? DateTime(h[i + 1].from.year, h[i + 1].from.month, h[i + 1].from.day - 1) : to;
+      final segEnd = next.isAfter(to) ? to : next;
+      final days = _daysBetween(segStart, segEnd) + 1;
+      if (days > 0) sum += h[i].amount * days;
+    }
+    return sum;
+  }
+
+  /// Число суток между двумя датами (по календарю, без сдвигов часовых поясов).
+  static int _daysBetween(DateTime a, DateTime b) =>
+      DateTime.utc(b.year, b.month, b.day).difference(DateTime.utc(a.year, a.month, a.day)).inDays;
 
   /// Вклад прошлых дней в сегодняшнее доступное: положительный — прошлые
   /// дни сэкономили и добавили сегодня, отрицательный — прошлый перерасход

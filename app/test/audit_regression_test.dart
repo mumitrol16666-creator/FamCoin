@@ -191,6 +191,61 @@ void main() {
     expect(f.ledger.balance('cash'), kzt(90000), reason: 'сервер применил ту же команду');
   });
 
+  test('D71: смена суммы лимита не пересчитывает прошлые дни по новой ставке', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await s.setDailyLimit(kzt(5000));
+    await s.setDailyLimitCarryOn(true);
+    f.now = f.now.add(const Duration(days: 9)); // десятый день переноса
+    expect(s.dailyLimitAvailable, kzt(5000 * 10));
+
+    await s.setDailyLimit(kzt(8000));
+    expect(s.dailyLimitAvailable, kzt(5000 * 9 + 8000), reason: 'девять прошлых дней остались по 5 000, новая сумма — только с сегодняшнего дня');
+    f.now = f.now.add(const Duration(days: 1));
+    expect(s.dailyLimitAvailable, kzt(5000 * 9 + 8000 * 2));
+
+    // Повторная правка в тот же день заменяет прежнюю, а не добавляет ещё одну.
+    await s.setDailyLimit(kzt(6000));
+    expect(s.dailyLimitAvailable, kzt(5000 * 9 + 8000 + 6000));
+    expect(s.dailyLimitHistory.length, 3);
+
+    // Возврат к прежней сумме не плодит одинаковых записей подряд.
+    await s.setDailyLimit(kzt(6000));
+    expect(s.dailyLimitHistory.length, 3);
+  });
+
+  test('D71: профиль без истории (до D71) считается как раньше, а первая правка сохраняет прошлое', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    final since = s.today.subtract(const Duration(days: 9));
+    f.profile = {'dailyLimit': kzt(5000).toString(), 'dailyLimitSince': '${since.year}-${since.month.toString().padLeft(2, '0')}-${since.day.toString().padLeft(2, '0')}', 'dailyLimitCarry': true};
+    await s.load();
+    expect(s.dailyLimitHistory, isEmpty);
+    expect(s.dailyLimitAvailable, kzt(5000 * 10));
+
+    await s.setDailyLimit(kzt(8000));
+    expect(s.dailyLimitAvailable, kzt(5000 * 9 + 8000), reason: 'до правки все дни шли по 5 000');
+  });
+
+  test('D71: перенос заново и выключение лимита очищают историю', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await s.setDailyLimit(kzt(5000));
+    await s.setDailyLimitCarryOn(true);
+    f.now = f.now.add(const Duration(days: 4));
+    await s.setDailyLimit(kzt(7000));
+    await s.resetDailyLimitCarry();
+    expect(s.dailyLimitHistory.length, 1);
+    expect(s.dailyLimitAvailable, kzt(7000));
+
+    await s.setDailyLimit(null);
+    expect(s.dailyLimitHistory, isEmpty);
+    expect(s.dailyLimitAvailable, isNull);
+  });
+
   test('D70: переключатель переноса — выключен, каждый день с полного лимита', () async {
     final f = FakeServer();
     await f.init();

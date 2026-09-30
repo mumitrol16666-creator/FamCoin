@@ -14,8 +14,12 @@ import 'package:postgres/postgres.dart';
 import 'auth_service.dart';
 
 const entityKinds = {'account', 'member', 'limit', 'goal', 'planned', 'debt', 'category', 'quick'};
-const profileKeys = {'mode', 'onboarded', 'incomeDay', 'budgetMethod', 'hiddenCategories', 'dailyLimit', 'dailyLimitSince', 'dailyLimitCarry', 'firstName', 'lastName', 'birthDate'};
+const profileKeys = {'mode', 'onboarded', 'incomeDay', 'budgetMethod', 'hiddenCategories', 'dailyLimit', 'dailyLimitSince', 'dailyLimitCarry', 'dailyLimitHistory', 'firstName', 'lastName', 'birthDate'};
 const maxEntityBytes = 8 * 1024;
+
+/// Предел размера профиля: он хранится одним JSON, и без предела клиент мог бы
+/// раздуть свою строку в базе (она читается при каждом открытии приложения).
+const maxProfileBytes = 32 * 1024;
 const maxBatch = 200;
 
 /// Ограничения обычного тарифа (D05).
@@ -43,11 +47,19 @@ class LedgerService {
   final Map<String, _Cached> _cache = {};
   static const cacheLimit = 200;
 
+  /// Потолок по общему числу операций в памяти: у одного «тяжёлого» владельца
+  /// их десятки тысяч, и 200 таких журналов заняли бы гигабайты.
+  static const maxCachedTransactions = 300000;
+
   void _remember(String userId, _Cached c) {
     _cache.remove(userId);
     _cache[userId] = c;
-    while (_cache.length > cacheLimit) {
-      _cache.remove(_cache.keys.first);
+    var total = 0;
+    for (final e in _cache.values) {
+      total += e.ledger.transactions.length;
+    }
+    while (_cache.length > 1 && (_cache.length > cacheLimit || total > maxCachedTransactions)) {
+      total -= _cache.remove(_cache.keys.first)!.ledger.transactions.length;
     }
   }
 
@@ -255,6 +267,7 @@ class LedgerService {
           if (!profileKeys.contains(e.key)) throw ApiError(400, 'bad_request');
           ctx.profile[e.key as String] = e.value;
         }
+        if (utf8.encode(jsonEncode(ctx.profile)).length > maxProfileBytes) throw ApiError(400, 'bad_request');
         ctx.profileChanged = true;
       default:
         throw ApiError(400, 'bad_request');
