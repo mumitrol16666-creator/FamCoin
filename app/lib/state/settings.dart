@@ -69,6 +69,14 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Карточка «включить уведомления на телефоне» на главной (D76) показана
+  /// один раз на устройство: после «Позже» или включения больше не появляется.
+  bool get pushPromptDismissed => _prefs.getBool('pushPromptDismissed') ?? false;
+  Future<void> dismissPushPrompt() async {
+    await _prefs.setBool('pushPromptDismissed', true);
+    notifyListeners();
+  }
+
   // ---------------------------------------------------------------- сессия
 
   String? _token;

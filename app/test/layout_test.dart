@@ -14,6 +14,7 @@ import 'package:famcoin/ui/analytics/analytics_screen.dart';
 import 'package:famcoin/ui/budget/sheets.dart';
 import 'package:famcoin/ui/more/more_screen.dart';
 import 'package:famcoin/ui/more/settings_screen.dart';
+import 'package:famcoin/ui/onboarding/onboarding_screen.dart';
 import 'package:famcoin/ui/ops/add_transaction_sheet.dart';
 import 'package:famcoin/ui/shell.dart';
 import 'package:famcoin_core/famcoin_core.dart';
@@ -240,6 +241,46 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Сверьте сентябрь'), findsNothing, reason: 'месяц закрыт — карточка ушла');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('анкета (D76): шаг «Уведомления» с галочками; выбор уходит на сервер после «Начать учёт»', (tester) async {
+    final f = await pumpApp(tester, home: const OnboardingScreen(), size: const Size(390, 844));
+    final s = f.state;
+    Future<void> next() async {
+      await tester.tap(find.widgetWithText(FilledButton, 'Продолжить'));
+      await tester.pumpAndSettle();
+    }
+
+    await tester.enterText(find.byType(TextField).first, 'Тест'); // 1. имя
+    await tester.pump();
+    await next(); // 2. режим
+    await next(); // 3. счёт
+    await tester.enterText(find.byType(TextField).at(1), '100000'); // остаток
+    await tester.pump();
+    for (var i = 0; i < 6; i++) {
+      await next(); // кредиты, платежи, люди, лимиты, цель → уведомления
+    }
+    expect(find.text('Шаг 9 из 10'), findsOneWidget);
+    expect(find.text('Уведомления'), findsWidgets);
+    expect(find.text('Утренняя сводка'), findsOneWidget);
+    expect(find.text('Вечерний отчёт'), findsOneWidget);
+    expect(find.text('Сверка месяца'), findsOneWidget);
+    // В тестах push недоступен (заглушка): кнопки «Включить» нет, есть пояснение.
+    expect(find.text('Включить уведомления'), findsNothing);
+    expect(find.textContaining('push недоступен'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Вечерний отчёт'));
+    await tester.pump();
+    await next(); // 10. сводка
+    expect(find.text('Шаг 10 из 10'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Начать учёт'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(s.onboarded, isTrue);
+    expect(f.notif, {'morning': true, 'evening': false, 'month': true}, reason: 'выбор из анкеты сохранён на сервере');
     await tester.pumpWidget(const SizedBox());
   });
 

@@ -7,6 +7,7 @@ import '../../state/app_state.dart';
 import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../more/categories_screen.dart';
+import 'notification_step.dart';
 import '../widgets/common.dart';
 
 /// S06 — анкета первого запуска. Всё введённое отправляется одной
@@ -54,7 +55,7 @@ class _LimitDraft {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const steps = 9;
+  static const steps = 10;
   int _step = 0;
   bool _busy = false;
 
@@ -76,6 +77,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _people = <_PersonDraft>[];
   final _limits = <_LimitDraft>[];
   final _goalName = TextEditingController();
+  // 9. Уведомления (D76): по умолчанию включено всё, как на сервере.
+  final _notif = {for (final k in notificationKinds) k: true};
   final _goalTarget = TextEditingController();
 
   @override
@@ -151,7 +154,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _finish() async {
     final state = AppScope.of(context).state;
     setState(() => _busy = true);
-    await runAction(context, () => state.sendBatch(_commands(state)));
+    final ok = await runAction(context, () => state.sendBatch(_commands(state)));
+    // Выбор уведомлений — отдельным запросом после анкеты: он не часть
+    // журнала. Если не дошёл, останутся значения по умолчанию (всё включено),
+    // человек поправит в «Ещё → Уведомления» — анкету из-за этого не ронять.
+    if (ok) {
+      try {
+        await state.api.updateNotificationSettings(state.token, Map<String, Object?>.from(_notif));
+      } catch (_) {}
+    }
     if (mounted) setState(() => _busy = false);
   }
 
@@ -174,6 +185,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       5 => (l.ob6Title, l.ob6Hint, l.tipPeople, _peopleStep()),
       6 => (l.ob7Title, l.ob7Hint, l.tipLimits, _limitsStep()),
       7 => (l.obGoalTitle, l.obGoalHint, l.tipGoal, _goalStep()),
+      8 => (l.obNotifTitle, l.obNotifHint, l.tipNotif, NotificationStep(values: _notif, onToggle: (k, v) => setState(() => _notif[k] = v))),
       _ => (l.ob8Title, l.ob8Hint, l.tipSummary, _summaryStep(state)),
     };
 

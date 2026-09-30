@@ -15,7 +15,9 @@ import '../more/settings_screen.dart';
 import '../more/tariff_screen.dart';
 import '../ops/transaction_tile.dart';
 import '../ops/voice_sheet.dart';
+import '../../state/push.dart';
 import '../widgets/common.dart';
+import '../widgets/push_enable.dart';
 import 'quick_actions.dart';
 
 /// S07 — главная: ориентир → счета → обязательства → лимиты с риском →
@@ -87,6 +89,9 @@ class HomeScreen extends StatelessWidget {
                   onSetLimit: () => showLimitSheet(context, state),
                   onExplain: () => _showExplainSheet(context, state),
                 ),
+                // Один раз на устройство: предложить включить push тем, кто
+                // прошёл анкету раньше или отложил это в ней (D76).
+                const _PushPromptCard(),
                 const QuickActionsRow(),
 
                 SectionHeader(l.accounts, action: '${l.all} ›', onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountsScreen()))),
@@ -434,6 +439,63 @@ class _CloseMonthCard extends StatelessWidget {
           ]),
         ),
         const Icon(Icons.chevron_right),
+      ]),
+    );
+  }
+}
+
+/// Предложение включить уведомления на телефоне (D76). Показывается, пока
+/// push на устройстве не включён и человек не сказал «Позже»; исчезает сам.
+class _PushPromptCard extends StatefulWidget {
+  const _PushPromptCard();
+
+  @override
+  State<_PushPromptCard> createState() => _PushPromptCardState();
+}
+
+class _PushPromptCardState extends State<_PushPromptCard> {
+  String? _status;
+
+  @override
+  void initState() {
+    super.initState();
+    pushStatus().then((s) {
+      if (mounted) setState(() => _status = s);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    final status = _status;
+    if (status == null || scope.settings.pushPromptDismissed || (status != 'off' && status != 'needs-install')) {
+      return const SizedBox.shrink();
+    }
+    final l = context.l10n;
+    final fam = context.fam;
+    final install = status == 'needs-install';
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.notifications_active_outlined),
+          const SizedBox(width: 10),
+          Expanded(child: Text(l.pushTitle, style: const TextStyle(fontWeight: FontWeight.w600))),
+        ]),
+        const SizedBox(height: 6),
+        Text(install ? l.pushNeedsInstall : l.pushPromptOff, style: TextStyle(fontSize: 12, color: fam.text2)),
+        const SizedBox(height: 8),
+        Row(children: [
+          TextButton(onPressed: scope.settings.dismissPushPrompt, child: Text(install ? l.gotIt : l.later)),
+          if (!install) ...[
+            const Spacer(),
+            FilledButton.tonal(
+              onPressed: () async {
+                if (await enablePushNotifications(context, scope.state)) await scope.settings.dismissPushPrompt();
+              },
+              child: Text(l.pushEnable),
+            ),
+          ],
+        ]),
       ]),
     );
   }

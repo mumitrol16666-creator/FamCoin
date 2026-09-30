@@ -31,9 +31,17 @@ class FakeServer {
     api: ApiClient(baseUrl: 'http://fake.test', client: MockClient(_handle)),
   );
 
+  /// Настройки уведомлений, как их хранит сервер (D76): что прислала анкета.
+  final notif = <String, dynamic>{};
+
   Future<http.Response> _handle(http.Request req) async {
     if (offline) throw http.ClientException('offline');
     if (req.url.path == '/state') return http.Response(jsonEncode(_snapshot()), 200);
+    if (req.url.path == '/notifications/settings') {
+      if (req.method == 'POST') notif.addAll((jsonDecode(req.body) as Map).cast<String, dynamic>());
+      return http.Response(jsonEncode({'morning': notif['morning'] ?? true, 'evening': notif['evening'] ?? true, 'month': notif['month'] ?? true, 'telegramLinked': false, 'telegramAvailable': false, 'pushDevices': 0}), 200);
+    }
+    if (req.url.path == '/push/key') return http.Response(jsonEncode({'key': 'test-key'}), 200);
     final cmd = jsonDecode(req.body) as Map<String, dynamic>;
     final id = cmd['commandId'] as String;
     if (seen.contains(id)) return http.Response(jsonEncode({'revision': revision, 'repeated': true}), 200);

@@ -6,6 +6,7 @@ import '../../state/app_scope.dart';
 import '../../state/push.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/push_enable.dart';
 
 /// S34 — уведомления: утренняя сводка и вечерний отчёт, доставка в Telegram.
 class NotificationsScreen extends StatefulWidget {
@@ -64,13 +65,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _enablePush() async {
-    final state = AppScope.of(context).state;
-    await runAction(context, () async {
-      // Разрешение нужно запрашивать сразу по нажатию — иначе iOS его не покажет.
-      final key = await state.api.pushKey(state.token);
-      final sub = await pushEnable(key);
-      if (sub != null) await state.api.pushSubscribe(state.token, sub);
-    });
+    await enablePushNotifications(context, AppScope.of(context).state);
     if (mounted) _load();
   }
 
