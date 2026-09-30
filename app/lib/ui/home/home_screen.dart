@@ -185,7 +185,7 @@ class HomeScreen extends StatelessWidget {
       builder: (ctx) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         AmountField(controller: amount, label: l.limitAmountDay, autofocus: true),
         const SizedBox(height: 8),
-        Text(l.dailyLimitNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+        Text(state.dailyLimitCarryOn ? l.dailyLimitNote : l.dailyLimitNoteNoCarry, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
         const SizedBox(height: 12),
         SubmitButton(
           label: l.save,
@@ -195,7 +195,7 @@ class HomeScreen extends StatelessWidget {
             return runAction(ctx, () => state.setDailyLimit(a));
           },
         ),
-        if (state.dailyLimit != null && state.dailyLimitCarry != 0)
+        if (state.dailyLimit != null && state.dailyLimitCarryOn && state.dailyLimitCarry != 0)
           TextButton(
             onPressed: () async {
               final nav = Navigator.of(ctx);

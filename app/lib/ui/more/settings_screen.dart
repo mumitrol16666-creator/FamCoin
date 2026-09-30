@@ -116,6 +116,15 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               AppCard(
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l.carryToggle),
+                  subtitle: Text(l.carryToggleDesc, style: TextStyle(fontSize: 12, color: fam.text2)),
+                  value: state.dailyLimitCarryOn,
+                  onChanged: (v) => runAction(context, () => state.setDailyLimitCarryOn(v)),
+                ),
+              ),
+              AppCard(
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TariffScreen())),
                 child: Row(children: [
                   Expanded(child: Text('${l.tariff}: ${state.pro ? 'Pro' : l.freePlan}')),

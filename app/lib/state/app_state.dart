@@ -84,6 +84,17 @@ class AppState extends ChangeNotifier {
   /// перенос не сбрасывается, если владелец просто поправил число.
   DateTime? get dailyLimitSince => profile['dailyLimitSince'] == null ? null : dateFromJson(profile['dailyLimitSince']);
 
+  /// Переносить ли остаток дневного лимита на следующий день (D70). Пока
+  /// владелец не трогал переключатель — включено, как было с D64.
+  bool get dailyLimitCarryOn => profile['dailyLimitCarry'] != false;
+
+  /// Включение начинает перенос с сегодняшнего дня: старый накопленный
+  /// плюс или минус не «оживает» после выключения и повторного включения.
+  Future<void> setDailyLimitCarryOn(bool on) => send({
+        'type': 'updateProfile',
+        'profile': {'dailyLimitCarry': on, if (on) 'dailyLimitSince': _date(today)},
+      });
+
   /// Меняет сумму лимита. Включение лимита (был не задан) запускает перенос
   /// с сегодняшнего дня; выключение — снимает перенос совсем.
   Future<void> setDailyLimit(int? minor) => send({
@@ -388,6 +399,7 @@ class AppState extends ChangeNotifier {
   int? get dailyLimitAvailable {
     final limit = dailyLimit;
     if (limit == null) return null;
+    if (!dailyLimitCarryOn) return limit - spentToday();
     final since = dailyLimitSince ?? today;
     final days = today.difference(since.isAfter(today) ? today : since).inDays + 1;
     return limit * days - spentBetween(since, today);

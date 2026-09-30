@@ -191,6 +191,28 @@ void main() {
     expect(f.ledger.balance('cash'), kzt(90000), reason: 'сервер применил ту же команду');
   });
 
+  test('D70: переключатель переноса — выключен, каждый день с полного лимита', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    await s.setDailyLimit(kzt(4000));
+    expect(s.dailyLimitCarryOn, isTrue, reason: 'по умолчанию включено, как было с D64');
+    await s.addExpense(amount: kzt(6200), category: 'cafe', account: 'cash', date: s.today);
+    await s.setDailyLimitCarryOn(false);
+    expect(s.dailyLimitAvailable, kzt(4000 - 6200));
+
+    f.now = f.now.add(const Duration(days: 1));
+    expect(s.dailyLimitAvailable, kzt(4000), reason: 'без переноса вчерашний минус 2200 не учитывается');
+    expect(s.dailyLimitCarry, 0);
+
+    // Повторное включение считает перенос с сегодняшнего дня, не с прошлого.
+    await s.setDailyLimitCarryOn(true);
+    expect(s.dailyLimitSince, s.today);
+    expect(s.dailyLimitAvailable, kzt(4000));
+    f.now = f.now.add(const Duration(days: 1));
+    expect(s.dailyLimitAvailable, kzt(8000));
+  });
+
   test('D64: неизрасходованный дневной лимит переносится на следующий день', () async {
     final f = FakeServer();
     await f.init();
