@@ -38,6 +38,8 @@ void main() {
   test('месячное напоминание: уходит один раз тем, кто вёл учёт и не закрыл месяц', () async {
     final db = await _connect();
     if (db == null) {
+      // В CI база обязана быть: молчаливый пропуск выглядел бы как успех.
+      if (Platform.environment['TEST_DB_REQUIRED'] == '1') fail('TEST_DB_REQUIRED=1, а база недоступна');
       markTestSkipped('локальная база не запущена');
       return;
     }

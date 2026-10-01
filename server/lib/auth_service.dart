@@ -11,6 +11,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:postgres/postgres.dart';
 import 'gate.dart';
+import 'telegram.dart';
 
 const maxFailedAttempts = 3;
 const lockMinutes = 15;
@@ -176,20 +177,36 @@ class AuthService {
       final name = rows.first[1] as String?;
       await tx.execute(Sql.named('DELETE FROM telegram_logins WHERE code = @c'), parameters: {'c': code});
 
-      var user = await tx.execute(
-        Sql.named('SELECT id, email, locale, display_name FROM users WHERE telegram_chat_id = @c'),
-        parameters: {'c': chatId},
-      );
+      // Чей это Telegram (D78): сначала аккаунт, созданный через этот же
+      // Telegram (у него нет другого входа — он находится по служебному email,
+      // даже если чат отвязали от уведомлений), затем аккаунт, к которому чат
+      // привязан для уведомлений.
+      Future<Result> find() => tx.execute(
+            Sql.named('''
+              SELECT id, email, locale, display_name FROM users
+              WHERE lower(email) = @email OR telegram_chat_id = @c
+              ORDER BY (lower(email) = @email) DESC LIMIT 1'''),
+            parameters: {'email': telegramEmail(chatId), 'c': chatId},
+          );
+      var user = await find();
       var isNew = false;
       if (user.isEmpty) {
-        isNew = true;
-        user = await tx.execute(
+        // Новый человек может подтвердить два кода разом (телефон и сайт):
+        // ON CONFLICT дожидается соседней транзакции и ничего не вставляет —
+        // аккаунт уже создан ею, берём его. Пароль — случайный и никому не
+        // известный, поэтому дорогой bcrypt здесь не нужен (стоимость 4):
+        // пачка первых входов не должна занимать процессор базы.
+        final created = await tx.execute(
           Sql.named('''
             INSERT INTO users (email, password_hash, locale, telegram_chat_id, display_name)
-            VALUES (@email, crypt(@pw, gen_salt('bf', 12)), @locale, @c, @n)
+            VALUES (@email, crypt(@pw, gen_salt('bf', 4)), @locale, @c, @n)
+            ON CONFLICT DO NOTHING
             RETURNING id, email, locale, display_name'''),
-          parameters: {'email': 'tg$chatId@telegram.local', 'pw': _newToken(), 'locale': locale, 'c': chatId, 'n': name},
+          parameters: {'email': telegramEmail(chatId), 'pw': _newToken(), 'locale': locale, 'c': chatId, 'n': name},
         );
+        isNew = created.isNotEmpty;
+        user = isNew ? created : await find();
+        if (user.isEmpty) throw ApiError(409, 'telegram_conflict');
       } else if (name != null && user.first[3] == null) {
         await tx.execute(Sql.named('UPDATE users SET display_name = @n WHERE id = @id'), parameters: {'n': name, 'id': user.first[0].toString()});
       }

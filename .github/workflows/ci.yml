@@ -42,6 +42,11 @@ jobs:
           done
           docker compose logs api
           exit 1
+      - uses: dart-lang/setup-dart@v1
+      - name: Тесты сервера на настоящей базе (вход через Telegram, напоминания)
+        env:
+          TEST_DB_REQUIRED: '1'
+        run: cd server && dart pub get && dart test test/telegram_login_db_test.dart test/month_nudge_db_test.dart
       - name: Параллельные запросы и повторы
         run: python3 deploy/concurrency_check.py
       - name: Нагрузка (100 пользователей, шторм входов)

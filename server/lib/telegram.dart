@@ -16,6 +16,13 @@ typedef PreCheckoutHandler = Future<String?> Function(Map<String, dynamic> query
 /// Успешная оплата: сообщение с полем `successful_payment`.
 typedef PaymentHandler = Future<void> Function(int chatId, Map<String, dynamic> from, Map<String, dynamic> payment);
 
+/// Служебный email аккаунта, созданного через Telegram. По нему аккаунт
+/// узнаётся, даже если чат отвязали от уведомлений.
+String telegramEmail(int chatId) => 'tg$chatId@telegram.local';
+
+/// Чем закончилась привязка чата к аккаунту для уведомлений.
+enum LinkOutcome { linked, notFound, loginChat }
+
 class Telegram {
   Telegram(this.db, {required this.token});
 
@@ -161,11 +168,8 @@ class Telegram {
     if (login != null) {
       final from = msg['from'] as Map<String, dynamic>? ?? const {};
       final name = [from['first_name'], from['last_name']].whereType<String>().join(' ').trim();
-      final rows = await db.execute(
-        Sql.named('UPDATE telegram_logins SET chat_id = @c, name = @n WHERE code = @code AND chat_id IS NULL AND expires_at > now() RETURNING code'),
-        parameters: {'c': chatId, 'n': name.isEmpty ? null : name, 'code': login[1]},
-      );
-      await send(chatId, rows.isEmpty ? 'Код устарел. Нажмите кнопку в приложении ещё раз.' : 'Готово — вернитесь в FamCoin, вход выполнится сам.');
+      final ok = await confirmLogin(login[1]!, chatId, name.isEmpty ? null : name);
+      await send(chatId, ok ? 'Готово — вернитесь в FamCoin, вход выполнится сам.' : 'Код устарел. Нажмите кнопку в приложении ещё раз.');
       return;
     }
     final m = RegExp(r'^/start\s+([A-Za-z0-9]{6,12})$').firstMatch(text);
@@ -182,17 +186,48 @@ class Telegram {
       );
       return;
     }
-    final rows = await db.execute(
-      Sql.named('DELETE FROM telegram_links WHERE code = @code AND expires_at > now() RETURNING user_id'),
-      parameters: {'code': m[1]},
+    await send(
+      chatId,
+      switch (await linkChat(m[1]!, chatId)) {
+        LinkOutcome.linked => 'Готово: аккаунт привязан. Утром — сводка на день, вечером — отчёт о тратах.',
+        LinkOutcome.notFound => 'Код не найден или устарел. Получите новый в приложении.',
+        LinkOutcome.loginChat =>
+          'Этот Telegram уже служит входом в другой аккаунт FamCoin (он создан через Telegram). Привязать его к ещё одному аккаунту нельзя — иначе вход в тот аккаунт был бы потерян.',
+      },
     );
-    if (rows.isEmpty) {
-      await send(chatId, 'Код не найден или устарел. Получите новый в приложении.');
-      return;
-    }
-    final userId = rows.first[0].toString();
-    await db.execute(Sql.named('UPDATE users SET telegram_chat_id = NULL WHERE telegram_chat_id = @c'), parameters: {'c': chatId});
-    await db.execute(Sql.named('UPDATE users SET telegram_chat_id = @c WHERE id = @u'), parameters: {'c': chatId, 'u': userId});
-    await send(chatId, 'Готово: аккаунт привязан. Утром — сводка на день, вечером — отчёт о тратах.');
   }
+
+  /// «/start login_<код>»: код входа достаётся первому чату, который его
+  /// прислал; второй чат тот же код забрать не может.
+  Future<bool> confirmLogin(String code, int chatId, String? name) async {
+    final rows = await db.execute(
+      Sql.named('UPDATE telegram_logins SET chat_id = @c, name = @n WHERE code = @code AND chat_id IS NULL AND expires_at > now() RETURNING code'),
+      parameters: {'c': chatId, 'n': name, 'code': code},
+    );
+    return rows.isNotEmpty;
+  }
+
+  /// «/start <код>» из «Настройки → Telegram»: чат привязывается к аккаунту
+  /// для уведомлений — одной транзакцией, у прежнего владельца чат снимается.
+  ///
+  /// Чат, который служит входом в аккаунт, созданный через Telegram, к
+  /// другому аккаунту не привязывается (D78): у такого аккаунта нет своего
+  /// пароля, и перенос чата оставил бы человека без входа в него.
+  Future<LinkOutcome> linkChat(String code, int chatId) => db.runTx((tx) async {
+        final link = await tx.execute(
+          Sql.named('SELECT user_id FROM telegram_links WHERE code = @code AND expires_at > now() FOR UPDATE'),
+          parameters: {'code': code},
+        );
+        if (link.isEmpty) return LinkOutcome.notFound;
+        final userId = link.first[0].toString();
+        final login = await tx.execute(
+          Sql.named('SELECT 1 FROM users WHERE lower(email) = @e AND id <> @u'),
+          parameters: {'e': telegramEmail(chatId), 'u': userId},
+        );
+        if (login.isNotEmpty) return LinkOutcome.loginChat;
+        await tx.execute(Sql.named('DELETE FROM telegram_links WHERE code = @code'), parameters: {'code': code});
+        await tx.execute(Sql.named('UPDATE users SET telegram_chat_id = NULL WHERE telegram_chat_id = @c AND id <> @u'), parameters: {'c': chatId, 'u': userId});
+        await tx.execute(Sql.named('UPDATE users SET telegram_chat_id = @c WHERE id = @u'), parameters: {'c': chatId, 'u': userId});
+        return LinkOutcome.linked;
+      });
 }
