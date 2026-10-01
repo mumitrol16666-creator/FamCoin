@@ -9,6 +9,7 @@ import '../home/home_screen.dart';
 import '../widgets/common.dart';
 import 'calendar_screen.dart';
 import 'debt_screens.dart';
+import 'limits_section.dart';
 import 'sheets.dart';
 
 /// S12 — бюджет периода: итоги месяца, лимиты, обязательные платежи,
@@ -52,10 +53,7 @@ class BudgetScreen extends StatelessWidget {
                 ]),
               ),
 
-              SectionHeader(l.limits, action: l.add, onAction: () => addLimitFlow(context)),
-              if (state.limits.isEmpty) EmptyHint(l.noLimits, icon: Icons.speed_outlined),
-              for (final def in state.limits) _LimitCard(def: def, status: state.limitStatusFor(def)),
-              if (!state.pro) Text('${l.limitFreeNote}: ${state.limits.length} / 2', style: TextStyle(fontSize: 12, color: fam.text2)),
+              const LimitsSection(),
 
               SectionHeader(l.planned, action: l.calendar, onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen()))),
               if (state.planned.isEmpty)
@@ -154,56 +152,6 @@ class BudgetScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(children: [Expanded(child: Text(label, style: TextStyle(color: context.fam.text2))), MoneyText(value, color: color, sign: sign)]),
       );
-}
-
-class _LimitCard extends StatelessWidget {
-  const _LimitCard({required this.def, required this.status});
-  final LimitInfo def;
-  final LimitStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = context.l10n;
-    final fam = context.fam;
-    final state = AppScope.of(context).state;
-    final st = status;
-    return AppCard(
-      onTap: () => addLimitFlow(context, initial: def),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          CategoryAvatar(categoryById(def.category).icon, size: 36),
-          const SizedBox(width: 10),
-          Expanded(child: Text(categoryName(l, def.category))),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: st.exceeded ? fam.expenseBg : st.warn80 ? fam.warnBg : fam.incomeBg, borderRadius: BorderRadius.circular(999)),
-            child: Text('${st.usedPercent?.round() ?? '—'}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: st.exceeded ? fam.expense : st.warn80 ? fam.warn : fam.income)),
-          ),
-          PopupMenuButton<String>(
-            onSelected: (_) async {
-              if (await confirm(context, title: l.deleteLimit, action: l.delete) && context.mounted) {
-                await runAction(context, () => state.delete('limit', def.id));
-              }
-            },
-            itemBuilder: (_) => [PopupMenuItem(value: 'delete', child: Text(l.delete))],
-          ),
-        ]),
-        const SizedBox(height: 8),
-        UsageBar(value: st.spent, max: st.limit),
-        const SizedBox(height: 6),
-        Row(children: [
-          MoneyText(st.spent, style: const TextStyle(fontSize: 13)),
-          Expanded(child: Text(' ${l.ofLimit} ${formatMoney(st.limit)}', style: TextStyle(fontSize: 13, color: fam.text2), overflow: TextOverflow.ellipsis)),
-        ]),
-        if (st.remainingPerDay != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text('${l.left}: ${formatMoney(st.remaining)} · ≈ ${formatMoney(st.remainingPerDay!)} ${l.perDay}', style: TextStyle(fontSize: 12, color: fam.text2)),
-          ),
-        if (st.forecastExceeds) Padding(padding: const EdgeInsets.only(top: 4), child: Text('⚠ ${l.warnForecast}', style: TextStyle(fontSize: 12, color: fam.warn))),
-      ]),
-    );
-  }
 }
 
 class _GoalCard extends StatelessWidget {

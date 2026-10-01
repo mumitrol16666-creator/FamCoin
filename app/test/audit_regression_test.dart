@@ -14,6 +14,7 @@ import 'package:http/testing.dart';
 
 class FakeServer {
   DateTime now = DateTime(2026, 9, 28);
+  String billingPlan = 'free';
   bool offline = false;
 
   /// Следующая команда применяется на сервере, но ответ до клиента не доходит.
@@ -83,7 +84,7 @@ class FakeServer {
 
   Map<String, Object?> _snapshot() => {
         'revision': revision,
-        'plan': 'free',
+        'plan': billingPlan,
         'email': 'audit@example.test',
         'profile': profile,
         'accounts': [for (final a in ledger.accounts) accountToJson(a)],

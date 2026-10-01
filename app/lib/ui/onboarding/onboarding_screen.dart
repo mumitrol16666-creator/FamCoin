@@ -661,13 +661,23 @@ class LimitResult {
   final int amount;
 }
 
-Future<LimitResult?> showLimitSheet(BuildContext context, {Set<String> exclude = const {}, LimitInfo? initial}) {
+Future<LimitResult?> showLimitSheet(BuildContext context, {Set<String> exclude = const {}, LimitInfo? initial}) async {
   final l = context.l10n;
   final state = AppScope.of(context).state;
   // Видимые встроенные плюс уже созданные свои категории (D41) — лимит
   // можно поставить и на свою категорию, не только на встроенную.
   final options = state.visibleExpenseCategories.where((c) => !exclude.contains(c.id) || c.id == initial?.category).toList();
-  var category = initial?.category ?? options.first.id;
+  String category;
+  if (initial != null) {
+    category = initial.category;
+  } else if (options.isNotEmpty) {
+    category = options.first.id;
+  } else {
+    // Если все категории уже имеют лимит, можно создать новую прямо здесь.
+    final id = await showCategorySheet(context);
+    if (id == null || !context.mounted) return null;
+    category = id;
+  }
   final amount = TextEditingController(text: initial == null ? '' : amountToField(initial.amount));
   return showFormSheet<LimitResult>(
     context,

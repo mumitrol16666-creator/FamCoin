@@ -644,8 +644,10 @@ Future<void> showProGate(BuildContext context, String message) {
   final l = context.l10n;
   return showModalBottomSheet(
     context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
     showDragHandle: true,
-    builder: (ctx) => Padding(
+    builder: (ctx) => SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
       child: Column(
         mainAxisSize: MainAxisSize.min,

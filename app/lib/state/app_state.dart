@@ -634,8 +634,17 @@ class AppState extends ChangeNotifier {
   int spentInCategory(String category) =>
       ledger.expenseByCategory(monthStart, monthEnd)[expenseAccount(category)] ?? 0;
 
-  LimitStatus limitStatusFor(LimitInfo def) => limitStatus(
-        spent: spentInCategory(def.category),
+  /// Список лимитов считает расходы одним проходом по журналу, даже если
+  /// категорий десятки. Подробности одного лимита используют тот же расчёт.
+  List<({LimitInfo def, LimitStatus status})> get currentLimitStatuses {
+    final spent = ledger.expenseByCategory(monthStart, monthEnd);
+    return [for (final def in limits) (def: def, status: _limitStatus(def, spent[expenseAccount(def.category)] ?? 0))];
+  }
+
+  LimitStatus limitStatusFor(LimitInfo def) => _limitStatus(def, spentInCategory(def.category));
+
+  LimitStatus _limitStatus(LimitInfo def, int spent) => limitStatus(
+        spent: spent,
         limit: def.amount,
         elapsedFullDays: today.day - 1,
         periodDays: daysInMonth,

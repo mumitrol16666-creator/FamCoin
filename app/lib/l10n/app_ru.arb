@@ -34,6 +34,76 @@
   "upcoming": "Ближайшие платежи",
   "allPayments": "Все платежи",
   "limits": "Лимиты",
+  "limitsScope": "По категориям с лимитом",
+  "limitsTotal": "Сумма лимитов",
+  "limitsRemaining": "Остаток по лимитам",
+  "limitSpent": "Потрачено",
+  "limitRemaining": "Осталось",
+  "limitOver": "Сверх лимита",
+  "limitUsed": "Использовано {percent}%",
+  "@limitUsed": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "limitNoPercentage": "Процент не рассчитывается при нулевом лимите.",
+  "limitDaily": "На день при равномерном распределении",
+  "limitDailyBasis": "Остаток ÷ {days} дн. до конца месяца, включая сегодня. Округлено вниз до целого тенге. Это распределение лимита, а не прогноз расходов.",
+  "@limitDailyBasis": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "limitEditAction": "Изменить лимит",
+  "limitOperations": "Операции категории",
+  "limitDetailsHint": "Открыть подробности лимита",
+  "allLimitsCount": "Все лимиты · {count}",
+  "limitsExceededCount": "Превышены: {count}",
+  "limitsPreview": "Показаны первые {shown} из {total}",
+  "limitsSearch": "Найти категорию",
+  "limitsClearSearch": "Очистить поиск",
+  "limitsFilterNear": "80–100%",
+  "limitsFilterExceeded": "Превышены",
+  "limitsFilterUnused": "Без расходов",
+  "limitsResults": "Найдено: {shown} из {total}",
+  "@allLimitsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@limitsExceededCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@limitsPreview": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "@limitsResults": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "limitsRisk": "Лимиты с риском",
   "monthReport": "Отчёт за месяц",
   "openReport": "Открыть отчёт",

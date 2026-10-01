@@ -34,6 +34,76 @@
   "upcoming": "Жақын төлемдер",
   "allPayments": "Барлық төлемдер",
   "limits": "Лимиттер",
+  "limitsScope": "Лимиті бар санаттар бойынша",
+  "limitsTotal": "Лимиттер сомасы",
+  "limitsRemaining": "Лимиттер бойынша қалдық",
+  "limitSpent": "Жұмсалды",
+  "limitRemaining": "Қалды",
+  "limitOver": "Лимиттен асқан",
+  "limitUsed": "{percent}% пайдаланылды",
+  "@limitUsed": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "limitNoPercentage": "Лимит нөлге тең болса, пайыз есептелмейді.",
+  "limitDaily": "Біркелкі бөлгендегі күндік сома",
+  "limitDailyBasis": "Қалдық ÷ ай соңына дейінгі {days} күн, бүгінді қоса. Бүтін теңгеге дейін төмен дөңгелектелген. Бұл — лимитті бөлу, шығыс болжамы емес.",
+  "@limitDailyBasis": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "limitEditAction": "Лимитті өзгерту",
+  "limitOperations": "Санат операциялары",
+  "limitDetailsHint": "Лимит мәліметтерін ашу",
+  "allLimitsCount": "Барлық лимиттер · {count}",
+  "limitsExceededCount": "Лимиттен асқан: {count}",
+  "limitsPreview": "{total} лимиттің алғашқы {shown} көрсетілді",
+  "limitsSearch": "Санатты табу",
+  "limitsClearSearch": "Іздеуді тазарту",
+  "limitsFilterNear": "80–100%",
+  "limitsFilterExceeded": "Лимиттен асқан",
+  "limitsFilterUnused": "Шығыс жоқ",
+  "limitsResults": "Табылды: {shown} / {total}",
+  "@allLimitsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@limitsExceededCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@limitsPreview": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "@limitsResults": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "limitsRisk": "Қауіпті лимиттер",
   "monthReport": "Ай есебі",
   "openReport": "Есепті ашу",
