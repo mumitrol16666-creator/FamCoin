@@ -567,7 +567,7 @@
   "tgSignIn": "Telegram арқылы кіру",
   "tgPrimaryHint": "Аккаунт бірінші кіргенде өзі құрылады. Пошта мен құпиясөз қажет емес.",
   "emailLoginToggle": "Email арқылы кіру немесе тіркелу",
-  "tgWaiting": "Telegram-ды ашып, FamCoin ботында «Start» басыңыз. Кіру өзі орындалады.",
+  "tgWaiting": "FamCoin ботында «Start» басып, осында оралыңыз — кіру өзі орындалады.",
   "tgOpenAgain": "Telegram-ды ашу",
   "tgUnavailable": "Telegram арқылы кіру серверде әлі қосылмаған.",
   "tgExpired": "Код ескірді — түймені қайта басыңыз.",

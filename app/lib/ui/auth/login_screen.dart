@@ -21,7 +21,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  late final _email = TextEditingController(text: AppScope.of(context).settings.email ?? '');
+  final _email = TextEditingController();
+  bool _emailPrefilled = false;
   final _password = TextEditingController();
   final _repeat = TextEditingController();
   Timer? _timer;
@@ -39,6 +40,24 @@ class _LoginScreenState extends State<LoginScreen> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && AppScope.of(context).settings.lockUntil != null) setState(() {});
     });
+    // Вход через Telegram начат, но приложение было выгружено, пока человек
+    // нажимал Start в боте (D77): продолжаем с тем же кодом.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) telegramSignIn(context, resume: true);
+    });
+  }
+
+  /// Последний email подставляется здесь, а не лениво при первом обращении:
+  /// ленивое поле впервые создавалось бы в dispose() (если форму email не
+  /// открывали — например, при входе через Telegram) и обращалось к контексту
+  /// уже уничтожаемого экрана.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_emailPrefilled) {
+      _emailPrefilled = true;
+      _email.text = AppScope.of(context).settings.email ?? '';
+    }
   }
 
   @override

@@ -77,6 +77,31 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Код входа через Telegram, который ждёт подтверждения в боте (D77).
+  /// Хранится на устройстве: пока человек в Telegram, Android может усыпить
+  /// или выгрузить приложение, и ожидание в памяти теряется. `null` — кода
+  /// нет или он уже устарел.
+  ({String code, String url})? get pendingTelegramLogin {
+    final code = _prefs.getString('tgLoginCode');
+    final url = _prefs.getString('tgLoginUrl');
+    final until = _prefs.getInt('tgLoginUntil') ?? 0;
+    if (code == null || url == null || DateTime.now().millisecondsSinceEpoch > until) return null;
+    return (code: code, url: url);
+  }
+
+  Future<void> setPendingTelegramLogin(String code, String url) async {
+    await _prefs.setString('tgLoginCode', code);
+    await _prefs.setString('tgLoginUrl', url);
+    // На сервере код живёт 10 минут; с запасом на расхождение часов — 9.
+    await _prefs.setInt('tgLoginUntil', DateTime.now().add(const Duration(minutes: 9)).millisecondsSinceEpoch);
+  }
+
+  Future<void> clearPendingTelegramLogin() async {
+    await _prefs.remove('tgLoginCode');
+    await _prefs.remove('tgLoginUrl');
+    await _prefs.remove('tgLoginUntil');
+  }
+
   // ---------------------------------------------------------------- сессия
 
   String? _token;

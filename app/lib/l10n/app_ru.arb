@@ -567,7 +567,7 @@
   "tgSignIn": "Войти через Telegram",
   "tgPrimaryHint": "Аккаунт создаётся сам при первом входе. Почта и пароль не нужны.",
   "emailLoginToggle": "Вход или регистрация по email",
-  "tgWaiting": "Откройте Telegram и нажмите «Start» в боте FamCoin. Вход произойдёт сам.",
+  "tgWaiting": "Нажмите «Start» в боте FamCoin и вернитесь сюда — вход произойдёт сам.",
   "tgOpenAgain": "Открыть Telegram",
   "tgUnavailable": "Вход через Telegram пока не подключён на сервере.",
   "tgExpired": "Код устарел — нажмите кнопку ещё раз.",

@@ -11,6 +11,7 @@ import 'package:famcoin/state/secret_store.dart';
 import 'package:famcoin/state/settings.dart';
 import 'package:famcoin/theme/app_theme.dart';
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
+import 'package:famcoin/ui/auth/login_screen.dart';
 import 'package:famcoin/ui/budget/sheets.dart';
 import 'package:famcoin/ui/more/more_screen.dart';
 import 'package:famcoin/ui/more/settings_screen.dart';
@@ -24,12 +25,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'audit_regression_test.dart' show FakeServer;
 
-Future<FakeServer> pumpApp(WidgetTester tester, {required Widget home, required Size size, double textScale = 1}) async {
+Future<FakeServer> pumpApp(WidgetTester tester, {required Widget home, required Size size, double textScale = 1, Map<String, Object> prefs = const {}}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues(prefs);
   final f = FakeServer();
   await f.init();
   await f.state.upsert('account', 'cash', {'name': 'Kaspi Gold', 'type': 'card'});
@@ -281,6 +282,70 @@ void main() {
 
     expect(s.onboarded, isTrue);
     expect(f.notif, {'morning': true, 'evening': false, 'month': true}, reason: 'выбор из анкеты сохранён на сервере');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('вход через Telegram (D77): после возврата в приложение проверка идёт сразу, код запомнен на устройстве', (tester) async {
+    final f = await pumpApp(tester, home: const LoginScreen(), size: const Size(390, 844));
+    final settings = AppScope.of(tester.element(find.byType(LoginScreen))).settings;
+    expect(settings.signedIn, isFalse);
+
+    await tester.tap(find.text('Войти через Telegram'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('Start'), findsOneWidget, reason: 'окно ожидания показано ещё до ухода в Telegram');
+    expect(settings.pendingTelegramLogin?.code, 'logincode1234', reason: 'код переживёт перезапуск приложения');
+
+    // Человек в Telegram: приложение в фоне, бот подтвердил код, человек вернулся.
+    final before = f.tgChecks;
+    for (final st in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
+      tester.binding.handleAppLifecycleStateChanged(st);
+    }
+    f.tgConfirmed = true;
+    for (final st in [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+      tester.binding.handleAppLifecycleStateChanged(st);
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(f.tgChecks, before + 1, reason: 'проверка сразу при возврате, без ожидания таймера');
+    expect(settings.signedIn, isTrue);
+    expect(settings.pendingTelegramLogin, isNull);
+    expect(find.textContaining('Start'), findsNothing, reason: 'окно ожидания закрылось');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('вход через Telegram (D77): приложение выгрузили, пока человек был в Telegram — при запуске вход продолжается сам', (tester) async {
+    final until = DateTime.now().add(const Duration(minutes: 5)).millisecondsSinceEpoch;
+    final f = await pumpApp(
+      tester,
+      home: const LoginScreen(),
+      size: const Size(390, 844),
+      prefs: {'tgLoginCode': 'logincode1234', 'tgLoginUrl': 'https://t.me/famcoin_test_bot?start=login_logincode1234', 'tgLoginUntil': until},
+    );
+    final settings = AppScope.of(tester.element(find.byType(LoginScreen))).settings;
+    expect(find.textContaining('Start'), findsOneWidget, reason: 'экран входа сам открыл окно ожидания по сохранённому коду');
+    expect(f.tgChecks, greaterThan(0), reason: 'и сразу проверил код');
+    expect(settings.signedIn, isFalse);
+
+    f.tgConfirmed = true;
+    await tester.pump(const Duration(seconds: 2)); // следующий опрос
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(settings.signedIn, isTrue);
+    expect(settings.pendingTelegramLogin, isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('вход через Telegram (D77): устаревший сохранённый код не поднимает окно', (tester) async {
+    final past = DateTime.now().subtract(const Duration(minutes: 1)).millisecondsSinceEpoch;
+    final f = await pumpApp(
+      tester,
+      home: const LoginScreen(),
+      size: const Size(390, 844),
+      prefs: {'tgLoginCode': 'old', 'tgLoginUrl': 'https://t.me/x', 'tgLoginUntil': past},
+    );
+    expect(find.textContaining('Start'), findsNothing);
+    expect(f.tgChecks, 0);
     await tester.pumpWidget(const SizedBox());
   });
 

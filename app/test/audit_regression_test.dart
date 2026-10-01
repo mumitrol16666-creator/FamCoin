@@ -35,6 +35,10 @@ class FakeServer {
   /// Настройки уведомлений, как их хранит сервер (D76): что прислала анкета.
   final notif = <String, dynamic>{};
 
+  /// Вход через Telegram (D77): бот «подтвердил» код, когда флаг поднят.
+  bool tgConfirmed = false;
+  int tgChecks = 0;
+
   Future<http.Response> _handle(http.Request req) async {
     if (offline) throw http.ClientException('offline');
     if (req.url.path == '/state') return http.Response(jsonEncode(_snapshot()), 200);
@@ -43,6 +47,14 @@ class FakeServer {
       return http.Response(jsonEncode({'morning': notif['morning'] ?? true, 'evening': notif['evening'] ?? true, 'month': notif['month'] ?? true, 'telegramLinked': false, 'telegramAvailable': false, 'pushDevices': 0}), 200);
     }
     if (req.url.path == '/push/key') return http.Response(jsonEncode({'key': 'test-key'}), 200);
+    if (req.url.path == '/auth/telegram/start') {
+      return http.Response(jsonEncode({'code': 'logincode1234', 'url': 'https://t.me/famcoin_test_bot?start=login_logincode1234'}), 200);
+    }
+    if (req.url.path == '/auth/telegram/check') {
+      tgChecks++;
+      final ok = {'status': 'ok', 'token': 'session-token', 'user': {'id': 'u1', 'email': 'tg1@telegram.local', 'locale': 'ru', 'name': 'Test'}};
+      return http.Response(jsonEncode(tgConfirmed ? ok : {'status': 'pending'}), 200);
+    }
     final cmd = jsonDecode(req.body) as Map<String, dynamic>;
     final id = cmd['commandId'] as String;
     if (seen.contains(id)) return http.Response(jsonEncode({'revision': revision, 'repeated': true}), 200);
