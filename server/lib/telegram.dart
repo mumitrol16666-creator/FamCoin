@@ -100,6 +100,31 @@ class Telegram {
       })) !=
       null;
 
+  /// Скачивает файл из сообщения (голосовое); `null` — не вышло или файл
+  /// больше [maxBytes].
+  Future<List<int>?> download(String fileId, {int maxBytes = 1024 * 1024}) async {
+    final info = await call('getFile', {'file_id': fileId});
+    final path = (info?['result'] as Map?)?['file_path'] as String?;
+    if (path == null) return null;
+    try {
+      final req = await _client.getUrl(Uri.parse('https://api.telegram.org/file/bot$token/$path'));
+      final res = await req.close().timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200 || res.contentLength > maxBytes) {
+        await res.drain<void>();
+        return null;
+      }
+      final bytes = <int>[];
+      await for (final chunk in res.timeout(const Duration(seconds: 20))) {
+        bytes.addAll(chunk);
+        if (bytes.length > maxBytes) return null;
+      }
+      return bytes;
+    } catch (e) {
+      stderr.writeln('telegram download: ${e.runtimeType}');
+      return null;
+    }
+  }
+
   /// Ответ на нажатие кнопки: без него Telegram крутит на кнопке «часики».
   Future<bool> answerCallback(String queryId, {String? text}) async =>
       (await call('answerCallbackQuery', {'callback_query_id': queryId, if (text != null) 'text': text})) != null;

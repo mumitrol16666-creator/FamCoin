@@ -10,6 +10,7 @@ import 'package:famcoin_core/famcoin_core.dart';
 import 'package:famcoin_server/auth_service.dart';
 import 'package:famcoin_server/chat_entry.dart';
 import 'package:famcoin_server/ledger_service.dart';
+import 'package:famcoin_server/speech.dart';
 import 'package:famcoin_server/telegram.dart';
 import 'package:postgres/postgres.dart';
 import 'package:test/test.dart';
@@ -26,6 +27,9 @@ class _FakeTelegram extends Telegram {
     return {'ok': true};
   }
 
+  @override
+  Future<List<int>?> download(String fileId, {int maxBytes = 1024 * 1024}) async => [1, 2, 3];
+
   Map<String, Object?> last(String method) => calls.lastWhere((c) => c.$1 == method).$2;
 
   /// `callback_data` кнопки с подписью, содержащей [label], в последнем сообщении.
@@ -33,6 +37,20 @@ class _FakeTelegram extends Telegram {
     final sent = calls.lastWhere((c) => (c.$1 == 'sendMessage' || c.$1 == 'editMessageText') && c.$2['reply_markup'] != null).$2;
     final rows = (sent['reply_markup'] as Map)['inline_keyboard'] as List;
     return rows.expand((r) => r as List).cast<Map>().firstWhere((b) => '${b['text']}'.contains(label))['callback_data'] as String;
+  }
+}
+
+/// «Распознаёт» заранее заданную фразу и считает обращения.
+class _FakeSpeech extends Speech {
+  _FakeSpeech() : super(apiKey: 'test');
+
+  String heard = '';
+  int requests = 0;
+
+  @override
+  Future<Transcript?> transcribe(List<int> audio) async {
+    requests++;
+    return heard.isEmpty ? null : Transcript(heard, tokensIn: 60, tokensOut: 9);
   }
 }
 
@@ -63,6 +81,7 @@ void main() {
   late LedgerService ledger;
   late _FakeTelegram bot;
   late ChatEntry chat;
+  final speech = _FakeSpeech();
   final base = 9300000000 + (DateTime.now().microsecondsSinceEpoch % 1000000) * 1000;
   var n = 0;
 
@@ -72,7 +91,7 @@ void main() {
     auth = AuthService(pool!);
     ledger = LedgerService(pool!);
     bot = _FakeTelegram(pool!);
-    chat = ChatEntry(pool!, ledger, bot)..attach();
+    chat = ChatEntry(pool!, ledger, bot, speech: speech)..attach();
   });
 
   tearDownAll(() async {
@@ -187,6 +206,59 @@ void main() {
     expect(await chat.onMessage(chatId, {'text': 'кофе 1500'}), isFalse, reason: 'непривязанный чат — обычная подсказка бота');
   });
 
+  /// Голосовое обрабатывается в фоне — ждём ответа бота.
+  Future<void> voice(int chatId, String id, {int duration = 3}) async {
+    final before = bot.calls.where((c) => c.$1 == 'sendMessage').length;
+    expect(await chat.onMessage(chatId, {'voice': {'file_id': id, 'file_unique_id': id, 'duration': duration}}), isTrue);
+    for (var i = 0; i < 100 && bot.calls.where((c) => c.$1 == 'sendMessage').length == before; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+  }
+
+  test('голосовое: распознанная фраза → черновик → запись; обращение учтено один раз', () async {
+    if (skip()) return;
+    final (chatId, userId) = await owner();
+    speech.heard = 'Кофе 1500.';
+    await voice(chatId, 'v1-$chatId');
+    expect(bot.last('sendMessage')['text'], allOf(contains('🎤'), contains('Кофе 1500.'), contains('Расход · 1 500 ₸'), contains('Кафе')));
+    await press(chatId, bot.button('Категория'));
+    await press(chatId, bot.button('Назад'));
+    expect(bot.last('editMessageText')['text'], contains('🎤'), reason: 'услышанное остаётся в черновике');
+    await press(chatId, bot.button('Записать'));
+    expect(await liquid(userId), kzt(98500));
+    await voice(chatId, 'v1-$chatId');
+    final rows = await pool!.execute(Sql.named("SELECT count(*), sum(tokens_in) FROM ai_usage WHERE user_id = @u AND feature = 'voice'"), parameters: {'u': userId});
+    expect(rows.first[0], 1);
+    expect(rows.first[1], 60);
+  });
+
+  test('голосовое: длинное не распознаётся, нераспознанное и лимит — понятный ответ', () async {
+    if (skip()) return;
+    final (chatId, userId) = await owner();
+    final before = speech.requests;
+    await voice(chatId, 'long-$chatId', duration: maxVoiceSeconds + 1);
+    expect(bot.last('sendMessage')['text'], contains('Слишком длинное'));
+    expect(speech.requests, before);
+
+    speech.heard = '';
+    await voice(chatId, 'mute-$chatId');
+    expect(bot.last('sendMessage')['text'], contains('Не смог разобрать'));
+
+    speech.heard = 'привет как дела';
+    await voice(chatId, 'hello-$chatId');
+    expect(bot.last('sendMessage')['text'], allOf(contains('привет как дела'), contains('Не нашёл сумму')));
+
+    await pool!.execute(
+      Sql.named("INSERT INTO ai_usage (user_id, feature, model, request_id) SELECT @u, 'voice', 'test', 'fill-' || g FROM generate_series(1, $maxVoicePerDay) g"),
+      parameters: {'u': userId},
+    );
+    final spent = speech.requests;
+    speech.heard = 'кофе 1500';
+    await voice(chatId, 'over-$chatId');
+    expect(bot.last('sendMessage')['text'], contains('лимит голосовых'));
+    expect(speech.requests, spent);
+  });
+
   test('команды и непонятные сообщения', () async {
     if (skip()) return;
     final (chatId, _) = await owner();
@@ -196,7 +268,7 @@ void main() {
     expect(bot.last('sendMessage')['text'], contains('Итог месяца'));
     await say(chatId, 'привет');
     expect(bot.last('sendMessage')['text'], contains('Не нашёл сумму'));
-    expect(await chat.onMessage(chatId, {'voice': {'file_id': 'x'}}), isTrue);
+    expect(await chat.onMessage(chatId, {'video_note': {'file_id': 'x'}}), isTrue);
     expect(bot.last('sendMessage')['text'], contains('Голосовые'));
   });
 }

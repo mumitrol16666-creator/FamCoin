@@ -9,6 +9,7 @@ import 'package:famcoin_server/chat_entry.dart';
 import 'package:famcoin_server/ledger_service.dart';
 import 'package:famcoin_server/maintenance.dart';
 import 'package:famcoin_server/notifications.dart';
+import 'package:famcoin_server/speech.dart';
 import 'package:famcoin_server/telegram.dart';
 import 'package:famcoin_server/webpush.dart';
 import 'package:postgres/postgres.dart';
@@ -65,7 +66,9 @@ Future<void> _run() async {
 
   // Бот слушает «/start <код>», сообщения с тратами и платежи только при заданном токене.
   if (telegram.enabled) {
-    ChatEntry(db, ledger, telegram, origin: env['CORS_ORIGIN']).attach();
+    final speech = Speech(apiKey: env['OPENAI_API_KEY'], model: env['OPENAI_TRANSCRIBE_MODEL']);
+    ChatEntry(db, ledger, telegram, origin: env['CORS_ORIGIN'], speech: speech).attach();
+    print(speech.enabled ? 'speech: голосовые в боте распознаёт ${speech.model}' : 'speech: OPENAI_API_KEY не задан, голосовые в боте выключены');
     telegram.pollForever();
     print('telegram: бот включён, Pro — ${billing.proStars} ⭐ на ${billing.proDays} дней');
   } else {

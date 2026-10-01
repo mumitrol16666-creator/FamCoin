@@ -8,6 +8,8 @@
 /// удаление операции в приложении (её видно в корзине).
 library;
 
+import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:famcoin_core/famcoin_core.dart';
@@ -17,11 +19,19 @@ import 'auth_service.dart';
 import 'briefs.dart';
 import 'ledger_service.dart';
 import 'notifications.dart';
+import 'speech.dart';
 import 'telegram.dart';
 
 /// Длиннее фразы об одной трате не бывают; остальное — не ввод операции.
 const maxPhraseLength = 300;
 const maxNoteLength = 200;
+
+/// Голосовое о трате — несколько секунд; длинные записи не распознаём.
+const maxVoiceSeconds = 60;
+
+/// Распознаваний на человека в сутки: расход на ИИ не должен зависеть от
+/// одного увлёкшегося пользователя.
+const maxVoicePerDay = 30;
 
 // ------------------------------------------------------------ справочники
 
@@ -106,6 +116,7 @@ class ChatDraft {
     required this.who,
     required this.txId,
     required this.undoId,
+    this.heard = '',
   });
 
   factory ChatDraft.fromJson(Map<String, dynamic> j) => ChatDraft(
@@ -119,6 +130,7 @@ class ChatDraft {
         who: j['who'] as String? ?? 'me',
         txId: j['txId'] as String,
         undoId: j['undoId'] as String,
+        heard: j['heard'] as String? ?? '',
       );
 
   final bool income;
@@ -138,7 +150,10 @@ class ChatDraft {
   final String txId;
   final String undoId;
 
-  ChatDraft copyWith({String? category, String? account, String? who}) => ChatDraft(
+  /// Что распознано из голосового сообщения — человек видит, что услышал бот.
+  final String heard;
+
+  ChatDraft copyWith({String? category, String? account, String? who, String? heard}) => ChatDraft(
         income: income,
         amount: amount,
         category: category ?? this.category,
@@ -149,6 +164,7 @@ class ChatDraft {
         who: who ?? this.who,
         txId: txId,
         undoId: undoId,
+        heard: heard ?? this.heard,
       );
 
   Map<String, Object?> toJson() => {
@@ -162,6 +178,7 @@ class ChatDraft {
         'who': who,
         'txId': txId,
         'undoId': undoId,
+        if (heard.isNotEmpty) 'heard': heard,
       };
 
   /// Команда журнала — в том же виде, в каком её отправляет форма приложения.
@@ -335,6 +352,7 @@ String draftText(ChatDraft d, LedgerView v, DateTime now) {
   final kind = d.income ? (kk ? 'Кіріс' : 'Доход') : (kk ? 'Шығыс' : 'Расход');
   final today = dateToJson(DateTime(now.year, now.month, now.day));
   return [
+    if (d.heard.isNotEmpty) '🎤 <i>«${escapeHtml(d.heard)}»</i>',
     '<b>$kind · ${formatMoney(d.amount)}</b>',
     '${kk ? 'Санат' : 'Категория'}: ${escapeHtml(categoryName(d.category, v))}',
     '${kk ? 'Шот' : 'Счёт'}: ${escapeHtml(_accountName(d, v))}',
@@ -416,7 +434,7 @@ String monthText(LedgerView v, DateTime now) {
   ].join('\n');
 }
 
-String helpText(bool kk, {String? origin}) => [
+String helpText(bool kk, {String? origin, bool voice = false}) => [
       kk
           ? 'Шығысты немесе кірісті жай хабарламамен жазыңыз — мен жобасын көрсетемін, растағаннан кейін жазамын.'
           : 'Напишите трату или доход обычным сообщением — я покажу черновик и запишу после подтверждения.',
@@ -426,6 +444,7 @@ String helpText(bool kk, {String? origin}) => [
       kk ? '• такси 2 мың кеше' : '• такси 2 тысячи вчера',
       kk ? '• азық-түлік 12400' : '• продукты 12400 с каспи',
       kk ? '• жалақы 350000' : '• зарплата 350000',
+      if (voice) ...['', kk ? 'Дауыстық хабарламамен де болады — қысқаша айтыңыз.' : 'Можно и голосовым сообщением — скажите то же самое вслух.'],
       '',
       kk ? '/today — бүгінгі шығыс' : '/today — траты за сегодня',
       kk ? '/month — ай қорытындысы' : '/month — итоги месяца',
@@ -475,7 +494,7 @@ Buttons undoButtons(String id, bool kk) => [
 // ----------------------------------------------------------------- сервис
 
 class ChatEntry {
-  ChatEntry(this.db, this.ledger, this.telegram, {this.origin});
+  ChatEntry(this.db, this.ledger, this.telegram, {this.origin, this.speech});
 
   final Pool db;
   final LedgerService ledger;
@@ -483,6 +502,9 @@ class ChatEntry {
 
   /// Адрес приложения (https://…) для подсказки; без него ссылки нет.
   final String? origin;
+
+  /// Распознавание голосовых; без него бот просит написать текстом.
+  final Speech? speech;
 
   /// Подключает бота: сообщения, кнопки и меню команд.
   void attach() {
@@ -508,7 +530,14 @@ class ChatEntry {
     final kk = v.locale == 'kk';
     final now = _now();
 
-    if (msg['voice'] != null || msg['audio'] != null || msg['video_note'] != null) {
+    final voice = msg['voice'] as Map<String, dynamic>?;
+    if (voice != null && speech?.enabled == true) {
+      // Распознавание занимает секунды, а опрос бота один на всех: не ждём
+      // его здесь, чтобы не задержать чужие сообщения и подтверждение оплаты.
+      unawaited(_voice(chatId, userId, voice).catchError((Object e, StackTrace st) => stderr.writeln('telegram voice: ${e.runtimeType}\n$st')));
+      return true;
+    }
+    if (voice != null || msg['audio'] != null || msg['video_note'] != null) {
       await telegram.send(
         chatId,
         kk
@@ -522,35 +551,77 @@ class ChatEntry {
       final reply = switch (text.split(RegExp(r'[\s@]')).first.toLowerCase()) {
         '/today' => todayText(v, now),
         '/month' => monthText(v, now),
-        _ => helpText(kk, origin: origin),
+        _ => helpText(kk, origin: origin, voice: speech?.enabled == true),
       };
       await telegram.send(chatId, reply);
       return true;
     }
     if (text.isEmpty || text.length > maxPhraseLength) {
-      await telegram.send(chatId, helpText(kk, origin: origin));
+      await telegram.send(chatId, helpText(kk, origin: origin, voice: speech?.enabled == true));
       return true;
     }
 
-    final (draft, problem) = buildDraft(text, v, now);
-    if (draft == null) {
+    await _offer(chatId, userId, v, text, now);
+    return true;
+  }
+
+  /// Разбирает фразу и отправляет черновик с кнопками — или объясняет, чего
+  /// не хватило. [heard] — фраза распознана из голосового: её показываем.
+  Future<void> _offer(int chatId, String userId, LedgerView v, String text, DateTime now, {bool heard = false}) async {
+    final kk = v.locale == 'kk';
+    final quote = heard ? '🎤 <i>«${escapeHtml(text)}»</i>\n' : '';
+    final (parsed, problem) = buildDraft(text, v, now);
+    if (parsed == null) {
       await telegram.send(
         chatId,
-        switch (problem!) {
-          DraftProblem.noAccount => kk ? 'Алдымен қолданбада сауалнаманы аяқтап, шот қосыңыз.' : 'Сначала завершите анкету в приложении и добавьте счёт — записывать пока некуда.',
-          DraftProblem.unsupported => kk ? 'Аударымдар мен қарыздар әзірге тек қолданбада жазылады. Мұнда — шығыс пен кіріс.' : 'Переводы и долги пока записываются только в приложении. Здесь — расходы и доходы.',
-          DraftProblem.noAmount => '${kk ? 'Соманы таппадым.' : 'Не нашёл сумму.'}\n\n${helpText(kk, origin: origin)}',
-        },
+        quote +
+            switch (problem!) {
+              DraftProblem.noAccount => kk ? 'Алдымен қолданбада сауалнаманы аяқтап, шот қосыңыз.' : 'Сначала завершите анкету в приложении и добавьте счёт — записывать пока некуда.',
+              DraftProblem.unsupported => kk ? 'Аударымдар мен қарыздар әзірге тек қолданбада жазылады. Мұнда — шығыс пен кіріс.' : 'Переводы и долги пока записываются только в приложении. Здесь — расходы и доходы.',
+              DraftProblem.noAmount => '${kk ? 'Соманы таппадым.' : 'Не нашёл сумму.'}\n\n${helpText(kk, origin: origin, voice: speech?.enabled == true)}',
+            },
       );
-      return true;
+      return;
     }
+    final draft = heard ? parsed.copyWith(heard: text) : parsed;
     final id = newChatId(6);
     await db.execute(
       Sql.named('INSERT INTO telegram_drafts (id, user_id, chat_id, data) VALUES (@id, @u, @c, @d:jsonb)'),
       parameters: {'id': id, 'u': userId, 'c': chatId, 'd': draft.toJson()},
     );
     await telegram.send(chatId, draftText(draft, v, now), buttons: draftButtons(id, v));
-    return true;
+  }
+
+  /// Голосовое сообщение: скачать, распознать, дальше — как набранный текст.
+  Future<void> _voice(int chatId, String userId, Map<String, dynamic> voice) async {
+    final v = await ledger.view(userId);
+    if (v == null) return;
+    final kk = v.locale == 'kk';
+    if (((voice['duration'] as num?) ?? 0) > maxVoiceSeconds) {
+      await telegram.send(chatId, kk ? 'Тым ұзақ хабарлама. Қысқаша айтыңыз: «кофе 1500».' : 'Слишком длинное сообщение. Скажите коротко: «кофе 1500».');
+      return;
+    }
+    final used = await db.execute(
+      Sql.named("SELECT count(*) FROM ai_usage WHERE user_id = @u AND feature = 'voice' AND created_at > now() - interval '1 day'"),
+      parameters: {'u': userId},
+    );
+    if ((used.first[0] as int) >= maxVoicePerDay) {
+      await telegram.send(chatId, kk ? 'Бүгінге дауыстық хабарламалар шегі бітті. Мәтінмен жазыңыз: «кофе 1500».' : 'На сегодня лимит голосовых исчерпан. Напишите текстом: «кофе 1500».');
+      return;
+    }
+    final audio = await telegram.download(voice['file_id'] as String);
+    final heard = audio == null ? null : await speech!.transcribe(audio);
+    if (heard == null || heard.text.isEmpty) {
+      await telegram.send(chatId, kk ? 'Хабарламаны түсіне алмадым. Қайталап көріңіз немесе мәтінмен жазыңыз.' : 'Не смог разобрать сообщение. Попробуйте ещё раз или напишите текстом.');
+      return;
+    }
+    await db.execute(
+      Sql.named('INSERT INTO ai_usage (user_id, feature, model, request_id, tokens_in, tokens_out) '
+          "VALUES (@u, 'voice', @m, @r, @i, @o) ON CONFLICT (user_id, request_id) DO NOTHING"),
+      parameters: {'u': userId, 'm': speech!.model, 'r': 'tg-voice-${voice['file_unique_id'] ?? voice['file_id']}', 'i': heard.tokensIn, 'o': heard.tokensOut},
+    );
+    final text = heard.text.length > maxPhraseLength ? heard.text.substring(0, maxPhraseLength) : heard.text;
+    await _offer(chatId, userId, v, text, _now(), heard: true);
   }
 
   /// Нажатие кнопки под черновиком: `d:<черновик>:<действие>[:<значение>]`.
