@@ -86,10 +86,18 @@ else
   fi
 fi
 
-# 2. Все контейнеры запущены
-running="$($DC ps --status running --services 2>/dev/null)"
+# 2. Все контейнеры запущены. Одному показанию не верим: 01.10.2026 список
+# запущенных один раз не показал db, хотя база работала без перезапусков, —
+# ушла ложная тревога. Поэтому «сервиса нет» перепроверяется через 5 секунд.
+running_now() { $DC ps --status running --services 2>/dev/null; }
+running="$(running_now)"
 for svc in $SERVICES; do
-  if ! echo "$running" | grep -qx "$svc"; then
+  if ! grep -qx "$svc" <<<"$running"; then
+    sleep "${WATCHDOG_RECHECK_SECONDS:-5}"
+    if grep -qx "$svc" <<<"$(running_now)"; then
+      log "сервис $svc один раз не попал в список запущенных; перепроверка: работает"
+      continue
+    fi
     if once_a_day "svc-$svc"; then alert "контейнер $svc не запущен, поднимаю"; fi
     $DC up -d "$svc" >/dev/null 2>&1
   fi
