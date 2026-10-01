@@ -42,6 +42,8 @@ class Maintenance {
       await clean('notifications', "DELETE FROM notifications WHERE created_at < now() - interval '180 days'");
       await clean('telegram_logins', 'DELETE FROM telegram_logins WHERE expires_at < now()');
       await clean('telegram_links', 'DELETE FROM telegram_links WHERE expires_at < now()');
+      // Кнопки под сообщением недельной давности уже никто не нажимает.
+      await clean('telegram_drafts', "DELETE FROM telegram_drafts WHERE created_at < now() - interval '7 days'");
     } finally {
       _busy = false;
     }

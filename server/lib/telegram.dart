@@ -16,6 +16,12 @@ typedef PreCheckoutHandler = Future<String?> Function(Map<String, dynamic> query
 /// Успешная оплата: сообщение с полем `successful_payment`.
 typedef PaymentHandler = Future<void> Function(int chatId, Map<String, dynamic> from, Map<String, dynamic> payment);
 
+typedef MessageHandler = Future<bool> Function(int chatId, Map<String, dynamic> message);
+typedef CallbackHandler = Future<void> Function(Map<String, dynamic> query);
+
+/// Ряды кнопок под сообщением: у каждой `text` и `callback_data` (до 64 байт).
+typedef Buttons = List<List<Map<String, String>>>;
+
 /// Служебный email аккаунта, созданного через Telegram. По нему аккаунт
 /// узнаётся, даже если чат отвязали от уведомлений.
 String telegramEmail(int chatId) => 'tg$chatId@telegram.local';
@@ -36,6 +42,13 @@ class Telegram {
 
   /// Что делать после успешной оплаты.
   PaymentHandler? onPayment;
+
+  /// Обычное сообщение в личном чате (не код привязки и не платёж): ввод
+  /// операции и запросы (D79). `false` — не обработано, бот ответит как раньше.
+  MessageHandler? onMessage;
+
+  /// Нажатие кнопки под сообщением бота.
+  CallbackHandler? onCallback;
 
   bool get enabled => token != null && token!.isNotEmpty;
 
@@ -66,8 +79,40 @@ class Telegram {
     return data;
   }
 
-  Future<bool> send(int chatId, String text) async =>
-      (await call('sendMessage', {'chat_id': chatId, 'text': text, 'parse_mode': 'HTML'})) != null;
+  /// [buttons] — ряды кнопок под сообщением; нажатие приходит в [onCallback].
+  Future<bool> send(int chatId, String text, {Buttons? buttons}) async =>
+      (await call('sendMessage', {
+        'chat_id': chatId,
+        'text': text,
+        'parse_mode': 'HTML',
+        if (buttons != null) 'reply_markup': {'inline_keyboard': buttons},
+      })) !=
+      null;
+
+  /// Заменяет текст и кнопки уже отправленного сообщения; без [buttons] кнопки убираются.
+  Future<bool> edit(int chatId, int messageId, String text, {Buttons? buttons}) async =>
+      (await call('editMessageText', {
+        'chat_id': chatId,
+        'message_id': messageId,
+        'text': text,
+        'parse_mode': 'HTML',
+        'reply_markup': {'inline_keyboard': buttons ?? const []},
+      })) !=
+      null;
+
+  /// Ответ на нажатие кнопки: без него Telegram крутит на кнопке «часики».
+  Future<bool> answerCallback(String queryId, {String? text}) async =>
+      (await call('answerCallbackQuery', {'callback_query_id': queryId, if (text != null) 'text': text})) != null;
+
+  /// Список команд в меню бота (кнопка «/» в чате).
+  Future<bool> setCommands(Map<String, String> commands, {String? language}) async =>
+      (await call('setMyCommands', {
+        'commands': [
+          for (final e in commands.entries) {'command': e.key, 'description': e.value},
+        ],
+        if (language != null) 'language_code': language,
+      })) !=
+      null;
 
   String? _username;
 
@@ -111,14 +156,14 @@ class Telegram {
   Future<bool> refundStars({required int telegramUserId, required String chargeId}) async =>
       (await call('refundStarPayment', {'user_id': telegramUserId, 'telegram_payment_charge_id': chargeId})) != null;
 
-  /// Длинный опрос: «/start <код>», предоплата и успешные платежи.
+  /// Длинный опрос: «/start <код>», сообщения и кнопки, предоплата и успешные платежи.
   Future<void> pollForever() async {
     if (!enabled) return;
     while (true) {
       final data = await call('getUpdates', {
         'offset': _offset,
         'timeout': 25,
-        'allowed_updates': ['message', 'pre_checkout_query'],
+        'allowed_updates': ['message', 'pre_checkout_query', 'callback_query'],
       });
       if (data == null) {
         await Future<void>.delayed(const Duration(seconds: 10));
@@ -135,6 +180,12 @@ class Telegram {
           final pre = u['pre_checkout_query'] as Map<String, dynamic>?;
           if (pre != null) {
             await _preCheckout(pre);
+            continue;
+          }
+          final cb = u['callback_query'] as Map<String, dynamic>?;
+          if (cb != null) {
+            final handler = onCallback;
+            if (handler != null) await handler(cb);
             continue;
           }
           final msg = u['message'] as Map<String, dynamic>?;
@@ -174,6 +225,8 @@ class Telegram {
     }
     final m = RegExp(r'^/start\s+([A-Za-z0-9]{6,12})$').firstMatch(text);
     if (m == null) {
+      final handler = onMessage;
+      if (handler != null && (msg['chat'] as Map)['type'] == 'private' && await handler(chatId, msg)) return;
       final linked = await db.execute(
         Sql.named('SELECT email FROM users WHERE telegram_chat_id = @c'),
         parameters: {'c': chatId},

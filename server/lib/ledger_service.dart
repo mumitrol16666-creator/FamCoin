@@ -29,6 +29,17 @@ const freeGoals = 1;
 /// Счета-копилки целей не расходуют лимит денежных счетов обычного тарифа.
 bool isPiggy(String accountId) => accountId.startsWith('piggy');
 
+/// Данные владельца для чтения: журнал, профиль и справочники (вид → id → данные).
+class LedgerView {
+  const LedgerView({required this.ledger, required this.profile, required this.locale, required this.entities});
+  final Ledger ledger;
+  final Map<String, dynamic> profile;
+  final String locale;
+  final Map<String, Map<String, Map<String, dynamic>>> entities;
+
+  Map<String, Map<String, dynamic>> of(String kind) => entities[kind] ?? const {};
+}
+
 class _Cached {
   _Cached(this.revision, this.ledger);
   final int revision;
@@ -140,6 +151,34 @@ class LedgerService {
           for (final e in entities) {'kind': e[0], 'id': e[1], 'data': e[2]},
         ],
       };
+    });
+  }
+
+  /// Журнал и справочники владельца для чтения на самом сервере (бот) — без
+  /// сборки JSON-снимка всех операций, который нужен только приложению.
+  /// Журнал общий с кешем: его можно только читать. `null` — владельца нет.
+  Future<LedgerView?> view(String userId) async {
+    return db.runTx((s) async {
+      final u = await s.execute(
+        Sql.named('SELECT locale, profile, revision FROM users WHERE id = @u'),
+        parameters: {'u': userId},
+      );
+      if (u.isEmpty) return null;
+      final ledger = await _loadLedger(s, userId, u.first[2] as int);
+      final rows = await s.execute(
+        Sql.named('SELECT kind, id, data FROM entities WHERE user_id = @u ORDER BY updated_at'),
+        parameters: {'u': userId},
+      );
+      final entities = <String, Map<String, Map<String, dynamic>>>{};
+      for (final e in rows) {
+        entities.putIfAbsent(e[0] as String, () => {})[e[1] as String] = Map<String, dynamic>.from(e[2] as Map);
+      }
+      return LedgerView(
+        ledger: ledger,
+        profile: Map<String, dynamic>.from(u.first[1] as Map? ?? const {}),
+        locale: u.first[0] as String? ?? 'ru',
+        entities: entities,
+      );
     });
   }
 

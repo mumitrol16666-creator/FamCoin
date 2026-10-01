@@ -5,6 +5,7 @@
 #   ADMIN_PASSWORD=...      (вход в админку /api/admin/)
 #   TELEGRAM_BOT_TOKEN=...  TELEGRAM_ADMIN_CHAT=...   (бот: вход, уведомления, оплата Pro звёздами, копии базы)
 #   PRO_STARS=950  PRO_DAYS=365                         (необязательно: цена и срок Pro)
+#   OPENAI_API_KEY=...                                  (необязательно: ключ ИИ)
 # Наружу смотрит только caddy (80/443): HTTPS, приложение, API по /api,
 # установочные файлы по /download.
 
@@ -49,6 +50,8 @@ services:
       PRO_DAYS: ${PRO_DAYS:-365}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Ключ поставщика ИИ: распознавание голосовых в боте, консультант.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ports: !override []
     restart: unless-stopped
 

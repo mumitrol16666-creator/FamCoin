@@ -5,6 +5,7 @@ import 'package:famcoin_server/admin.dart';
 import 'package:famcoin_server/api.dart';
 import 'package:famcoin_server/auth_service.dart';
 import 'package:famcoin_server/billing.dart';
+import 'package:famcoin_server/chat_entry.dart';
 import 'package:famcoin_server/ledger_service.dart';
 import 'package:famcoin_server/maintenance.dart';
 import 'package:famcoin_server/notifications.dart';
@@ -62,8 +63,9 @@ Future<void> _run() async {
   final admin = AdminService(db, password: env['ADMIN_PASSWORD']);
   final handler = buildHandler(auth, ledger, notifications, admin, telegram: telegram, billing: billing, allowedOrigin: env['CORS_ORIGIN'] ?? '*');
 
-  // Бот слушает «/start <код>» и платежи только при заданном токене.
+  // Бот слушает «/start <код>», сообщения с тратами и платежи только при заданном токене.
   if (telegram.enabled) {
+    ChatEntry(db, ledger, telegram, origin: env['CORS_ORIGIN']).attach();
     telegram.pollForever();
     print('telegram: бот включён, Pro — ${billing.proStars} ⭐ на ${billing.proDays} дней');
   } else {
