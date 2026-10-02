@@ -206,9 +206,10 @@ const _headOperation = {'операция', 'transaction', 'operation'};
 const _headDetails = {'детали', 'details', 'толығырақ'};
 
 class _Header {
-  const _Header(this.y, this.h, this.xOperation, this.xDetails, this.language);
+  const _Header(this.y, this.h, this.xAmount, this.xOperation, this.xDetails, this.language);
   final double y;
   final double h;
+  final double xAmount;
   final double xOperation;
   final double xDetails;
   final String language;
@@ -228,7 +229,7 @@ _Header? _header(_Line line) {
   final operation = amount == null ? null : find(_headOperation.contains, amount.x0);
   final details = operation == null ? null : find(_headDetails.contains, operation.x0);
   if (details == null) return null;
-  return _Header(line.y, line.h, operation!.x0, details.x0, _headDate[_lower(date.text)]!);
+  return _Header(line.y, line.h, amount!.x0, operation!.x0, details.x0, _headDate[_lower(date.text)]!);
 }
 
 // ------------------------------------------------------------- операции
@@ -315,24 +316,40 @@ final _otherCurrency = RegExp(r'^(\$|€|£|¥|₽|USD|EUR|RUB|GBP|CNY|KGS|UZS|T
   return (_minor(m), m[1] != null, consumed);
 }
 
-/// Самое частое значение среди близких (в пределах [tolerance]) — начало
-/// колонки, выровненной по левому краю. `null` — выраженного значения нет.
-double? _commonStart(List<double> xs, int rows, {double tolerance = 2.5}) {
-  if (xs.isEmpty) return null;
+/// Положения, сгруппированные по близости (в пределах [tolerance]), от
+/// самого частого к редким: (начало группы, сколько раз встретилось).
+/// Колонка, выровненная по левому краю, даёт одну большую группу.
+List<(double, int)> _starts(List<double> xs, {double tolerance = 2.5}) {
+  if (xs.isEmpty) return const [];
   xs.sort();
-  var bestStart = 0;
-  var bestCount = 0;
+  final groups = <(double, int)>[];
   var start = 0;
   for (var i = 1; i <= xs.length; i++) {
     if (i < xs.length && xs[i] - xs[i - 1] <= tolerance) continue;
+    groups.add((xs[start], i - start));
+    start = i;
+  }
+  // При равенстве — левее: порядок сортировки стабилен по построению.
+  return groups..sort((a, b) => a.$2 != b.$2 ? b.$2.compareTo(a.$2) : a.$1.compareTo(b.$1));
+}
+
+/// Самый частый шаг между соседними строками (с точностью до пункта);
+/// `null` — сравнить не с чем.
+double? _commonStep(List<double> steps) {
+  if (steps.isEmpty) return null;
+  steps.sort();
+  var bestStart = 0;
+  var bestCount = 0;
+  var start = 0;
+  for (var i = 1; i <= steps.length; i++) {
+    if (i < steps.length && steps[i] - steps[i - 1] <= 1.0) continue;
     if (i - start > bestCount) {
       bestCount = i - start;
       bestStart = start;
     }
     start = i;
   }
-  if (bestCount < max(2, (rows * 0.4).ceil())) return null;
-  return xs[bestStart];
+  return steps[bestStart];
 }
 
 /// Разбирает выписку из слов PDF. Бросает [StatementError], если это не
@@ -387,41 +404,127 @@ BankStatement parseStatement(List<PdfWord> input, {int maxRows = 3000}) {
   if (rows.length > maxRows) throw const StatementError('tooMany');
 
   // Где начинаются колонки «Операция» и «Детали» — по самим строкам: у
-  // заголовка выравнивание может быть другим, чем у ячеек.
-  final opStarts = <double>[];
-  final detailStarts = <double>[];
+  // заголовка выравнивание может быть другим, чем у ячеек. Колонка, выровненная
+  // по левому краю, даёт самое частое положение начала слова. Первое слово
+  // после суммы — начало операции, а если её название ушло на соседние строки
+  // (выравнивание по середине) — начало деталей. Детали есть почти в каждой
+  // строке, и вторые слова встречаются на своём месте не чаще первых, поэтому
+  // самое частое положение правее операции — начало деталей. Заголовок
+  // выручает, когда строк слишком мало, чтобы судить по ним.
+  final amountStarts = <double>[];
+  final firstStarts = <double>[];
+  final afterAmount = <double>[];
   var heights = 0.0;
   for (final r in rows) {
     heights += r.dateWord.height;
     final rest = r.line.words.sublist(1);
     final a = _amountPrefix(rest);
-    if (a == null || a.$3 >= rest.length) continue;
-    opStarts.add(rest[a.$3].x0);
-    for (var i = a.$3 + 1; i < rest.length; i++) {
-      detailStarts.add(rest[i].x0);
-    }
+    if (a == null) continue;
+    amountStarts.add(rest.first.x0);
+    if (a.$3 >= rest.length) continue;
+    firstStarts.add(rest[a.$3].x0);
+    afterAmount.addAll([for (var i = a.$3; i < rest.length; i++) rest[i].x0]);
   }
   final h = heights / rows.length;
-  final tolerance = max(2.0, 0.35 * h);
-  var xOperation = _commonStart(opStarts, rows.length) ?? head.xOperation;
-  var xDetails = _commonStart(detailStarts.where((x) => x > xOperation + 8).toList(), rows.length) ?? head.xDetails;
+  final enough = max(2, (firstStarts.length * 0.1).ceil());
+  final first = _starts(firstStarts).where((c) => c.$2 >= enough).take(2).map((c) => c.$1).toList()..sort();
+  var xOperation = head.xOperation;
+  // Одно частое положение — обычно операция; деталями оно оказывается,
+  // только когда ни одно название операции не уместилось на строке с датой.
+  if (first.length == 2 || (first.length == 1 && (first[0] - head.xDetails).abs() >= (first[0] - head.xOperation).abs())) xOperation = first[0];
+  var xDetails = head.xDetails;
+  final right = _starts(afterAmount.where((x) => x > xOperation + 8).toList());
+  if (right.isNotEmpty && right.first.$2 >= 2) {
+    // Почти одинаково частые положения — ближайшее к заголовку.
+    final top = right.where((c) => c.$2 >= 0.8 * right.first.$2).map((c) => c.$1);
+    xDetails = top.reduce((a, b) => (a - head.xDetails).abs() <= (b - head.xDetails).abs() ? a : b);
+  }
   if (xDetails <= xOperation + 8) {
     xOperation = head.xOperation;
     xDetails = head.xDetails;
   }
-  final leftOfOperation = xOperation - tolerance;
-  final leftOfDetails = xDetails - tolerance;
+  final amounts = _starts(amountStarts);
+  final xAmount = amounts.isNotEmpty && amounts.first.$2 >= enough ? amounts.first.$1 : head.xAmount;
+  // Границы колонок — посередине между их началами: так небольшая ошибка в
+  // начале колонки (заголовок сдвинут относительно ячеек) ничего не меняет.
+  // Слова одной ячейки идут через обычный пробел, между ячейками промежуток
+  // шире; ячейку относит к колонке её начало — длинное название операции
+  // может дотянуться и за середину.
+  final amountEnd = (xAmount + xOperation) / 2;
+  final operationEnd = (xOperation + xDetails) / 2;
+  final wide = 0.8 * h;
+  List<List<PdfWord>> cellsOf(List<PdfWord> words) {
+    final cells = <List<PdfWord>>[];
+    for (final w in words) {
+      if (cells.isNotEmpty && w.x0 - cells.last.last.x1 <= wide) {
+        cells.last.add(w);
+      } else {
+        cells.add([w]);
+      }
+    }
+    return cells;
+  }
 
-  // Ячейки бывают выровнены по верху строки (перенос уходит вниз) или по её
-  // середине (перенос расходится вверх и вниз от строки с датой). Во втором
-  // случае у двухстрочной операции на строке с датой нет её названия.
-  // Смотрим только на строки с суммой: строка с одной датой может оказаться
-  // не операцией, а подписью под таблицей.
-  bool hasOperation(_Line l) => l.words.skip(1).any((w) => w.x0 >= leftOfOperation && w.x0 < leftOfDetails);
-  var centered = rows.any((r) => _amountPrefix(r.line.words.sublist(1)) != null && !hasOperation(r.line));
-  if (!centered) {
-    final firstRow = rows.first.line;
-    centered = table.any((l) => l.page == firstRow.page && l.y < firstRow.y && firstRow.y - l.y <= 2.2 * h && l.words.any((w) => w.x0 >= leftOfOperation));
+  // К какой операции относятся строки переноса. Между строками таблицы есть
+  // отступ, поэтому строки одной операции стоят плотнее, чем соседние
+  // операции: расстояние между соседними однострочными операциями — шаг
+  // таблицы, всё, что заметно ближе друг к другу, — одна операция. Так
+  // переносы находят свою операцию при любом выравнивании ячеек.
+  final steps = <double>[];
+  for (var i = 0; i + 1 < table.length; i++) {
+    final a = table[i];
+    final b = table[i + 1];
+    if (a.page == b.page && rowOf.containsKey(a) && rowOf.containsKey(b)) steps.add(b.y - a.y);
+  }
+  final step = _commonStep(steps);
+  final near = step == null ? 0.0 : step - max(1.0, 0.1 * step);
+  final blocks = <List<_Line>>[];
+  for (final line in table) {
+    if (blocks.isNotEmpty && blocks.last.last.page == line.page && line.y - blocks.last.last.y < near) {
+      blocks.last.add(line);
+    } else {
+      blocks.add([line]);
+    }
+  }
+  final placed = <_Line, _Row>{};
+  var above = false;
+  for (final block in blocks) {
+    final dated = block.where(rowOf.containsKey).toList();
+    if (dated.length != 1 || block.length == 1) continue;
+    final row = rowOf[dated.single]!;
+    for (final line in block) {
+      if (line == dated.single) continue;
+      placed[line] = row;
+      row.extra.addAll([for (final w in line.words) (line.y, w)]);
+      if (line.y < row.line.y) above = true;
+    }
+  }
+
+  // Что не разложилось по группам (таблица без отступов между строками,
+  // выписка из одних многострочных операций) — по выравниванию ячеек: по
+  // верху строки перенос уходит вниз, по середине — расходится вверх и вниз
+  // от строки с датой, и тогда у двухстрочной операции на строке с датой нет
+  // её названия. Смотрим только на строки с суммой: строка с одной датой
+  // может оказаться не операцией, а подписью под таблицей.
+  bool hasOperation(_Line l) {
+    final rest = l.words.sublist(1);
+    final a = _amountPrefix(rest);
+    return a == null || cellsOf(rest.sublist(a.$3)).any((c) => c.first.x0 < operationEnd);
+  }
+
+  var centered = above || rows.any((r) => !hasOperation(r.line));
+  // Ещё один признак середины: строка переноса стоит прямо над строкой с
+  // датой и заметно ближе к ней, чем к тому, что выше. При выравнивании по
+  // верху над датой — конец предыдущей операции, и он от неё дальше.
+  for (var i = 0; !centered && i + 1 < table.length; i++) {
+    final line = table[i];
+    final next = table[i + 1];
+    if (rowOf.containsKey(line) || !rowOf.containsKey(next) || line.page != next.page) continue;
+    // Только текст правее колонки дат: слева от неё — поля страницы.
+    if (!line.words.any((w) => w.x0 > next.words.first.x1)) continue;
+    final down = next.y - line.y;
+    final up = i > 0 && table[i - 1].page == line.page ? line.y - table[i - 1].y : double.infinity;
+    centered = down <= 2.2 * h && down < 0.85 * up;
   }
 
   if (centered) {
@@ -430,7 +533,7 @@ BankStatement parseStatement(List<PdfWord> input, {int maxRows = 3000}) {
       byPage.putIfAbsent(r.line.page, () => []).add(r);
     }
     for (final line in table) {
-      if (rowOf.containsKey(line)) continue;
+      if (rowOf.containsKey(line) || placed.containsKey(line)) continue;
       _Row? nearest;
       var best = double.infinity;
       for (final r in byPage[line.page] ?? const <_Row>[]) {
@@ -446,7 +549,7 @@ BankStatement parseStatement(List<PdfWord> input, {int maxRows = 3000}) {
     _Row? current;
     var lastY = 0.0;
     for (final line in table) {
-      final row = rowOf[line];
+      final row = rowOf[line] ?? placed[line];
       if (row != null) {
         current = row;
         lastY = line.y;
@@ -473,18 +576,27 @@ BankStatement parseStatement(List<PdfWord> input, {int maxRows = 3000}) {
     final rest = r.line.words.sublist(1);
     final prefix = _amountPrefix(rest);
     final onLine = prefix == null ? rest : rest.sublist(prefix.$3);
-    // Слова операции: со строки с датой и с соседних строк, по порядку чтения.
-    final cells = [for (final w in onLine) (r.line.y, w), ...r.extra]..sort((a, b) => a.$1 != b.$1 ? a.$1.compareTo(b.$1) : a.$2.x0.compareTo(b.$2.x0));
+    // Строки операции сверху вниз: строка с датой (после суммы) и переносы.
+    final byLine = <double, List<PdfWord>>{r.line.y: onLine};
+    for (final (y, w) in r.extra) {
+      byLine.putIfAbsent(y, () => []).add(w);
+    }
     final amountWords = <String>[];
     final operationWords = <String>[];
     final detailWords = <String>[];
-    for (final (y, w) in cells) {
-      if (w.x0 >= leftOfDetails) {
-        detailWords.add(w.text);
-      } else if (w.x0 >= leftOfOperation || (y == r.line.y && prefix != null)) {
-        operationWords.add(w.text);
-      } else {
-        amountWords.add(w.text);
+    for (final y in byLine.keys.toList()..sort()) {
+      for (final cell in cellsOf(byLine[y]!..sort((a, b) => a.x0.compareTo(b.x0)))) {
+        final text = [for (final w in cell) w.text];
+        final x = cell.first.x0;
+        if (x >= operationEnd) {
+          detailWords.addAll(text);
+        } else if (_foreign.hasMatch(text.join(' '))) {
+          amountWords.addAll(text); // сумма в валюте покупки — под суммой в тенге
+        } else if (x >= amountEnd || (y == r.line.y && prefix != null)) {
+          operationWords.addAll(text);
+        } else {
+          amountWords.addAll(text);
+        }
       }
     }
     final beside = amountWords.join(' ');

@@ -8,7 +8,7 @@ import 'dart:math';
 import 'package:famcoin_server/pdf_words.dart';
 
 class Sheet {
-  Sheet({this.centered = false, this.x = const [40, 110, 230, 360]});
+  Sheet({this.centered = false, this.x = const [40, 110, 230, 360], this.height = 9, this.pitch = 12, this.padding = 6});
 
   /// Ячейки выровнены по середине строки таблицы, а не по её верху.
   final bool centered;
@@ -23,8 +23,10 @@ class Sheet {
   var page = 0;
   var y = 60.0;
 
-  static const height = 9.0;
-  static const pitch = 12.0;
+  /// Высота слова, шаг строк внутри ячейки и отступ между строками таблицы.
+  final double height;
+  final double pitch;
+  final double padding;
   static const charWidth = 5.0;
 
   /// Текст с позиции [at]; пробел разделяет слова.
@@ -55,7 +57,7 @@ class Sheet {
     for (var i = 0; i < 4; i++) {
       text((at ?? x)[i], titles[i]);
     }
-    y += pitch + 6;
+    y += pitch + padding;
   }
 
   /// Строка таблицы; ячейка из нескольких строк — через `\n`.
@@ -68,7 +70,7 @@ class Sheet {
         text(x[c], cells[c][i], onY: y + shift + i * pitch);
       }
     }
-    y += lines * pitch + 6;
+    y += lines * pitch + padding;
   }
 
   void newPage() {
