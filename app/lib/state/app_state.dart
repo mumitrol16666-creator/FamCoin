@@ -106,15 +106,7 @@ class AppState extends ChangeNotifier {
   /// даты до следующей. Поэтому смена суммы не пересчитывает прошлые дни по
   /// новой ставке: без истории переход с 5 000 на 8 000 ₸ на десятый день
   /// переноса добавил бы 30 000 ₸, которых никто не выдавал.
-  List<({DateTime from, int amount})> get dailyLimitHistory {
-    final raw = profile['dailyLimitHistory'];
-    if (raw is! List) return const [];
-    final out = <({DateTime from, int amount})>[
-      for (final e in raw)
-        if (e is Map && e['from'] != null && e['amount'] != null) (from: dateFromJson(e['from']), amount: parseMinor(e['amount'])),
-    ]..sort((a, b) => a.from.compareTo(b.from));
-    return out;
-  }
+  List<({DateTime from, int amount})> get dailyLimitHistory => dailyLimitHistoryOf(profile);
 
   List<Map<String, String>> _historyJson(List<({DateTime from, int amount})> h) =>
       [for (final e in h) {'from': _date(e.from), 'amount': e.amount.toString()}];
@@ -464,55 +456,19 @@ class AppState extends ChangeNotifier {
     return sum;
   }
 
-  /// День, к которому относится трата. Возврат уменьшает траты того дня,
-  /// когда была покупка, а не дня возврата: вернули вчерашний кофе —
-  /// вчерашние расходы уменьшились, сегодняшний лимит не тронут.
-  /// `null` — возврат по удалённой покупке: в дневные траты не входит
-  /// (деньги на счёте он всё равно учитывает).
-  DateTime? _spendDay(Transaction t) {
-    if (t.type == EventType.refund) {
-      final of = t.meta['refundOf'];
-      if (of is String) return ledger.currentVersion(of)?.date;
-    }
-    return t.date;
-  }
-
-  /// Запланированная трата — вне дневного лимита: оплата планового платежа
-  /// (раздел 9.3, T33) или покупка, которую владелец отметил как
-  /// запланированную (D74; программа предлагает это для крупных покупок). То
-  /// же для возврата по такой покупке. Деньги со счёта такая трата тратит как
-  /// обычно — она не входит только в дневной лимит и в разборы привычек.
-  bool _isPlannedSpend(Transaction t) {
-    bool planned(Transaction x) => x.meta['planned'] != null || x.meta['plannedPurchase'] == true;
-    if (planned(t)) return true;
-    final of = t.meta['refundOf'];
-    if (t.type != EventType.refund || of is! String) return false;
-    final original = ledger.currentVersion(of) ?? ledger.byId(of);
-    return original != null && planned(original);
-  }
+  /// День, к которому относится трата, и признак «запланированная» — общие
+  /// с ботом и сводками правила из ядра (`formulas/daily_limit.dart`).
+  DateTime? _spendDay(Transaction t) => spendDay(ledger, t);
+  bool _isPlannedSpend(Transaction t) => isPlannedSpend(ledger, t);
 
   /// Повседневные траты из дневного бюджета за [from]–[to] включительно:
   /// покупки минус возвраты по покупкам этих дней (возврат считается по дню
-  /// покупки, не по дню самого возврата — см. `_spendDay`). Запланированные
-  /// траты (см. `_isPlannedSpend`) сюда не входят.
-  int spentBetween(DateTime from, DateTime to) => _spent(from, to, planned: false);
+  /// покупки, не по дню самого возврата). Запланированные траты сюда не входят.
+  int spentBetween(DateTime from, DateTime to) => spendBetween(ledger, from, to).everyday;
 
   /// Запланированные траты за те же дни — вне лимита; для пояснения «что не
   /// вошло в лимит», в расчёт доступного не идут.
-  int spentPlannedBetween(DateTime from, DateTime to) => _spent(from, to, planned: true);
-
-  int _spent(DateTime from, DateTime to, {required bool planned}) {
-    var sum = 0;
-    for (final tx in ledger.transactions) {
-      if ((tx.type != EventType.expense && tx.type != EventType.refund) || ledger.isReversed(tx.id)) continue;
-      final day = _spendDay(tx); // возврат по удалённой покупке даёт null и сюда не попадает
-      if (day == null || day.isBefore(from) || day.isAfter(to) || _isPlannedSpend(tx) != planned) continue;
-      for (final p in tx.postings) {
-        if (ledger.account(p.accountId).kind == LedgerKind.expense) sum += p.amount;
-      }
-    }
-    return sum < 0 ? 0 : sum;
-  }
+  int spentPlannedBetween(DateTime from, DateTime to) => spendBetween(ledger, from, to).planned;
 
   /// Крупная покупка (D74): от половины дневного лимита. Такую покупку
   /// программа предлагает отметить запланированной — дневной лимит нужен для
@@ -525,20 +481,11 @@ class AppState extends ChangeNotifier {
   /// Сегодняшние повседневные траты из дневного бюджета.
   int spentToday() => spentBetween(today, today);
 
-  /// Сколько доступно сегодня по лимиту и переносу (D64), без оглядки на
-  /// деньги: за каждый день с начала копления (`dailyLimitSince`) лимит либо
-  /// остаётся неизрасходован и добавляется к завтрашнему дню, либо превышен —
-  /// и настолько же уменьшает доступное на будущее. Эквивалентно «выдано
-  /// лимитов за N дней минус потрачено за N дней»; ежедневно ничего не
-  /// сохраняется отдельно — значение всегда считается заново по журналу.
-  int? get dailyLimitPlanned {
-    final limit = dailyLimit;
-    if (limit == null) return null;
-    if (!dailyLimitCarryOn) return limit - spentToday();
-    final since = dailyLimitSince ?? today;
-    final start = since.isAfter(today) ? today : since;
-    return _granted(start, today, limit) - spentBetween(start, today);
-  }
+  /// Дневной лимит на сегодня: расчёт — в ядре, один для приложения и бота.
+  DailyLimitState get _limitState => dailyLimitState(ledger, profile, today);
+
+  /// Сколько доступно сегодня по лимиту и переносу (D64), без оглядки на деньги.
+  int? get dailyLimitPlanned => _limitState.planned;
 
   /// Свободные деньги сейчас (D73): ликвидные минус отложенное на цели минус
   /// ещё не оплаченные платежи до следующего дохода. Отрицательные — платежи
@@ -546,19 +493,10 @@ class AppState extends ChangeNotifier {
   int get freeMoney => ledger.freeLiquid() - obligationsUntilIncome;
 
   /// Доступно на свободные траты сегодня (D73, D81): по лимиту и переносу, но
-  /// не больше денег, которые есть сейчас (без отложенного на цели). Так
-  /// накопленный перенос не превращается в «право» потратить деньги, которых
-  /// уже нет. Предстоящие платежи доступное не уменьшают (D81): доход приходит
-  /// постепенно, и платёж в конце месяца не обязан быть покрыт сегодняшним
-  /// остатком — о нехватке карточка предупреждает отдельно. Перерасход
-  /// остаётся отрицательным: ограничение срезает только плюс.
-  int? get dailyLimitAvailable {
-    final planned = dailyLimitPlanned;
-    if (planned == null) return null;
-    final money = ledger.freeLiquid();
-    final cap = money < 0 ? 0 : money;
-    return planned > cap ? cap : planned;
-  }
+  /// не больше денег, которые есть сейчас (без отложенного на цели).
+  /// Предстоящие платежи доступное не уменьшают — о нехватке карточка
+  /// предупреждает отдельно. Перерасход остаётся отрицательным.
+  int? get dailyLimitAvailable => _limitState.available;
 
   /// Разбор «доступно сегодня» для экрана «Как посчитано» (D73):
   /// деньги → свободно → ориентир → лимит и перенос → доступно.
@@ -585,40 +523,10 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  /// Сколько лимита выдано за дни [from]–[to] включительно по истории сумм.
-  int _granted(DateTime from, DateTime to, int currentLimit) {
-    final h = dailyLimitHistory;
-    if (h.isEmpty) return currentLimit * (_daysBetween(from, to) + 1); // профиль до D71
-    var sum = 0;
-    if (h.first.from.isAfter(from)) {
-      // дни до первой записи истории — по её сумме (действующей раньше нет)
-      final end = h.first.from.isAfter(to) ? to : h.first.from.subtract(const Duration(days: 1));
-      final days = _daysBetween(from, end) + 1;
-      if (days > 0) sum += h.first.amount * days;
-    }
-    for (var i = 0; i < h.length; i++) {
-      final segStart = h[i].from.isAfter(from) ? h[i].from : from;
-      final next = i + 1 < h.length ? DateTime(h[i + 1].from.year, h[i + 1].from.month, h[i + 1].from.day - 1) : to;
-      final segEnd = next.isAfter(to) ? to : next;
-      final days = _daysBetween(segStart, segEnd) + 1;
-      if (days > 0) sum += h[i].amount * days;
-    }
-    return sum;
-  }
-
-  /// Число суток между двумя датами (по календарю, без сдвигов часовых поясов).
-  static int _daysBetween(DateTime a, DateTime b) =>
-      DateTime.utc(b.year, b.month, b.day).difference(DateTime.utc(a.year, a.month, a.day)).inDays;
-
   /// Вклад прошлых дней в сегодняшнее доступное: положительный — прошлые
   /// дни сэкономили и добавили сегодня, отрицательный — прошлый перерасход
   /// уменьшил сегодняшнюю сумму. `0` в первый день лимита или без переноса.
-  int get dailyLimitCarry {
-    final limit = dailyLimit;
-    final planned = dailyLimitPlanned; // ограничение деньгами — не вклад прошлых дней
-    if (limit == null || planned == null) return 0;
-    return planned - (limit - spentToday());
-  }
+  int get dailyLimitCarry => _limitState.carry;
 
   static DateTime _onDay(int year, int month, int day) {
     final last = DateTime(year, month + 1, 0).day;
