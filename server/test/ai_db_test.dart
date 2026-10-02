@@ -6,6 +6,7 @@ library;
 import 'dart:io';
 
 import 'package:famcoin_server/ai.dart';
+import 'package:famcoin_server/ai_check.dart';
 import 'package:famcoin_server/auth_service.dart';
 import 'package:postgres/postgres.dart';
 import 'package:test/test.dart';
@@ -23,7 +24,17 @@ class _FakeModel extends ChatModel {
   Future<AiReply?> complete(List<Map<String, String>> messages, {Duration timeout = const Duration(seconds: 25)}) async {
     seen.add(messages);
     if (down) return null;
-    return AiReply(scripted.isEmpty ? 'ответ ${seen.length}' : scripted.removeAt(0), tokensIn: 700, tokensOut: 90);
+    final text = scripted.isEmpty ? 'ответ ${seen.length}' : scripted.removeAt(0);
+    // «текст || сумма := расчёт» — ответ с объяснением суммы, как его даёт модель.
+    final parts = text.split(' || ');
+    return AiReply(
+      parts.first,
+      numbers: [
+        for (final n in parts.skip(1)) DeclaredNumber(n.split(' := ').first, n.split(' := ').last),
+      ],
+      tokensIn: 700,
+      tokensOut: 90,
+    );
   }
 }
 
@@ -129,11 +140,13 @@ void main() {
     expect((messages.last as Map)['unverified'], ['3 600 000 ₸']);
     expect((messages[1] as Map)['unverified'], isEmpty);
 
-    // Суммы сходятся с данными — второго обращения к модели нет.
-    model.scripted.add('Вы заработали 300 000 ₸.');
+    // Расчёт предъявлен и сервер получил то же число — подтверждено без перепроверки.
+    model.scripted.add('За год это 3 600 000 ₸ — мой расчёт. || 3 600 000 ₸ := report.income * 12');
     calls = model.seen.length;
-    await ai.chat(u, ask('Ещё раз?', 'c3'));
+    final proven = await ai.chat(u, ask('А за год точно?', 'c2b'));
+    expect(proven['unverified'], isEmpty);
     expect(model.seen.length, calls + 1);
+
     final tokens = await pool!.execute(Sql.named("SELECT tokens_in FROM ai_usage WHERE user_id = @u ORDER BY created_at"), parameters: {'u': u});
     expect([for (final r in tokens) r[0]], [1400, 1400, 700], reason: 'токены перепроверки учтены в том же обращении');
   });

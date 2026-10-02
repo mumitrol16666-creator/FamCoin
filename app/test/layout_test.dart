@@ -575,12 +575,12 @@ void main() {
     expect(context.keys.where((k) => k.toLowerCase().contains('birth') || k.toLowerCase().contains('lastname')), isEmpty, reason: 'кроме имени, личных данных в сводке нет');
     expect(tester.takeException(), isNull);
 
-    // Сумма, которой нет в данных, — с пометкой «посчитал сам» (D91).
+    // Сумма, которую сервер не смог подтвердить данными, — с пометкой (D91, D93).
     f.aiUnverified = ['50 100 ₸'];
     await tester.enterText(find.byType(TextField), 'Сколько накоплю за 3 месяца?');
     await tester.tap(find.byIcon(Icons.send));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Консультант посчитал сам'), findsOneWidget);
+    expect(find.textContaining('не удалось подтвердить данными'), findsOneWidget);
     expect(find.textContaining('50\u00A0100'), findsOneWidget);
     f.aiUnverified = const [];
     expect(tester.takeException(), isNull);

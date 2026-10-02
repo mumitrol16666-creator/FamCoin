@@ -7,6 +7,7 @@
 library;
 
 import 'package:famcoin_core/famcoin_core.dart';
+import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -21,6 +22,12 @@ double? _round1(double? v) => v == null ? null : (v * 10).round() / 10;
 /// Доля от дохода в процентах; больше 100 % — не показатель, а признак того,
 /// что доходы записаны не полностью: такую долю не передаём (D83).
 double? _share(double? v) => v == null || v > 100 ? null : _round1(v);
+
+/// «2 октября 2026» на языке интерфейса.
+String _dayText(DateTime d, AppLocalizations l) => DateFormat('d MMMM y', l.localeName).format(d);
+
+/// «октябрь 2026» на языке интерфейса.
+String _monthText(DateTime d, AppLocalizations l) => DateFormat('LLLL y', l.localeName).format(d);
 
 String _month(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
@@ -85,7 +92,7 @@ Map<String, Object?> _operations(AppState s, AppLocalizations l) {
     final account = t.postings.map((p) => s.accountInfo(p.accountId)).whereType<AccountInfo>().firstOrNull;
     final note = '${t.meta['note'] ?? ''}'.trim();
     return {
-      if (dated) 'date': dateToJson(t.date),
+      if (dated) 'date': _dayText(t.date, l),
       'type': expense ? 'expense' : 'income',
       'amount': _t(amount(t)),
       'category': categories.join(', '),
@@ -152,17 +159,18 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     // Только имя — чтобы консультант мог обратиться по имени; фамилия и дата
     // рождения не передаются.
     'userFirstName': firstName.isEmpty ? null : firstName,
-    'today': dateToJson(s.today),
-    // Готовые даты: считать дни в уме модель умеет плохо.
-    'yesterday': dateToJson(s.today.subtract(const Duration(days: 1))),
-    'dayBeforeYesterday': dateToJson(s.today.subtract(const Duration(days: 2))),
+    // Даты — готовыми словами («2 октября»): считать дни и переводить числа
+    // в названия месяцев модель умеет плохо.
+    'today': _dayText(s.today, l),
+    'yesterday': _dayText(DateTime(s.today.year, s.today.month, s.today.day - 1), l),
+    'dayBeforeYesterday': _dayText(DateTime(s.today.year, s.today.month, s.today.day - 2), l),
     'tracking': {
       // С какого дня ведётся учёт: до этой даты «нет данных», а не «было 0».
-      'recordedFrom': trackedFrom == null ? null : dateToJson(trackedFrom),
+      'recordedFrom': trackedFrom == null ? null : _dayText(trackedFrom, l),
       'daysOfHistory': trackedFrom == null ? 0 : s.today.difference(trackedFrom).inDays + 1,
       'notIncludedInThisSummary': _notIncluded,
     },
-    'period': {'month': _month(month), 'todayDay': s.today.day, 'daysInMonth': s.daysInMonth},
+    'period': {'month': _month(month), 'monthText': _monthText(month, l), 'todayDay': s.today.day, 'daysInMonth': s.daysInMonth},
     'thisMonth': {
       'income': _t(r.income),
       'expense': _t(r.expense),
@@ -174,7 +182,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     },
     'previousMonth': hasPrev
         ? {
-            'month': _month(prevMonth),
+            'month': _monthText(prevMonth, l),
             'income': _t(pr.income),
             'expense': _t(pr.expense),
             // Учёт начат посреди того месяца — его суммы неполные.
@@ -204,7 +212,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
             'carryEnabled': s.dailyLimitCarryOn,
             'unspentFromPreviousDays': _t(ex.carry > 0 ? ex.carry : 0),
             'overspentOnPreviousDays': _t(ex.carry < 0 ? -ex.carry : 0),
-            'carryCountedSince': s.dailyLimitCarryOn && s.dailyLimitSince != null ? dateToJson(s.dailyLimitSince!) : null,
+            'carryCountedSince': s.dailyLimitCarryOn && s.dailyLimitSince != null ? _dayText(s.dailyLimitSince!, l) : null,
             'availableToday': _t(ex.available ?? 0),
             'limitedByMoneyOnAccounts': ex.capped,
             'howItIsCalculated': 'availableToday = perDay + unspentFromPreviousDays − overspentOnPreviousDays − spentToday, но не больше денег на счетах',
@@ -216,18 +224,18 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'unpaidCount': due.length,
       'notEnoughMoneyNowBy': _t(ex.shortfall),
       'unpaid': [
-        for (final d in due.take(10)) {'name': d.planned.name, 'amount': _t(d.planned.amount), 'date': dateToJson(d.date)},
+        for (final d in due.take(10)) {'name': d.planned.name, 'amount': _t(d.planned.amount), 'date': _dayText(d.date, l)},
       ],
     },
+    // Лимиты категорий — плоским списком с готовым остатком: чем меньше
+    // модели приходится считать самой, тем меньше ей есть где ошибиться.
     'categoryLimits': limits.isEmpty
         ? null
-        : {
-            'usedPercent': _round1(s.budgetUsedPercent),
-            'monthElapsedPercent': _round1(s.monthElapsedPercent),
-            'limits': [
-              for (final x in limits) {'category': categoryName(l, x.def.category), 'limit': _t(x.status.limit), 'spent': _t(x.status.spent)},
-            ],
-          },
+        : [
+            for (final x in limits)
+              {'name': categoryName(l, x.def.category), 'limit': _t(x.status.limit), 'spent': _t(x.status.spent), 'left': _t(x.status.remaining)},
+          ],
+    'categoryLimitsTotal': limits.isEmpty ? null : {'usedPercent': _round1(s.budgetUsedPercent), 'monthElapsedPercent': _round1(s.monthElapsedPercent)},
     'expenseByCategory': _categories(s, l, month, withPrevious: hasPrev),
     'expenseCategoriesTotal': allCategories,
     'expenseByType': _types(s, month),
@@ -254,7 +262,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
               {
                 'name': p.name,
                 'amount': _t(p.amount),
-                'month': p.once,
+                'month': _monthText(p.onceMonth!, l),
                 // Копилка под покупку (D90): `null` — человек её не заводил.
                 'savedInPiggy': s.purchaseGoal(p) == null ? null : _t(s.purchaseSaved(p)),
                 'toSavePerMonth': _t(s.purchaseMonthly(p)),
@@ -264,7 +272,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
         ? null
         : [
             for (final g in goals)
-              {'name': g.name, 'target': _t(g.target), 'saved': _t(s.goalSaved(g)), 'deadline': g.deadline == null ? null : dateToJson(g.deadline!)},
+              {'name': g.name, 'target': _t(g.target), 'saved': _t(s.goalSaved(g)), 'deadline': g.deadline == null ? null : _dayText(g.deadline!, l)},
           ],
     'observations': {
       'eveningShareOfDiscretionaryPercent': _round1(s.eveningDiscretionaryShare(month)),
@@ -290,9 +298,9 @@ Map<String, Object?> aiReviewContext(AppState s, AppLocalizations l, DateTime mo
   final prevMonth = DateTime(month.year, month.month - 1, 1);
   final hasPrev = _hasData(s, prevMonth);
   return {
-    'period': {'month': _month(month), 'daysInMonth': sum.days},
+    'period': {'month': _month(month), 'monthText': _monthText(month, l), 'daysInMonth': sum.days},
     'month': {'income': _t(sum.income), 'expense': _t(sum.expense), 'incomeMinusExpense': _t(sum.income - sum.expense)},
-    'previousMonth': hasPrev ? {'month': _month(prevMonth), 'income': _t(sum.prevIncome), 'expense': _t(sum.prevExpense)} : null,
+    'previousMonth': hasPrev ? {'month': _monthText(prevMonth, l), 'income': _t(sum.prevIncome), 'expense': _t(sum.prevExpense)} : null,
     'expenseByCategory': _categories(s, l, sum.month, withPrevious: hasPrev),
     'expenseByType': _types(s, sum.month),
     'averageEverydaySpendPerDay': _t(sum.avgDaily),
