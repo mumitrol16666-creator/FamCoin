@@ -65,7 +65,7 @@ class CapitalTab extends StatelessWidget {
                   Text(l.totalDebt, style: TextStyle(fontSize: 12, color: fam.text2)),
                   MoneyText(status.totalDebt, color: fam.debt, style: const TextStyle(fontSize: 18)),
                   if (status.incomeSharePercent != null)
-                    Text(l.incomeShareShort(status.incomeSharePercent!.round()), style: TextStyle(fontSize: 12, color: fam.text2)),
+                    Text(status.incomeSharePercent! > 100 ? l.incomeIncompleteShort : l.incomeShareShort(status.incomeSharePercent!.round()), style: TextStyle(fontSize: 12, color: fam.text2)),
                 ]),
               ),
               const Icon(Icons.chevron_right),

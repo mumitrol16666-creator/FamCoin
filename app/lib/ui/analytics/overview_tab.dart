@@ -262,6 +262,9 @@ class OverviewTab extends StatelessWidget {
       Text('${l.forecastObligations}: −${formatMoney(f.remainingObligations)}', style: TextStyle(fontSize: 12, color: fam.text2)),
       Text('${l.forecastSpend}: ≈−${formatMoney(f.expectedRegularSpend)}', style: TextStyle(fontSize: 12, color: fam.text2)),
       if (f.expectedIncome > 0) Text('${l.forecastIncome}: +${formatMoney(f.expectedIncome)}', style: TextStyle(fontSize: 12, color: fam.text2)),
+      // Чему в оценке не стоит верить (D92): начало месяца и неполные доходы.
+      if ((state.today as DateTime).day < 7) Padding(padding: const EdgeInsets.only(top: 6), child: Text(l.forecastEarly, style: TextStyle(fontSize: 12, color: fam.warn))),
+      if (state.incomeLooksIncomplete as bool) Padding(padding: const EdgeInsets.only(top: 6), child: Text(l.incomeIncompleteNote, style: TextStyle(fontSize: 12, color: fam.warn))),
     ]);
   }
 }

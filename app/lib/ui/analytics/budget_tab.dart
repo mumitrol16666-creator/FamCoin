@@ -89,7 +89,7 @@ class BudgetTab extends StatelessWidget {
             Row(children: [Expanded(child: Text(l.total, style: const TextStyle(fontWeight: FontWeight.w700))), MoneyText(state.recurringMonthly, style: const TextStyle(fontSize: 16))]),
             if (share != null) ...[
               const SizedBox(height: 8),
-              Text(l.recurringShareOfIncome(share.round()), style: TextStyle(fontSize: 12, color: fam.text2)),
+              Text(share > 100 ? l.incomeIncompleteNote : l.recurringShareOfIncome(share.round()), style: TextStyle(fontSize: 12, color: share > 100 ? fam.warn : fam.text2)),
             ] else if (income == 0)
               Text(l.recurringShareUnknown, style: TextStyle(fontSize: 12, color: fam.text2)),
           ]),

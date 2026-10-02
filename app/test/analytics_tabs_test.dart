@@ -54,6 +54,32 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('доходов записано меньше, чем платежей (D92): вместо «1 350 % дохода» — подсказка, что внесены не все доходы', (tester) async {
+    final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(390, 844));
+    final s = f.state;
+    // Средний доход считается по прошлым месяцам: в августе записали только 12 000 ₸.
+    await s.addIncome(amount: kzt(12000), source: 'side', account: 'cash', date: DateTime(2026, 8, 15));
+    await s.upsert('planned', 'rent', {'name': 'Аренда', 'amount': '${kzt(162000)}', 'day': 25, 'category': 'home', 'paid': []});
+    expect(s.recurringShareOfIncome, 1350);
+    expect(s.incomeLooksIncomplete, isTrue);
+    await tester.pump();
+
+    await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.text('Бюджет')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1350%'), findsNothing);
+    expect(find.textContaining('внесены не все доходы', skipOffstage: false), findsWidgets);
+
+    await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.text('Обзор')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1350%', skipOffstage: false), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    // Доходы записаны — доля снова показывается как доля.
+    await s.addIncome(amount: kzt(400000), source: 'salary', account: 'cash', date: DateTime(2026, 8, 20));
+    expect(s.incomeLooksIncomplete, isFalse);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('Обзор: выбранный день не переживает смену месяца с другой вкладки (F05)', (tester) async {
     final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(390, 844));
     await f.state.addExpense(amount: kzt(1000), category: 'food', account: 'cash', date: DateTime(2026, 8, 31));

@@ -1331,5 +1331,8 @@
   "purchaseFromPiggy": "Из копилки на этот счёт вернётся {amount} — покупка оплатится с него.",
   "@purchaseFromPiggy": {"placeholders": {"amount": {"type": "String"}}},
   "aiUnverified": "Консультант посчитал сам, в данных приложения этих сумм нет: {amounts}. Перепроверьте.",
-  "@aiUnverified": {"placeholders": {"amounts": {"type": "String"}}}
+  "@aiUnverified": {"placeholders": {"amounts": {"type": "String"}}},
+  "incomeIncompleteNote": "Платежей в месяц больше, чем записано доходов. Похоже, в приложении внесены не все доходы — доли и прогноз пока неточны.",
+  "incomeIncompleteShort": "доходы записаны не все?",
+  "forecastEarly": "Месяц только начался: оценка грубая и меняется от каждой траты."
 }

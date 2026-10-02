@@ -1060,6 +1060,11 @@ class AppState extends ChangeNotifier {
     return counted == 0 ? 0 : sum ~/ counted;
   }
 
+  /// Постоянных платежей в месяц больше, чем записано доходов (D92): доля от
+  /// дохода тогда не показатель, а признак того, что доходы внесены не все.
+  /// Вместо «1 350 % дохода» приложение говорит об этом прямо.
+  bool get incomeLooksIncomplete => recurringMonthly > 0 && avgMonthlyIncome() > 0 && recurringMonthly > avgMonthlyIncome();
+
   /// Доля постоянных обязательств от среднего дохода; `null` — доход неизвестен.
   double? get recurringShareOfIncome {
     final income = avgMonthlyIncome();

@@ -72,7 +72,12 @@ List<String> observations(BuildContext context, AppState state, DateTime month) 
   if (ratio != null && ratio >= 1.3) notes.add(l.obsPayday(ratio.toStringAsFixed(1)));
 
   final share = state.recurringShareOfIncome;
-  if (share != null && share >= 30) notes.add(l.obsRecurringShare(share.round()));
+  // Больше 100 % — не «доля», а знак, что доходы записаны не все (D92).
+  if (share != null && share > 100) {
+    notes.add(l.incomeIncompleteNote);
+  } else if (share != null && share >= 30) {
+    notes.add(l.obsRecurringShare(share.round()));
+  }
 
   final prevMonth = DateTime(month.year, month.month - 1, 1);
   final cats = state.categoriesFor(month);
