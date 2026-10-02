@@ -371,7 +371,7 @@ void main() {
     expect(s.dailyLimitCarry, kzt(45000), reason: 'перенос считается по лимиту, а не по остатку денег');
   });
 
-  test('D73: платежи до дохода уменьшают свободные деньги; не хватает на платежи — доступно 0', () async {
+  test('D81: платежи до дохода уменьшают свободные деньги, но не дневной лимит; о нехватке — предупреждение', () async {
     final f = FakeServer();
     await f.init();
     final s = f.state;
@@ -385,8 +385,13 @@ void main() {
     await s.reserve('trip', 'cash', kzt(95000)); // осталось 5 000, а платёж 10 000
     expect(s.freeMoney, -kzt(5000));
     expect(s.limitExplain.shortfall, kzt(5000));
-    expect(s.dailyLimitAvailable, 0, reason: 'свободно нечего — тратить «по лимиту» нельзя');
+    expect(s.dailyLimitAvailable, kzt(5000), reason: 'платёж впереди лимит не обнуляет: доход может прийти позже');
+    expect(s.limitExplain.capped, isFalse);
+
+    await s.addExpense(amount: kzt(3000), category: 'cafe', account: 'cash', date: s.today, plannedPurchase: true);
+    expect(s.dailyLimitAvailable, kzt(2000), reason: 'а деньгами на счетах доступное ограничено по-прежнему');
     expect(s.limitExplain.capped, isTrue);
+    expect(s.limitExplain.shortfall, kzt(8000));
   });
 
   test('D73: перерасход остаётся отрицательным — ограничение срезает только плюс', () async {

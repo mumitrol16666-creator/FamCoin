@@ -73,7 +73,7 @@ void main() {
     await s.reserve('trip', 'cash', kzt(60000)); // свободно осталось 40 000
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('ограничено свободными деньгами'), findsOneWidget);
+    expect(find.text('ограничено деньгами на счетах'), findsOneWidget);
     await tester.ensureVisible(find.text('Как посчитано ›'));
     await tester.tap(find.text('Как посчитано ›'));
     // На главной крутится фон сезона — pumpAndSettle не дождался бы конца.
@@ -83,7 +83,7 @@ void main() {
     for (final label in ['Деньги на счетах', 'Отложено на цели', 'Свободно', 'Ваш лимит на день', 'Доступно сегодня']) {
       expect(find.text(label, skipOffstage: false), findsOneWidget, reason: label);
     }
-    expect(find.textContaining('Доступное ограничено свободными деньгами', skipOffstage: false), findsOneWidget);
+    expect(find.textContaining('Доступное ограничено деньгами на счетах', skipOffstage: false), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 

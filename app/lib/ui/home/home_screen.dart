@@ -295,15 +295,13 @@ class HomeScreen extends StatelessWidget {
             const Divider(height: 16),
             line(l.explainAvailable, money(ex.available!, bold: true, color: ex.available! < 0 ? fam.expense : null), bold: true),
             if (ex.outside > 0) note(l.explainOutside(moneyInText(ex.outside))),
+            if (ex.capped) note(l.explainNoteCapped(moneyInText(ex.planned!))),
             if (ex.shortfall > 0)
-              note(l.explainNoteShortfall(moneyInText(ex.shortfall)), color: fam.expense)
-            else ...[
-              if (ex.capped) note(l.explainNoteCapped(moneyInText(ex.planned!))),
-              if (ex.limitTooHigh)
-                note(l.explainNoteHigh(date(ex.runOutDate!), date(ex.until)), color: fam.warn)
-              else if (!ex.capped)
-                note(l.explainNoteOk, color: fam.income),
-            ],
+              note(l.explainNoteShortfall(moneyInText(ex.shortfall)), color: fam.warn)
+            else if (ex.limitTooHigh)
+              note(l.explainNoteHigh(date(ex.runOutDate!), date(ex.until)), color: fam.warn)
+            else if (!ex.capped)
+              note(l.explainNoteOk, color: fam.income),
           ],
           const SizedBox(height: 16),
           OutlinedButton(
@@ -367,12 +365,13 @@ class _GuideCard extends StatelessWidget {
                       '${carry == 0 ? '' : carry > 0 ? ' · ${l.carryPositive(moneyInText(carry))}' : ' · ${l.carryNegative(moneyInText(-carry))}'}',
               style: const TextStyle(fontSize: 13),
             ),
-            // Доступное упирается в деньги, а не в лимит (D73) — говорим прямо.
+            // Доступное упирается в деньги, а не в лимит (D73), или на платежи
+            // пока не хватает (D81: предупреждение, лимит не уменьшается).
             if (ex != null && (ex.shortfall > 0 || ex.capped))
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
-                  ex.shortfall > 0 ? l.cardShortfall(moneyInText(ex.shortfall)) : l.cardCapped,
+                  ex.capped ? l.cardCapped : l.cardShortfall(moneyInText(ex.shortfall)),
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 ),
               ),
