@@ -105,26 +105,34 @@ class BudgetScreen extends StatelessWidget {
                         final m = p.onceMonth!;
                         final name = toBeginningOfSentenceCase(DateFormat.yMMMM(locale).format(m));
                         final overdue = m.isBefore(state.monthStart);
+                        final saving = state.purchaseGoal(p) != null;
+                        final saved = state.purchaseSaved(p);
+                        final monthly = state.purchaseMonthly(p);
+                        final when = overdue
+                            ? l.purchaseOverdue(name)
+                            : m == state.monthStart
+                                ? l.purchaseThisMonth(name)
+                                : saving
+                                    ? name
+                                    : l.purchaseBy(name, moneyInText(monthly));
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: CategoryAvatar(categoryById(p.category).icon),
                           title: Text(p.name),
-                          subtitle: Text(
-                            overdue
-                                ? l.purchaseOverdue(name)
-                                : m == state.monthStart
-                                    ? l.purchaseThisMonth(name)
-                                    : l.purchaseBy(name, moneyInText(state.purchaseMonthly(p))),
-                            style: TextStyle(fontSize: 12, color: overdue ? fam.expense : fam.text2),
-                          ),
+                          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(when, style: TextStyle(fontSize: 12, color: overdue ? fam.expense : fam.text2)),
+                            // Копят в копилку (D90): сколько уже есть и сколько осталось откладывать.
+                            if (saving) ...[
+                              Text(
+                                '${l.purchaseProgress(moneyInText(saved), moneyInText(p.amount))} · ${monthly == 0 ? l.purchaseReady : l.purchaseMore(moneyInText(monthly))}',
+                                style: TextStyle(fontSize: 12, color: fam.text2),
+                              ),
+                              const SizedBox(height: 4),
+                              UsageBar(value: saved, max: p.amount, color: context.scheme.primary),
+                            ],
+                          ]),
                           trailing: MoneyText(p.amount),
-                          // «Купил»: расход записывается вне дневного лимита, покупка уходит из плана.
-                          onTap: () => showPayDueSheet(context, DueItem(p, DateTime(m.year, m.month + 1, 0), p.once!)),
-                          onLongPress: () async {
-                            if (await confirm(context, title: l.deletePurchase, action: l.delete) && context.mounted) {
-                              await runAction(context, () => state.delete('purchase', p.id));
-                            }
-                          },
+                          onTap: () => showPurchaseSheet(context, p),
                         );
                       }),
                   ]),

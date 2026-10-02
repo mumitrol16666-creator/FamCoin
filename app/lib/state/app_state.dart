@@ -365,13 +365,37 @@ class AppState extends ChangeNotifier {
   /// Разовые покупки, которые ещё впереди (не куплены).
   List<PlannedInfo> get purchases => planned.where((p) => p.once != null && !p.paid.contains(p.once)).toList()..sort((a, b) => a.once!.compareTo(b.once!));
 
+  /// Копилка, в которую откладывают на покупку (D90); `null` — не копят или
+  /// копилку уже закрыли.
+  GoalInfo? purchaseGoal(PlannedInfo p) => p.goalId == null ? null : goals.where((g) => g.id == p.goalId).firstOrNull;
+
+  /// Сколько уже отложено на покупку в её копилке.
+  int purchaseSaved(PlannedInfo p) {
+    final goal = purchaseGoal(p);
+    return goal == null ? 0 : goalSaved(goal);
+  }
+
   /// Сколько откладывать в месяц, чтобы к месяцу покупки набралась вся сумма:
-  /// поровну на оставшиеся месяцы, считая текущий; вверх до 100 ₸.
+  /// то, чего ещё не хватает, поровну на оставшиеся месяцы, считая текущий;
+  /// вверх до 100 ₸. `0` — уже накоплено.
   int purchaseMonthly(PlannedInfo p) {
     final m = p.onceMonth!;
     final months = (m.year - today.year) * 12 + (m.month - today.month) + 1;
+    final left = p.amount - purchaseSaved(p);
+    if (left <= 0) return 0;
     final step = 100 * minorPerUnit;
-    return ((p.amount / (months < 1 ? 1 : months)) / step).ceil() * step;
+    return ((left / (months < 1 ? 1 : months)) / step).ceil() * step;
+  }
+
+  /// Завести копилку под покупку: цель с тем же названием, суммой и сроком —
+  /// деньги в ней перестают быть свободными и не попадают в дневной лимит.
+  Future<void> startSavingFor(PlannedInfo p) {
+    final m = p.onceMonth!;
+    final goal = newGoalCommands(name: p.name, target: p.amount, deadline: DateTime(m.year, m.month + 1, 0));
+    return sendBatch([
+      ...goal,
+      {'type': 'upsertEntity', 'kind': p.entityKind, 'entityId': p.id, 'data': p.toJson(goal: goal.last['entityId'] as String)},
+    ]);
   }
 
   /// Новая разовая покупка на месяц [month]. Срок — последний день месяца:
@@ -800,9 +824,13 @@ class AppState extends ChangeNotifier {
     final fact = p.debtId != null
         ? {'type': 'loanPayment', 'id': newId(), 'date': d, 'account': account, 'debtId': p.debtId, 'principal': (amount - interest).toString(), 'interest': interest.toString(), 'meta': link}
         : {'type': 'expense', 'id': newId(), 'date': d, 'account': account, 'splits': {p.category: amount.toString()}, 'meta': {'who': 'shared', 'note': p.name, ...link}};
+    // Покупка из копилки (D90): накопленное возвращается на счёт оплаты,
+    // копилка закрывается — и расход проводится уже с этого счёта.
+    final goal = p.once == null ? null : purchaseGoal(p);
     return sendBatch([
+      if (goal != null) ...closeGoalCommands(goal, returnTo: account),
       fact,
-      {'type': 'upsertEntity', 'kind': p.entityKind, 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, due.period})},
+      {'type': 'upsertEntity', 'kind': p.entityKind, 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, due.period}, keepGoal: goal == null)},
     ], commandId: commandId);
   }
 
@@ -1278,16 +1306,18 @@ class AppState extends ChangeNotifier {
       send({'type': 'transfer', 'id': newId(), 'date': _date(date ?? today), 'from': g.account!, 'to': to, 'amount': amount.toString()});
 
   /// Закрыть цель: деньги из копилки возвращаются на счёт, копилка в архив.
-  Future<void> closeGoal(GoalInfo g, {required String returnTo}) {
+  Future<void> closeGoal(GoalInfo g, {required String returnTo}) => sendBatch(closeGoalCommands(g, returnTo: returnTo));
+
+  List<Map<String, dynamic>> closeGoalCommands(GoalInfo g, {required String returnTo}) {
     final acc = g.account;
     final balance = acc != null && ledger.hasAccount(acc) ? ledger.balance(acc) : 0;
-    return sendBatch([
+    return [
       if (acc != null && balance > 0) {'type': 'transfer', 'id': newId(), 'date': _date(today), 'from': acc, 'to': returnTo, 'amount': balance.toString()},
       for (final r in ledger.reservations.where((r) => r.goalId == g.id))
         {'type': 'release', 'goalId': g.id, 'accountId': r.accountId, 'amount': r.amount.toString()},
       if (acc != null && ledger.hasAccount(acc)) {'type': 'archiveAccount', 'accountId': acc},
       {'type': 'deleteEntity', 'kind': 'goal', 'entityId': g.id},
-    ]);
+    ];
   }
 
   // ---------------------------------------------------------- категории

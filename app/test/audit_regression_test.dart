@@ -7,6 +7,7 @@ import 'dart:convert';
 
 import 'package:famcoin/state/api_client.dart';
 import 'package:famcoin/state/app_state.dart';
+import 'package:famcoin/state/models.dart';
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -464,6 +465,45 @@ void main() {
 
     f.now = DateTime(2027, 4, 2);
     expect(s.dueItems(s.today).single.date, DateTime(2027, 3, 31), reason: 'не купили в срок — висит как просроченная');
+  });
+
+  test('D90: копилка под покупку — прогресс, взнос от остатка, покупка из копилки закрывает её', () async {
+    final f = FakeServer(); // сегодня 28 сентября 2026, на счёте 100 000 ₸
+    await f.init();
+    final s = f.state;
+    await s.setDailyLimit(kzt(5000));
+    await s.addPurchase(name: 'Колёса', amount: kzt(60000), month: DateTime(2026, 12, 1), category: 'transport');
+    expect(s.purchaseGoal(s.purchases.single), isNull);
+    expect(s.purchaseMonthly(s.purchases.single), kzt(15000), reason: '60 000 на 4 месяца');
+
+    await s.startSavingFor(s.purchases.single);
+    final goal = s.purchaseGoal(s.purchases.single)!;
+    expect((goal.name, goal.target, goal.deadline), ('Колёса', kzt(60000), DateTime(2026, 12, 31)));
+    expect(s.purchaseSaved(s.purchases.single), 0);
+
+    await s.depositToGoal(goal, from: 'cash', amount: kzt(20000));
+    expect(s.purchaseSaved(s.purchases.single), kzt(20000));
+    expect(s.purchaseMonthly(s.purchases.single), kzt(10000), reason: 'осталось 40 000 на 4 месяца');
+    expect(s.ledger.freeLiquid(), kzt(80000), reason: 'отложенное в копилку — не свободные деньги');
+    expect(s.spentToday(), 0);
+
+    // Купили за 55 000: 20 000 вернулись из копилки на счёт, расход прошёл с него.
+    f.now = DateTime(2026, 12, 10);
+    final p = s.purchases.single;
+    await s.payDue(DueItem(p, DateTime(2026, 12, 31), p.once!), account: 'cash', amount: kzt(55000));
+    expect(s.purchases, isEmpty);
+    expect(s.goals, isEmpty, reason: 'копилка закрыта');
+    expect(s.ledger.balance('cash'), kzt(45000));
+    expect(s.ledger.liquid(), kzt(45000));
+    expect(s.spentToday(), 0, reason: 'запланированная покупка не тратит дневной лимит');
+    expect(s.monthReport.expense, kzt(55000));
+    expect(f.entities['purchase']!.values.single.containsKey('goal'), isFalse);
+
+    // Накоплено всё — откладывать больше не нужно.
+    await s.addPurchase(name: 'Страховка', amount: kzt(30000), month: DateTime(2027, 2, 1), category: 'transport');
+    await s.startSavingFor(s.purchases.single);
+    await s.depositToGoal(s.purchaseGoal(s.purchases.single)!, from: 'cash', amount: kzt(30000));
+    expect(s.purchaseMonthly(s.purchases.single), 0);
   });
 
   test('D87: пояснение к минусу действует, пока счёт в минусе, и не переносится на следующий минус', () async {

@@ -147,7 +147,7 @@ class GoalInfo {
 
 /// Плановый платёж: план не меняет баланс, факт оплаты проводится отдельно (D14).
 class PlannedInfo {
-  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once});
+  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once, this.goalId});
   factory PlannedInfo.fromJson(String id, Map<String, dynamic> d) => PlannedInfo(
         id,
         d['name'] as String? ?? '',
@@ -158,6 +158,7 @@ class PlannedInfo {
         {...((d['paid'] as List?) ?? const []).cast<String>()},
         start: d['start'] == null ? null : dateFromJson(d['start']),
         once: d['once'] as String?,
+        goalId: d['goal'] as String?,
       );
   final String id;
   final String name;
@@ -180,13 +181,18 @@ class PlannedInfo {
   /// запланирована. `null` — обычный ежемесячный платёж.
   final String? once;
 
+  /// Цель-копилка, в которую откладывают на разовую покупку (D90).
+  final String? goalId;
+
   /// Вид справочника на сервере: разовые покупки хранятся отдельно.
   String get entityKind => once == null ? 'planned' : 'purchase';
 
   /// Первое число месяца разовой покупки.
   DateTime? get onceMonth => once == null ? null : DateTime(int.parse(once!.substring(0, 4)), int.parse(once!.substring(5, 7)), 1);
 
-  Map<String, Object?> toJson({Set<String>? paid}) => {
+  /// [goal] привязывает копилку; `keepGoal: false` снимает привязку (покупка
+  /// совершена, копилка закрыта).
+  Map<String, Object?> toJson({Set<String>? paid, String? goal, bool keepGoal = true}) => {
         'name': name,
         'amount': amount.toString(),
         'day': day,
@@ -195,6 +201,7 @@ class PlannedInfo {
         'paid': [...(paid ?? this.paid)]..sort(),
         if (start != null) 'start': dateToJson(start!),
         if (once != null) 'once': once,
+        if ((goal ?? (keepGoal ? goalId : null)) != null) 'goal': goal ?? goalId,
       };
 }
 

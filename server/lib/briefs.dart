@@ -21,7 +21,7 @@ String _period(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
 int _minor(Object? v) => v == null ? 0 : parseMinor(v);
 
-/// Плановые платежи, не оплаченные и попадающие в [from, until].
+/// Плановые платежи и разовые покупки, не оплаченные и попадающие в [from, until].
 List<(Map<String, dynamic>, DateTime)> _due(List<Map<String, dynamic>> planned, DateTime from, DateTime until) {
   final out = <(Map<String, dynamic>, DateTime)>[];
   for (final p in planned) {
@@ -32,6 +32,8 @@ List<(Map<String, dynamic>, DateTime)> _due(List<Map<String, dynamic>> planned, 
       final d = _onDay(from.year, from.month + m, day);
       if (d.isBefore(from) || d.isAfter(until)) continue;
       if (start != null && d.isBefore(start)) continue;
+      // Разовая покупка (D88) — только в своём месяце.
+      if (p['once'] != null && p['once'] != _period(d)) continue;
       if (paid.contains(_period(d))) continue;
       out.add((p, d));
     }

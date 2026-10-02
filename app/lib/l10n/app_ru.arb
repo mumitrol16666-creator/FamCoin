@@ -1316,5 +1316,18 @@
   "@purchaseThisMonth": {"placeholders": {"month": {"type": "String"}}},
   "purchaseOverdue": "{month} · срок прошёл",
   "@purchaseOverdue": {"placeholders": {"month": {"type": "String"}}},
-  "deletePurchase": "Убрать покупку из плана?"
+  "deletePurchase": "Убрать покупку из плана?",
+  "purchaseProgress": "отложено {saved} из {total}",
+  "@purchaseProgress": {"placeholders": {"saved": {"type": "String"}, "total": {"type": "String"}}},
+  "purchaseMore": "ещё ≈ {amount} в месяц",
+  "@purchaseMore": {"placeholders": {"amount": {"type": "String"}}},
+  "purchaseReady": "накоплено",
+  "purchaseBought": "Купил",
+  "purchaseSave": "Копить в копилку",
+  "purchaseTopUp": "Пополнить копилку",
+  "purchaseRemove": "Убрать из плана",
+  "purchaseSaveNote": "Можно просто помнить о покупке, а можно копить: «Копить в копилку» создаст цель с этой суммой и сроком. Деньги в копилке не считаются свободными и не попадают в дневной лимит.",
+  "purchaseRemoveHint": "Копилка с накопленным останется среди целей.",
+  "purchaseFromPiggy": "Из копилки на этот счёт вернётся {amount} — покупка оплатится с него.",
+  "@purchaseFromPiggy": {"placeholders": {"amount": {"type": "String"}}}
 }

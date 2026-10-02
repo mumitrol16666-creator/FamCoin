@@ -162,7 +162,8 @@ class NotificationService {
       ledger: l,
       today: today,
       profile: Map<String, dynamic>.from(s['profile'] as Map? ?? const {}),
-      planned: ofKind('planned'),
+      // Разовые покупки (D88) напоминают о себе так же, как платежи.
+      planned: [...ofKind('planned'), ...ofKind('purchase')],
       limits: ofKind('limit'),
       locale: s['locale'] as String? ?? 'ru',
     );

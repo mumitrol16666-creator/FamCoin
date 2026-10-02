@@ -60,6 +60,8 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due) {
   final amount = TextEditingController(text: amountToField(p.amount));
   final interest = TextEditingController();
   var account = _firstAccount(context);
+  // Покупка из копилки (D90): накопленное вернётся на счёт оплаты той же командой.
+  final fromPiggy = p.once == null ? 0 : state.purchaseSaved(p);
   return showFormSheet<void>(
     context,
     title: '${l.pay}: ${p.name}',
@@ -74,7 +76,8 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due) {
           const SizedBox(height: 12),
         ],
         AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
-        ListenableBuilder(listenable: amount, builder: (_, _) => MinusWarning(accountId: account, amount: parseAmount(amount.text))),
+        if (fromPiggy > 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text(l.purchaseFromPiggy(moneyInText(fromPiggy)), style: TextStyle(fontSize: 12, color: ctx.fam.text2))),
+        ListenableBuilder(listenable: amount, builder: (_, _) => MinusWarning(accountId: account, amount: parseAmount(amount.text), returned: fromPiggy)),
         const SizedBox(height: 20),
         SubmitButton(
           label: l.pay,
@@ -318,6 +321,64 @@ Future<void> addPlannedFlow(BuildContext context) async {
   if (r == null || !context.mounted) return;
   final id = newId();
   await runAction(context, () => state.upsert('planned', id, PlannedInfo(id, r.name, r.amount, r.day, r.category, null, const {}, start: state.plannedStart(r.day, paidThisMonth: r.paidThisMonth)).toJson()));
+}
+
+/// Действия с разовой покупкой (D88, D90): купил, копить, убрать из плана.
+Future<void> showPurchaseSheet(BuildContext context, PlannedInfo p) {
+  final l = context.l10n;
+  final state = AppScope.of(context).state;
+  final m = p.onceMonth!;
+  return showFormSheet<void>(
+    context,
+    title: p.name,
+    builder: (ctx) {
+      final goal = state.purchaseGoal(p);
+      final monthly = state.purchaseMonthly(p);
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Center(child: BigMoney(p.amount)),
+        const SizedBox(height: 8),
+        if (goal != null)
+          Text(
+            '${l.purchaseProgress(moneyInText(state.purchaseSaved(p)), moneyInText(p.amount))} · ${monthly == 0 ? l.purchaseReady : l.purchaseMore(moneyInText(monthly))}',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: ctx.fam.text2),
+          )
+        else
+          Text(l.purchaseSaveNote, style: TextStyle(fontSize: 13, color: ctx.fam.text2)),
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: () {
+            Navigator.pop(ctx);
+            // «Купил»: расход записывается вне дневного лимита, покупка уходит из плана.
+            showPayDueSheet(context, DueItem(p, DateTime(m.year, m.month + 1, 0), p.once!));
+          },
+          child: Text(l.purchaseBought),
+        ),
+        const SizedBox(height: 8),
+        FilledButton.tonal(
+          onPressed: () async {
+            Navigator.pop(ctx);
+            if (goal != null) {
+              await showReserveSheet(context, goal, release: false, initial: monthly == 0 ? null : monthly);
+            } else if (!state.pro && state.goals.isNotEmpty) {
+              await showProGate(context, l.proGateGoals);
+            } else {
+              await runAction(context, () => state.startSavingFor(p));
+            }
+          },
+          child: Text(goal != null ? l.purchaseTopUp : l.purchaseSave),
+        ),
+        TextButton(
+          onPressed: () async {
+            final nav = Navigator.of(ctx);
+            if (!await confirm(ctx, title: l.deletePurchase, message: goal == null ? null : l.purchaseRemoveHint, action: l.delete) || !ctx.mounted) return;
+            if (await runAction(ctx, () => state.delete('purchase', p.id))) nav.pop();
+          },
+          child: Text(l.purchaseRemove),
+        ),
+      ]);
+    },
+  );
 }
 
 /// Новая разовая покупка (D88): что, сколько и в каком месяце.

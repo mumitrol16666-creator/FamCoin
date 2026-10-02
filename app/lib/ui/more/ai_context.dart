@@ -241,7 +241,15 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     'plannedPurchases': s.purchases.isEmpty
         ? null
         : [
-            for (final p in s.purchases) {'name': p.name, 'amount': _t(p.amount), 'month': p.once, 'toSavePerMonth': _t(s.purchaseMonthly(p))},
+            for (final p in s.purchases)
+              {
+                'name': p.name,
+                'amount': _t(p.amount),
+                'month': p.once,
+                // Копилка под покупку (D90): `null` — человек её не заводил.
+                'savedInPiggy': s.purchaseGoal(p) == null ? null : _t(s.purchaseSaved(p)),
+                'toSavePerMonth': _t(s.purchaseMonthly(p)),
+              },
           ],
     'goals': goals.isEmpty
         ? null

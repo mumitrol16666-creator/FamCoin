@@ -89,7 +89,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('разовые покупки (D88): раздел в «Бюджете», подсказка сколько откладывать, форма добавления открывается', (tester) async {
+  testWidgets('разовые покупки (D88, D90): раздел в «Бюджете», подсказка сколько откладывать, копилка и «купил»', (tester) async {
     final f = await pumpApp(tester, home: const BudgetScreen(), size: const Size(360, 732));
     await f.state.addPurchase(name: 'Колёса', amount: kzt(100000), month: DateTime(2027, 3, 1), category: 'transport');
     await tester.pump(const Duration(milliseconds: 500));
@@ -101,7 +101,25 @@ void main() {
 
     await tester.tap(find.text('Колёса'));
     await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull, reason: 'форма «купил» открывается без переполнений');
+    expect(tester.takeException(), isNull, reason: 'лист покупки открывается без переполнений');
+    expect(find.text('Купил'), findsOneWidget);
+    expect(find.text('Убрать из плана'), findsOneWidget);
+
+    // «Копить в копилку» заводит цель — строка покупки показывает прогресс.
+    await tester.tap(find.text('Копить в копилку'));
+    await tester.pumpAndSettle();
+    expect(f.state.goals.single.name, 'Колёса');
+    expect(find.textContaining('отложено 0'), findsOneWidget);
+    expect(find.textContaining('ещё ≈'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Колёса').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Пополнить копилку'), findsOneWidget);
+    await tester.tap(find.text('Купил'));
+    await tester.pumpAndSettle();
+    expect(find.text('Оплатить'), findsWidgets, reason: 'форма «купил» открывается');
+    expect(tester.takeException(), isNull);
     Navigator.pop(tester.element(find.byType(BottomSheet)));
     await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
