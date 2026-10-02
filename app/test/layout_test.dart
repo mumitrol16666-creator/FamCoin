@@ -466,6 +466,7 @@ void main() {
     expect((context['thisMonth'] as Map)['expense'], 1500, reason: 'суммы уходят в тенге');
     expect((context['expenseByCategory'] as List).first, containsPair('name', 'Кафе'));
     expect(context['dailyLimit'], isNull, reason: 'лимит не задан — так и передаём, а не ноль');
+    expect(context['recordedIncome'], containsPair('looksIncomplete', false));
     expect(tester.takeException(), isNull);
 
     // Меню: что видит консультант и разбор прошлого месяца (составляется один раз).

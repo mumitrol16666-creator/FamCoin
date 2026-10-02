@@ -17,6 +17,10 @@ num _t(int minor) => minor % minorPerUnit == 0 ? minor ~/ minorPerUnit : minor /
 
 double? _round1(double? v) => v == null ? null : (v * 10).round() / 10;
 
+/// Доля от дохода в процентах; больше 100 % — не показатель, а признак того,
+/// что доходы записаны не полностью: такую долю не передаём (D83).
+double? _share(double? v) => v == null || v > 100 ? null : _round1(v);
+
 String _month(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
 /// Категории месяца [month] с суммами прошлого месяца рядом — не больше 12.
@@ -53,6 +57,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
   final debt = s.debtLoadStatus;
   final limits = s.currentLimitStatuses;
   final goals = s.goals;
+  final avgIncome = s.avgMonthlyIncome();
 
   return {
     'today': dateToJson(s.today),
@@ -103,7 +108,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     'capital': {'money': _t(worth.money), 'owedToMe': _t(worth.receivables), 'debts': _t(worth.liabilities), 'capital': _t(worth.capital)},
     'bankDebts': debt.totalDebt == 0
         ? null
-        : {'totalDebt': _t(debt.totalDebt), 'monthlyPayments': _t(debt.monthlyPayments), 'shareOfIncomePercent': _round1(debt.incomeSharePercent)},
+        : {'totalDebt': _t(debt.totalDebt), 'monthlyPayments': _t(debt.monthlyPayments), 'shareOfIncomePercent': _share(debt.incomeSharePercent)},
     'goals': goals.isEmpty
         ? null
         : [
@@ -114,7 +119,13 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'eveningShareOfDiscretionaryPercent': _round1(s.eveningDiscretionaryShare(month)),
       'largeExpensesWithoutLimit': s.unplannedLargeExpenses(month).length,
       'incomeDaySpendRatio': _round1(s.paydaySpendRatio()),
-      'recurringPaymentsShareOfIncomePercent': _round1(s.recurringShareOfIncome),
+      'recurringPaymentsShareOfIncomePercent': _share(s.recurringShareOfIncome),
+    },
+    'recordedIncome': {
+      'averagePerMonth': _t(avgIncome),
+      'recurringPaymentsPerMonth': _t(s.recurringMonthly),
+      // Платежей больше, чем записано доходов: скорее всего, доходы внесены не все.
+      'looksIncomplete': s.recurringMonthly > avgIncome,
     },
     'familyMode': s.familyMode,
   };
