@@ -23,7 +23,7 @@ const _steady = <String, dynamic>{
   'thisMonth': {'income': 350000, 'expense': 142000, 'incomeMinusExpense': 208000, 'monthInProgress': true, 'daysElapsed': 20},
   'previousMonth': {'month': '2026-09', 'income': 350000, 'expense': 231000, 'incomplete': false},
   'money': {'onAccounts': 412000, 'reservedForGoals': 60000, 'accounts': [{'name': 'Kaspi Gold', 'balance': 412000}]},
-  'dailyLimit': {'perDay': 5000, 'spentToday': 1200, 'carryFromPreviousDays': null, 'availableToday': 3800, 'limitedByMoneyOnAccounts': false},
+  'dailyLimit': {'perDay': 5000, 'spentToday': 1200, 'carryEnabled': false, 'unspentFromPreviousDays': 0, 'overspentOnPreviousDays': 0, 'carryCountedSince': null, 'availableToday': 3800, 'limitedByMoneyOnAccounts': false},
   'paymentsUntilMonthEnd': {'unpaidTotal': 150000, 'overdueTotal': 0, 'notEnoughMoneyNowBy': 0, 'unpaidCount': 1, 'unpaid': [{'name': 'Аренда', 'amount': 150000, 'date': '2026-10-25'}]},
   'categoryLimits': {'usedPercent': 71.0, 'monthElapsedPercent': 64.5, 'limits': [{'category': 'Продукты', 'limit': 90000, 'spent': 65000}, {'category': 'Кафе', 'limit': 20000, 'spent': 13000}]},
   'expenseByCategory': [
@@ -50,7 +50,17 @@ const _thin = <String, dynamic>{
   'thisMonth': {'income': 0, 'expense': 8363, 'incomeMinusExpense': -8363, 'monthInProgress': true, 'daysElapsed': 2},
   'previousMonth': {'month': '2026-09', 'income': 12000, 'expense': 9647, 'incomplete': true},
   'money': {'onAccounts': 32514, 'reservedForGoals': 0, 'accounts': [{'name': 'Kaspi Gold', 'balance': 32514}]},
-  'dailyLimit': {'perDay': 5000, 'spentToday': 0, 'carryFromPreviousDays': -293, 'availableToday': 4707, 'limitedByMoneyOnAccounts': false},
+  'dailyLimit': {
+    'perDay': 5000,
+    'spentToday': 3180,
+    'carryEnabled': true,
+    'unspentFromPreviousDays': 0,
+    'overspentOnPreviousDays': 293,
+    'carryCountedSince': '2026-09-29',
+    'availableToday': 1527,
+    'limitedByMoneyOnAccounts': false,
+    'howItIsCalculated': 'availableToday = perDay + unspentFromPreviousDays − overspentOnPreviousDays − spentToday, но не больше денег на счетах',
+  },
   'paymentsUntilMonthEnd': {
     'unpaidTotal': 162000,
     'overdueTotal': 40000,
@@ -74,11 +84,14 @@ const _thin = <String, dynamic>{
 };
 
 class _Case {
-  const _Case(this.name, this.question, {this.context = _steady, this.locale = 'ru', this.must = const [], this.mustNot = const []});
+  const _Case(this.name, this.question, {this.context = _steady, this.locale = 'ru', this.history = const [], this.must = const [], this.mustNot = const []});
   final String name;
   final String question;
   final Map<String, dynamic> context;
   final String locale;
+
+  /// Предыдущие сообщения разговора: вопрос, ответ, вопрос, ответ…
+  final List<String> history;
 
   /// Каждый шаблон должен встретиться в ответе.
   final List<String> must;
@@ -120,6 +133,16 @@ const _cases = <_Case>[
   _Case('действие: поставить лимит', 'Поставь лимит на кафе 25 000', must: ['Бюджет'], mustNot: ['поставил|установил[^и]|готово|изменил']),
   _Case('действие: напомнить', 'Напомни мне завтра оплатить аренду', must: [_noAction], mustNot: ['напомню|хорошо, завтра']),
   _Case('раздел: долги', 'Где в приложении посмотреть мои долги?', must: ['Бюджет']),
+  // Объяснение цифры: расчёт словами, без жаргона и без повтора.
+  _Case('объяснение: откуда остаток', 'Почему сегодня доступно столько?', context: _thin, must: ['1 527', '293', 'больше лимита|сверх лимита|перерасход|превы'], mustNot: [r'[-−–]293', 'могу (кратко |подробнее )?(пояснить|объяснить)']),
+  _Case(
+    'объяснение: «объясни» — глубже, а не повтор',
+    'объясни',
+    context: _thin,
+    history: ['Почему сегодня доступно столько?', 'Сегодня доступно 1 527 ₸: из лимита 5 000 ₸ уже потрачено 3 180 ₸, и ещё вычтено 293 ₸ за прошлые дни.'],
+    must: ['293', r'[−–-] ?(293|3 180)|минус|вычита|вычт', 'лимит'],
+    mustNot: [r'[-−–]293', 'могу (кратко |подробнее )?(пояснить|объяснить)'],
+  ),
   // Обычные ответы: цифры из сводки, имя, язык.
   _Case('ответ: категория', 'Сколько я потратил на продукты в этом месяце?', must: ['65 000']),
   _Case('ответ: имя', 'Как меня зовут?', must: ['Владислав']),
@@ -149,6 +172,7 @@ Future<void> main(List<String> args) async {
       for (final c in batch)
         model.complete([
           {'role': 'system', 'content': chatSystemPrompt(c.locale, c.context)},
+          for (var h = 0; h < c.history.length; h++) {'role': h.isEven ? 'user' : 'assistant', 'content': c.history[h]},
           {'role': 'user', 'content': c.question},
         ]),
     ]);

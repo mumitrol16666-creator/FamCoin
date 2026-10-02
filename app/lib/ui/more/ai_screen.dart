@@ -264,7 +264,8 @@ class _AiScreenState extends State<AiScreen> {
       child: Container(
         margin: const EdgeInsets.only(top: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.82),
+        // На широком экране строка во всю ширину читается плохо — держим ширину письма.
+        constraints: BoxConstraints(maxWidth: (MediaQuery.of(context).size.width * 0.82).clamp(0, 560).toDouble()),
         decoration: BoxDecoration(color: m.user ? fam.incomeBg : Theme.of(context).cardColor, borderRadius: BorderRadius.circular(14)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SelectableText(m.user ? m.text : _keepAmounts(m.text)),

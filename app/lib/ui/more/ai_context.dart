@@ -130,9 +130,15 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
         : {
             'perDay': _t(s.dailyLimit!),
             'spentToday': _t(ex.spent),
-            'carryFromPreviousDays': s.dailyLimitCarryOn ? _t(ex.carry) : null,
+            // Перенос (D64) — двумя положительными числами, чтобы его можно было
+            // назвать словами: «не потратили раньше» или «потратили сверх лимита».
+            'carryEnabled': s.dailyLimitCarryOn,
+            'unspentFromPreviousDays': _t(ex.carry > 0 ? ex.carry : 0),
+            'overspentOnPreviousDays': _t(ex.carry < 0 ? -ex.carry : 0),
+            'carryCountedSince': s.dailyLimitCarryOn && s.dailyLimitSince != null ? dateToJson(s.dailyLimitSince!) : null,
             'availableToday': _t(ex.available ?? 0),
             'limitedByMoneyOnAccounts': ex.capped,
+            'howItIsCalculated': 'availableToday = perDay + unspentFromPreviousDays − overspentOnPreviousDays − spentToday, но не больше денег на счетах',
           },
     'paymentsUntilMonthEnd': {
       'unpaidTotal': _t(due.fold(0, (sum, d) => sum + d.planned.amount)),
