@@ -179,6 +179,9 @@ void main() {
     expect(q('дал в долг асхату 5000 с каспи').person, 'Асхату');
     expect(q('дал в долг асхату 5000 с каспи').accountId, 'kaspi');
     expect(q('взял в долг у данияра 20 тысяч').person, 'Данияра');
+    expect(q('взял в долг у данияра 20 тысяч').kind, VoiceKind.borrow, reason: '«взял в долг» — не выдача');
+    expect(q('заняла у мамы 50000').kind, VoiceKind.borrow);
+    expect(q('занял ему 5000').kind, VoiceKind.lendOut);
     expect(q('взял в долг 20 тысяч').person, isNull);
     expect(q('взял в долг 20 тысяч').warnings, contains('no_person'));
     // Имя, записанное раньше в другом падеже, узнаётся по основе.

@@ -99,7 +99,7 @@ const Map<String, String> _incomeWords = {
 
 const _incomeVerbs = ['получил', 'получила', 'пришл', 'зачисл', 'доход', 'кіріс', 'түсті', 'алдым'];
 const _transferVerbs = ['перевел', 'перевёл', 'перевела', 'перекинул', 'перекинула', 'перевод', 'аудардым', 'аударым'];
-const _lendVerbs = ['дал в долг', 'дала в долг', 'одолжил', 'одолжила', 'занял ему', 'қарыз бердім', 'в долг'];
+const _lendVerbs = ['дал в долг', 'дала в долг', 'одолжил', 'одолжила', 'занял ему', 'қарыз бердім'];
 const _borrowVerbs = ['взял в долг', 'взяла в долг', 'занял у', 'заняла у', 'занял', 'қарыз алдым'];
 const _repayReceivedVerbs = ['вернул мне', 'вернула мне', 'мне вернул', 'мне вернула', 'отдал мне', 'отдала мне', 'қайтарды'];
 const _repayMadeVerbs = ['вернул долг', 'вернула долг', 'отдал долг', 'отдала долг', 'вернул', 'вернула', 'қайтардым'];
@@ -323,6 +323,10 @@ VoiceDraft parseVoice(
     kind = VoiceKind.lendOut;
   } else if (_hasAny(text, _borrowVerbs)) {
     kind = VoiceKind.borrow;
+  } else if (text.contains('в долг')) {
+    // «Дал Асхату 30 тысяч в долг»: слова разнесены, но это выдача. Проверяется
+    // после «взял в долг» — иначе любое «в долг» считалось бы выдачей.
+    kind = VoiceKind.lendOut;
   } else if (_hasAny(text, _repayMadeVerbs)) {
     kind = VoiceKind.repaymentMade;
   } else if (_hasAny(text, _transferVerbs)) {

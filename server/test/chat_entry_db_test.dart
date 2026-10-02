@@ -220,6 +220,69 @@ void main() {
     expect(bot.last('sendMessage')['text'], contains('Потрачено: <b>1 500 ₸</b>'));
   });
 
+  test('перевод: счета меняются кнопками, «куда» = «откуда» меняет их местами; запись и отмена', () async {
+    if (skip()) return;
+    final (chatId, userId) = await owner(accounts: 3);
+    await say(chatId, 'перевёл 30000');
+    expect(bot.last('sendMessage')['text'], allOf(contains('Перевод · 30 000 ₸'), contains('Со счёта: Счёт 0'), contains('На счёт: Счёт 1')));
+    await press(chatId, bot.button('На счёт'));
+    await press(chatId, bot.button('Счёт 2'));
+    expect(bot.last('editMessageText')['text'], allOf(contains('Со счёта: Счёт 0'), contains('На счёт: Счёт 2')));
+    await press(chatId, bot.button('Со счёта'));
+    await press(chatId, bot.button('Счёт 2'));
+    expect(bot.last('editMessageText')['text'], allOf(contains('Со счёта: Счёт 2'), contains('На счёт: Счёт 0')), reason: 'выбрали тот же счёт — поменялись местами');
+    final ok = bot.button('Записать');
+    await press(chatId, ok);
+    var l = (await ledger.view(userId))!.ledger;
+    expect((l.balance('acc0'), l.balance('acc1'), l.balance('acc2')), (kzt(130000), kzt(100000), kzt(70000)));
+    expect(l.liquid(), kzt(300000), reason: 'перевод не меняет сумму денег');
+    await press(chatId, bot.button('Отменить запись'));
+    l = (await ledger.view(userId))!.ledger;
+    expect((l.balance('acc0'), l.balance('acc2')), (kzt(100000), kzt(100000)));
+  });
+
+  test('долг: выдал и получил обратно; без имени — подсказка; минус — предупреждение до записи', () async {
+    if (skip()) return;
+    final (chatId, userId) = await owner();
+    await say(chatId, 'взял в долг 20000');
+    expect(bot.last('sendMessage')['text'], contains('Не понял, с кем долг'));
+
+    await say(chatId, 'дал в долг марату 150000');
+    expect(bot.last('sendMessage')['text'], allOf(contains('Дал в долг · 150 000 ₸'), contains('Кому: Марату'), contains('уйдёт в минус на 50 000 ₸')));
+    await press(chatId, bot.button('Отмена'));
+
+    await say(chatId, 'дал в долг марату 40000');
+    expect(bot.last('sendMessage')['text'], isNot(contains('⚠')));
+    await press(chatId, bot.button('Записать'));
+    var l = (await ledger.view(userId))!.ledger;
+    expect((l.balance('acc0'), l.balance('receivable:Марату')), (kzt(60000), kzt(40000)));
+    expect(bot.last('editMessageText')['text'], contains('На счетах: 60 000 ₸.'));
+
+    await say(chatId, 'марат вернул мне 15000');
+    expect(bot.last('sendMessage')['text'], allOf(contains('Мне вернули долг · 15 000 ₸'), contains('Кто вернул: Марату')));
+    await press(chatId, bot.button('Записать'));
+    l = (await ledger.view(userId))!.ledger;
+    expect((l.balance('acc0'), l.balance('receivable:Марату')), (kzt(75000), kzt(25000)));
+    expect(l.report(DateTime(2000), DateTime(2100)).expense, 0, reason: 'долг — не расход');
+
+    // Вернуть больше, чем должны, журнал не даст — бот покажет причину.
+    await say(chatId, 'марат вернул мне 90000');
+    await press(chatId, bot.button('Записать'));
+    expect(bot.last('answerCallbackQuery')['text'], isNot(anyOf('Записано', isNull)));
+    expect((await ledger.view(userId))!.ledger.balance('receivable:Марату'), kzt(25000));
+  });
+
+  test('после расхода бот показывает «доступно сегодня» по лимиту', () async {
+    if (skip()) return;
+    final (chatId, userId) = await owner();
+    await ledger.command(userId, {'type': 'updateProfile', 'commandId': 'limit-$chatId', 'profile': {'dailyLimit': '${kzt(5000)}'}});
+    await say(chatId, 'кофе 1500');
+    await press(chatId, bot.button('Записать'));
+    expect(bot.last('editMessageText')['text'], contains('Сегодня потрачено: 1 500 ₸. Доступно сегодня: <b>3 500 ₸</b>.'));
+    await say(chatId, '/today');
+    expect(bot.last('sendMessage')['text'], contains('Лимит на день: 5 000 ₸\nДоступно сегодня: <b>3 500 ₸</b>'));
+  });
+
   test('«Отмена» ничего не записывает, кнопки после неё не действуют', () async {
     if (skip()) return;
     final (chatId, userId) = await owner();

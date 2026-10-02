@@ -1,11 +1,12 @@
-/// Ввод операций и запросы из чата Telegram (D79).
+/// Ввод операций и запросы из чата Telegram (D79, D85, D89).
 ///
-/// Человек пишет боту «кофе 1500» — фразу разбирает то же ядро, что и
-/// голосовой ввод в приложении (`parseVoice`), бот показывает черновик с
-/// кнопками. В журнал операция попадает только после «Записать» — обычной
-/// командой через [LedgerService], как из приложения; отдельного пути записи
-/// у бота нет. Записанное можно отменить кнопкой — это та же отмена, что
-/// удаление операции в приложении (её видно в корзине).
+/// Человек пишет боту «кофе 1500», «перевёл 20000 с каспи на наличные» или
+/// «дал в долг Асхату 5000» — фразу разбирает то же ядро, что и голосовой
+/// ввод в приложении (`parseVoice`), бот показывает черновик с кнопками. В
+/// журнал операция попадает только после «Записать» — обычной командой через
+/// [LedgerService], как из приложения; отдельного пути записи у бота нет.
+/// Записанное можно отменить кнопкой — это та же отмена, что удаление
+/// операции в приложении (её видно в корзине).
 library;
 
 import 'dart:async';
@@ -102,14 +103,28 @@ List<ChatAccount> chatAccounts(LedgerView v) {
   ];
 }
 
+/// Люди, с которыми есть личные долги, — чтобы имя узнавалось во фразе в
+/// любой форме («Асхат вернул», «вернул Асхату»). Банковские долги — не люди.
+List<String> chatPeople(LedgerView v) {
+  final banks = v.of('debt').keys.toSet();
+  return {
+    for (final a in v.ledger.accounts)
+      if ((a.assetClass == AssetClass.receivable || a.kind == LedgerKind.liability) && v.ledger.balance(a.id) != 0) a.id.substring(a.id.indexOf(':') + 1),
+  }.where((name) => !banks.contains(name)).toList();
+}
+
 // --------------------------------------------------------------- черновик
+
+const _debtKinds = {'lendOut', 'borrow', 'repaymentReceived', 'repaymentMade'};
 
 class ChatDraft {
   const ChatDraft({
-    required this.income,
+    required this.kind,
     required this.amount,
-    required this.category,
+    this.category = '',
     required this.account,
+    this.toAccount,
+    this.person,
     required this.note,
     required this.date,
     required this.time,
@@ -120,10 +135,13 @@ class ChatDraft {
   });
 
   factory ChatDraft.fromJson(Map<String, dynamic> j) => ChatDraft(
-        income: j['income'] == true,
+        // Черновики до D89 знали только расход и доход (поле `income`).
+        kind: j['kind'] as String? ?? (j['income'] == true ? 'income' : 'expense'),
         amount: parseMinor(j['amount']),
-        category: j['category'] as String,
+        category: j['category'] as String? ?? '',
         account: j['account'] as String,
+        toAccount: j['toAccount'] as String?,
+        person: j['person'] as String?,
         note: j['note'] as String? ?? '',
         date: j['date'] as String,
         time: j['time'] as String,
@@ -133,12 +151,24 @@ class ChatDraft {
         heard: j['heard'] as String? ?? '',
       );
 
-  final bool income;
+  /// Вид операции — то же слово, что тип команды журнала: `expense`, `income`,
+  /// `transfer`, `lendOut`, `borrow`, `repaymentReceived`, `repaymentMade`.
+  final String kind;
 
   /// В тиынах.
   final int amount;
+
+  /// Категория расхода или источник дохода; у переводов и долгов — пусто.
   final String category;
+
+  /// Счёт операции; у перевода — откуда.
   final String account;
+
+  /// У перевода — куда.
+  final String? toAccount;
+
+  /// У долга — с кем.
+  final String? person;
   final String note;
 
   /// День операции `ГГГГ-ММ-ДД` и время `ЧЧ:ММ` по времени Казахстана.
@@ -153,11 +183,20 @@ class ChatDraft {
   /// Что распознано из голосового сообщения — человек видит, что услышал бот.
   final String heard;
 
-  ChatDraft copyWith({bool? income, String? category, String? account, String? who, String? heard}) => ChatDraft(
-        income: income ?? this.income,
+  bool get income => kind == 'income';
+  bool get transfer => kind == 'transfer';
+  bool get debt => _debtKinds.contains(kind);
+
+  /// Деньги уходят со счёта [account] — после записи он может уйти в минус.
+  bool get outflow => kind == 'expense' || kind == 'transfer' || kind == 'lendOut' || kind == 'repaymentMade';
+
+  ChatDraft copyWith({String? kind, String? category, String? account, String? toAccount, String? who, String? heard}) => ChatDraft(
+        kind: kind ?? this.kind,
         amount: amount,
         category: category ?? this.category,
         account: account ?? this.account,
+        toAccount: toAccount ?? this.toAccount,
+        person: person,
         note: note,
         date: date,
         time: time,
@@ -168,10 +207,12 @@ class ChatDraft {
       );
 
   Map<String, Object?> toJson() => {
-        'income': income,
+        'kind': kind,
         'amount': amount.toString(),
         'category': category,
         'account': account,
+        if (toAccount != null) 'toAccount': toAccount,
+        if (person != null) 'person': person,
         'note': note,
         'date': date,
         'time': time,
@@ -182,28 +223,48 @@ class ChatDraft {
       };
 
   /// Команда журнала — в том же виде, в каком её отправляет форма приложения.
-  Map<String, dynamic> command() => income
-      ? {
-          'type': 'income',
-          'id': txId,
-          'date': date,
-          'account': account,
-          'source': category,
-          'amount': amount.toString(),
-          'meta': {if (note.isNotEmpty) 'note': note, 'time': time},
-        }
-      : {
-          'type': 'expense',
-          'id': txId,
-          'date': date,
-          'account': account,
-          'splits': {category: amount.toString()},
-          'meta': {'who': who, if (note.isNotEmpty) 'note': note, 'time': time},
-        };
+  Map<String, dynamic> command() => switch (kind) {
+        'income' => {
+            'type': 'income',
+            'id': txId,
+            'date': date,
+            'account': account,
+            'source': category,
+            'amount': amount.toString(),
+            'meta': {if (note.isNotEmpty) 'note': note, 'time': time},
+          },
+        'transfer' => {
+            'type': 'transfer',
+            'id': txId,
+            'date': date,
+            'from': account,
+            'to': toAccount,
+            'amount': amount.toString(),
+            'meta': {'time': time},
+          },
+        'lendOut' || 'borrow' || 'repaymentReceived' || 'repaymentMade' => {
+            'type': kind,
+            'id': txId,
+            'date': date,
+            'account': account,
+            'person': person,
+            // У возврата долга сумма — это тело долга; проценты из чата не пишутся.
+            (kind.startsWith('repayment') ? 'principal' : 'amount'): amount.toString(),
+            'meta': {'time': time},
+          },
+        _ => {
+            'type': 'expense',
+            'id': txId,
+            'date': date,
+            'account': account,
+            'splits': {category: amount.toString()},
+            'meta': {'who': who, if (note.isNotEmpty) 'note': note, 'time': time},
+          },
+      };
 }
 
 /// Почему из сообщения не получился черновик.
-enum DraftProblem { noAccount, noAmount, unsupported }
+enum DraftProblem { noAccount, noAmount, noPerson, needSecondAccount }
 
 String newChatId([int bytes = 16]) {
   final r = Random.secure();
@@ -235,45 +296,73 @@ String _stem(String name) {
   return w.length >= 4 && RegExp(r'[аеиоуыэюяйь]$').hasMatch(w) ? w.substring(0, w.length - 1) : w;
 }
 
-/// Разбирает сообщение в черновик расхода или дохода. [now] — время Казахстана.
-/// Переводы и долги из чата не записываются: им нужны второй счёт или человек,
-/// и ошибиться в переписке проще, чем в форме.
+/// Разбирает сообщение в черновик операции. [now] — время Казахстана.
 (ChatDraft?, DraftProblem?) buildDraft(String phrase, LedgerView v, DateTime now) {
   final accounts = chatAccounts(v);
   if (accounts.isEmpty) return (null, DraftProblem.noAccount);
   final d = parseVoice(
     phrase,
+    // Названия счетов — как их передаёт приложение: целиком и по словам.
     accounts: [
       for (final a in accounts)
         VoiceAccount(a.id, [
           a.name,
-          // Отдельные слова названия — кроме коротких и чисел: счёт «Kaspi 2»
-          // иначе «узнавался» бы по двойке внутри суммы и портил её.
-          ...a.name.split(RegExp(r'\s+')).where((w) => w.length >= 3 && !RegExp(r'^\d+$').hasMatch(w)),
-          if (a.type == 'cash') ...['наличн', 'қолма-қол'],
+          ...a.name.split(RegExp(r'\s+')),
+          if (a.type == 'cash') ...['наличные', 'қолма-қол'],
           if (a.type == 'deposit') 'депозит',
         ]),
     ],
+    people: chatPeople(v),
     // Свои категории узнаются по названию: «собака 3000» → «Собака».
     userWords: {
       for (final e in v.of('category').entries)
         if (e.value['income'] != true && '${e.value['name'] ?? ''}'.trim().length >= 3) _stem('${e.value['name']}'): e.key,
     },
   );
-  if (d.kind != VoiceKind.expense && d.kind != VoiceKind.income) return (null, DraftProblem.unsupported);
   if (!d.complete) return (null, DraftProblem.noAmount);
+  final named = accounts.where((a) => a.id == d.accountId).firstOrNull;
+  final usual = _lastUsed(v, accounts) ?? accounts.where((a) => a.liquid).firstOrNull ?? accounts.first;
+  final date = dateToJson(DateTime(now.year, now.month, now.day + (d.date ?? 0)));
+  final time = '${_two(now.hour)}:${_two(now.minute)}';
+
+  if (d.kind == VoiceKind.transfer) {
+    if (accounts.length < 2) return (null, DraftProblem.needSecondAccount);
+    final target = accounts.where((a) => a.id == d.toAccountId).firstOrNull;
+    // Откуда: названный счёт, иначе привычный — но не тот, куда переводим.
+    final from = named ?? (usual.id != target?.id ? usual : accounts.firstWhere((a) => a.id != target?.id));
+    final to = target != null && target.id != from.id ? target : accounts.firstWhere((a) => a.id != from.id);
+    return (ChatDraft(kind: 'transfer', amount: d.amount!, account: from.id, toAccount: to.id, note: '', date: date, time: time, who: 'me', txId: newChatId(), undoId: newChatId()), null);
+  }
+  final account = named ?? usual;
+  if (d.kind != VoiceKind.expense && d.kind != VoiceKind.income) {
+    final person = d.person?.trim() ?? '';
+    if (person.isEmpty) return (null, DraftProblem.noPerson);
+    return (
+      ChatDraft(
+        kind: d.kind.name,
+        amount: d.amount!,
+        account: account.id,
+        person: person.length > 60 ? person.substring(0, 60) : person,
+        note: '',
+        date: date,
+        time: time,
+        who: 'me',
+        txId: newChatId(),
+        undoId: newChatId(),
+      ),
+      null,
+    );
+  }
   final income = d.kind == VoiceKind.income;
-  final account = accounts.where((a) => a.id == d.accountId).firstOrNull ?? _lastUsed(v, accounts) ?? accounts.where((a) => a.liquid).firstOrNull ?? accounts.first;
-  final day = DateTime(now.year, now.month, now.day + (d.date ?? 0));
   return (
     ChatDraft(
-      income: income,
+      kind: income ? 'income' : 'expense',
       amount: d.amount!,
       category: d.category ?? (income ? 'otherIncome' : 'other'),
       account: account.id,
       note: d.note.length > maxNoteLength ? d.note.substring(0, maxNoteLength) : d.note,
-      date: dateToJson(day),
-      time: '${_two(now.hour)}:${_two(now.minute)}',
+      date: date,
+      time: time,
       who: _whoFor(v, account),
       txId: newChatId(),
       undoId: newChatId(),
@@ -282,50 +371,11 @@ String _stem(String name) {
   );
 }
 
-// ------------------------------------------------------------------ цифры
-
-class DaySpend {
-  const DaySpend(this.everyday, this.planned, this.byCategory);
-
-  /// Повседневные траты дня — те, что идут в дневной лимит.
-  final int everyday;
-
-  /// Запланированные траты дня — вне лимита (D74).
-  final int planned;
-  final Map<String, int> byCategory;
-}
-
-/// Траты за [day] по тем же правилам, что на главном экране приложения
-/// (`AppState.spentBetween`): покупки минус возвраты, возврат относится к дню
-/// покупки, запланированные траты считаются отдельно.
-DaySpend spendOn(Ledger l, DateTime day) {
-  bool isPlanned(Transaction x) => x.meta['planned'] != null || x.meta['plannedPurchase'] == true;
-  var everyday = 0;
-  var planned = 0;
-  final byCat = <String, int>{};
-  for (final tx in l.transactions) {
-    if ((tx.type != EventType.expense && tx.type != EventType.refund) || l.isReversed(tx.id)) continue;
-    var on = tx.date;
-    var outside = isPlanned(tx);
-    final of = tx.meta['refundOf'];
-    if (tx.type == EventType.refund && of is String) {
-      final purchase = l.currentVersion(of);
-      if (purchase == null) continue; // возврат по удалённой покупке в траты дня не входит
-      on = purchase.date;
-      outside = outside || isPlanned(purchase);
-    }
-    if (on != day) continue;
-    for (final p in tx.postings) {
-      if (l.account(p.accountId).kind != LedgerKind.expense) continue;
-      if (outside) {
-        planned += p.amount;
-      } else {
-        everyday += p.amount;
-        byCat.update(p.accountId.substring(8), (s) => s + p.amount, ifAbsent: () => p.amount);
-      }
-    }
-  }
-  return DaySpend(everyday < 0 ? 0 : everyday, planned < 0 ? 0 : planned, byCat..removeWhere((_, s) => s <= 0));
+/// На сколько счёт уйдёт в минус после этой операции (D87); 0 — не уйдёт.
+int minusAfter(ChatDraft d, LedgerView v) {
+  if (!d.outflow || !v.ledger.hasAccount(d.account)) return 0;
+  final after = v.ledger.balance(d.account) - d.amount;
+  return after < 0 ? -after : 0;
 }
 
 // ----------------------------------------------------------------- тексты
@@ -345,19 +395,45 @@ String _dayLabel(String date, DateTime now, bool kk) {
   };
 }
 
-String _accountName(ChatDraft d, LedgerView v) => v.of('account')[d.account]?['name'] as String? ?? d.account;
+String _accountName(String? id, LedgerView v) => escapeHtml(v.of('account')[id]?['name'] as String? ?? id ?? '');
+
+String _kindTitle(String kind, bool kk) => switch (kind) {
+      'income' => kk ? 'Кіріс' : 'Доход',
+      'transfer' => kk ? 'Аударым' : 'Перевод',
+      'lendOut' => kk ? 'Қарызға бердім' : 'Дал в долг',
+      'borrow' => kk ? 'Қарызға алдым' : 'Взял в долг',
+      'repaymentReceived' => kk ? 'Маған қарыз қайтарылды' : 'Мне вернули долг',
+      'repaymentMade' => kk ? 'Қарызды қайтардым' : 'Вернул долг',
+      _ => kk ? 'Шығыс' : 'Расход',
+    };
+
+String _personLabel(String kind, bool kk) => switch (kind) {
+      'borrow' => kk ? 'Кімнен' : 'У кого',
+      'repaymentReceived' => kk ? 'Кім қайтарды' : 'Кто вернул',
+      _ => kk ? 'Кімге' : 'Кому',
+    };
 
 String draftText(ChatDraft d, LedgerView v, DateTime now) {
   final kk = v.locale == 'kk';
-  final kind = d.income ? (kk ? 'Кіріс' : 'Доход') : (kk ? 'Шығыс' : 'Расход');
   final today = dateToJson(DateTime(now.year, now.month, now.day));
+  final minus = minusAfter(d, v);
   return [
     if (d.heard.isNotEmpty) '🎤 <i>«${escapeHtml(d.heard)}»</i>',
-    '<b>$kind · ${formatMoney(d.amount)}</b>',
-    '${kk ? 'Санат' : 'Категория'}: ${escapeHtml(categoryName(d.category, v))}',
-    '${kk ? 'Шот' : 'Счёт'}: ${escapeHtml(_accountName(d, v))}',
+    '<b>${_kindTitle(d.kind, kk)} · ${formatMoney(d.amount)}</b>',
+    if (d.transfer) ...[
+      '${kk ? 'Қай шоттан' : 'Со счёта'}: ${_accountName(d.account, v)}',
+      '${kk ? 'Қай шотқа' : 'На счёт'}: ${_accountName(d.toAccount, v)}',
+    ] else ...[
+      d.debt ? '${_personLabel(d.kind, kk)}: ${escapeHtml(d.person ?? '')}' : '${kk ? 'Санат' : 'Категория'}: ${escapeHtml(categoryName(d.category, v))}',
+      '${kk ? 'Шот' : 'Счёт'}: ${_accountName(d.account, v)}',
+    ],
     if (d.note.isNotEmpty) '${kk ? 'Жазба' : 'Заметка'}: ${escapeHtml(d.note)}',
     if (d.date != today) '${kk ? 'Күні' : 'Дата'}: ${_dayLabel(d.date, now, kk)}',
+    // В минус уйти можно — но человек должен увидеть это до записи (D87).
+    if (minus > 0)
+      kk
+          ? '⚠ Жазылғаннан кейін «${_accountName(d.account, v)}» шоты ${formatMoney(minus)} минусқа кетеді.'
+          : '⚠ После записи счёт «${_accountName(d.account, v)}» уйдёт в минус на ${formatMoney(minus)}.',
   ].join('\n');
 }
 
@@ -366,21 +442,33 @@ String _oneLine(ChatDraft d, LedgerView v, DateTime now) {
   final kk = v.locale == 'kk';
   final today = dateToJson(DateTime(now.year, now.month, now.day));
   return [
-    '${d.income ? (kk ? 'Кіріс' : 'Доход') : (kk ? 'Шығыс' : 'Расход')} ${formatMoney(d.amount)}',
-    escapeHtml(categoryName(d.category, v)),
-    escapeHtml(_accountName(d, v)),
+    '${_kindTitle(d.kind, kk)} ${formatMoney(d.amount)}',
+    if (d.transfer)
+      '${_accountName(d.account, v)} → ${_accountName(d.toAccount, v)}'
+    else ...[
+      d.debt ? escapeHtml(d.person ?? '') : escapeHtml(categoryName(d.category, v)),
+      _accountName(d.account, v),
+    ],
     if (d.note.isNotEmpty) escapeHtml(d.note),
     if (d.date != today) _dayLabel(d.date, now, kk),
   ].join(' · ');
 }
 
-/// Строка «сколько потрачено сегодня» — и лимит на день, если он задан.
+/// «Доступно сегодня: 1 527 ₸» или «Перерасход по лимиту: 2 000 ₸» — то же
+/// число, что на главном экране приложения: расчёт общий, из ядра.
+String _availableLine(DailyLimitState s, bool kk) {
+  final a = s.available!;
+  return a >= 0
+      ? '${kk ? 'Бүгін қолжетімді' : 'Доступно сегодня'}: <b>${formatMoney(a)}</b>'
+      : '${kk ? 'Лимиттен асып кетті' : 'Перерасход по лимиту'}: <b>${formatMoney(-a)}</b>';
+}
+
+/// Строка после записи расхода: сколько потрачено сегодня и сколько доступно.
 String _spentLine(LedgerView v, DateTime now) {
   final kk = v.locale == 'kk';
-  final spent = spendOn(v.ledger, DateTime(now.year, now.month, now.day)).everyday;
-  final limit = v.profile['dailyLimit'] == null ? null : parseMinor(v.profile['dailyLimit']);
-  if (limit == null) return kk ? 'Бүгін жұмсалды: ${formatMoney(spent)}.' : 'Сегодня потрачено: ${formatMoney(spent)}.';
-  return kk ? 'Бүгін жұмсалды: ${formatMoney(spent)}, күндік лимит — ${formatMoney(limit)}.' : 'Сегодня потрачено: ${formatMoney(spent)}, лимит на день — ${formatMoney(limit)}.';
+  final s = dailyLimitState(v.ledger, v.profile, DateTime(now.year, now.month, now.day));
+  final spent = kk ? 'Бүгін жұмсалды: ${formatMoney(s.spentToday)}.' : 'Сегодня потрачено: ${formatMoney(s.spentToday)}.';
+  return s.available == null ? spent : '$spent ${_availableLine(s, kk)}.';
 }
 
 /// [v] — данные уже после записи: в строке о тратах учтена и эта операция.
@@ -390,7 +478,7 @@ String savedText(ChatDraft d, LedgerView v, DateTime now) {
     '✅ <b>${kk ? 'Жазылды' : 'Записано'}</b>',
     _oneLine(d, v, now),
     '',
-    d.income ? (kk ? 'Шоттарда: ${formatMoney(v.ledger.liquid())}.' : 'На счетах: ${formatMoney(v.ledger.liquid())}.') : _spentLine(v, now),
+    d.kind == 'expense' ? _spentLine(v, now) : (kk ? 'Шоттарда: ${formatMoney(v.ledger.liquid())}.' : 'На счетах: ${formatMoney(v.ledger.liquid())}.'),
   ].join('\n');
 }
 
@@ -402,9 +490,10 @@ String undoneText(ChatDraft d, LedgerView v, DateTime now) =>
 
 String todayText(LedgerView v, DateTime now) {
   final kk = v.locale == 'kk';
-  final s = spendOn(v.ledger, DateTime(now.year, now.month, now.day));
+  final today = DateTime(now.year, now.month, now.day);
+  final s = spendBetween(v.ledger, today, today);
+  final limit = dailyLimitState(v.ledger, v.profile, today);
   final top = s.byCategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-  final limit = v.profile['dailyLimit'] == null ? null : parseMinor(v.profile['dailyLimit']);
   return [
     '<b>${kk ? 'Бүгін' : 'Сегодня'}, ${_two(now.day)}.${_two(now.month)}</b>',
     s.everyday == 0 && s.planned == 0
@@ -412,7 +501,15 @@ String todayText(LedgerView v, DateTime now) {
         : (kk ? 'Жұмсалды: <b>${formatMoney(s.everyday)}</b>' : 'Потрачено: <b>${formatMoney(s.everyday)}</b>'),
     for (final e in top.take(5)) '• ${escapeHtml(categoryName(e.key, v))} — ${formatMoney(e.value)}',
     if (s.planned > 0) kk ? 'Лимиттен тыс (жоспарланған): ${formatMoney(s.planned)}' : 'Вне лимита (запланированное): ${formatMoney(s.planned)}',
-    if (limit != null) kk ? 'Күндік лимит: ${formatMoney(limit)}' : 'Лимит на день: ${formatMoney(limit)}',
+    if (limit.limit != null) ...[
+      kk ? 'Күндік лимит: ${formatMoney(limit.limit!)}' : 'Лимит на день: ${formatMoney(limit.limit!)}',
+      [
+        _availableLine(limit, kk),
+        if (limit.carry > 0) kk ? 'алдыңғы күндерден +${formatMoney(limit.carry)}' : 'с прошлых дней +${formatMoney(limit.carry)}',
+        if (limit.carry < 0) kk ? 'алдыңғы күндердің артық шығысы ${formatMoney(-limit.carry)}' : 'перерасход прошлых дней ${formatMoney(-limit.carry)}',
+        if (limit.capped) kk ? 'шоттардағы ақшамен шектелген' : 'ограничено деньгами на счетах',
+      ].join(' · '),
+    ],
     kk ? 'Шоттарда: ${formatMoney(v.ledger.liquid())}' : 'На счетах: ${formatMoney(v.ledger.liquid())}',
   ].join('\n');
 }
@@ -436,14 +533,16 @@ String monthText(LedgerView v, DateTime now) {
 
 String helpText(bool kk, {String? origin, bool voice = false}) => [
       kk
-          ? 'Шығысты немесе кірісті жай хабарламамен жазыңыз — мен жобасын көрсетемін, растағаннан кейін жазамын.'
-          : 'Напишите трату или доход обычным сообщением — я покажу черновик и запишу после подтверждения.',
+          ? 'Шығысты, кірісті, аударымды немесе қарызды жай хабарламамен жазыңыз — мен жобасын көрсетемін, растағаннан кейін жазамын.'
+          : 'Напишите трату, доход, перевод или долг обычным сообщением — я покажу черновик и запишу после подтверждения.',
       '',
       kk ? 'Мысалы:' : 'Например:',
       '• кофе 1500',
       kk ? '• такси 2 мың кеше' : '• такси 2 тысячи вчера',
       kk ? '• азық-түлік 12400' : '• продукты 12400 с каспи',
       kk ? '• жалақы 350000' : '• зарплата 350000',
+      kk ? '• Асхатқа 5000 қарыз бердім' : '• перевёл 20000 с каспи на наличные',
+      if (!kk) '• дал в долг Асхату 5000',
       if (voice) ...['', kk ? 'Дауыстық хабарламамен де болады — қысқаша айтыңыз.' : 'Можно и голосовым сообщением — скажите то же самое вслух.'],
       '',
       kk ? '/today — бүгінгі шығыс' : '/today — траты за сегодня',
@@ -456,17 +555,25 @@ String helpText(bool kk, {String? origin, bool voice = false}) => [
 
 Map<String, String> _button(String text, String data) => {'text': text, 'callback_data': data};
 
-/// [income] — тип черновика сейчас: кнопка предлагает противоположный, на
-/// случай если бот понял фразу не так («вернули 5000» — это доход).
-Buttons draftButtons(String id, LedgerView v, {bool income = false}) {
+/// Кнопки под черновиком. У расхода и дохода — категория, счёт и смена типа
+/// (на случай если бот понял фразу не так: «премия 5000» — это доход); у
+/// перевода — откуда и куда; у долга — счёт.
+Buttons draftButtons(String id, LedgerView v, ChatDraft d) {
   final kk = v.locale == 'kk';
+  final account = _button(kk ? 'Шот' : 'Счёт', 'd:$id:acc');
+  final many = chatAccounts(v).length > 1;
   return [
     [_button(kk ? '✅ Жазу' : '✅ Записать', 'd:$id:ok'), _button(kk ? '✖ Болдырмау' : '✖ Отмена', 'd:$id:no')],
-    [
-      _button(kk ? 'Санат' : 'Категория', 'd:$id:cat'),
-      if (chatAccounts(v).length > 1) _button(kk ? 'Шот' : 'Счёт', 'd:$id:acc'),
-      _button(income ? (kk ? 'Бұл шығыс' : 'Это расход') : (kk ? 'Бұл кіріс' : 'Это доход'), 'd:$id:type'),
-    ],
+    if (d.transfer)
+      [_button(kk ? 'Қай шоттан' : 'Со счёта', 'd:$id:acc'), _button(kk ? 'Қай шотқа' : 'На счёт', 'd:$id:to')]
+    else if (d.debt) ...[
+      if (many) [account],
+    ] else
+      [
+        _button(kk ? 'Санат' : 'Категория', 'd:$id:cat'),
+        if (many) account,
+        _button(d.income ? (kk ? 'Бұл шығыс' : 'Это расход') : (kk ? 'Бұл кіріс' : 'Это доход'), 'd:$id:type'),
+      ],
   ];
 }
 
@@ -509,7 +616,7 @@ ChatDraft? quickDraft(ChatQuick q, LedgerView v, DateTime now) {
   if (accounts.isEmpty) return null;
   final account = _lastUsed(v, accounts) ?? accounts.where((a) => a.liquid).firstOrNull ?? accounts.first;
   return ChatDraft(
-    income: false,
+    kind: 'expense',
     amount: q.amount,
     category: q.category,
     account: account.id,
@@ -534,10 +641,11 @@ Buttons categoryButtons(String id, ChatDraft d, LedgerView v) => _grid(
     );
 
 /// Счёт в кнопке — номером в списке: id счёта может не уместиться в 64 байта.
-Buttons accountButtons(String id, LedgerView v) {
+/// [target] — выбирается счёт, на который идёт перевод.
+Buttons accountButtons(String id, LedgerView v, {bool target = false}) {
   final accounts = chatAccounts(v);
   return _grid(
-    [for (var i = 0; i < accounts.length; i++) _button(accounts[i].name, 'd:$id:a:$i')],
+    [for (var i = 0; i < accounts.length; i++) _button(accounts[i].name, 'd:$id:${target ? 't' : 'a'}:$i')],
     2,
     _button(v.locale == 'kk' ? '← Артқа' : '← Назад', 'd:$id:back'),
   );
@@ -649,7 +757,10 @@ class ChatEntry {
         quote +
             switch (problem!) {
               DraftProblem.noAccount => kk ? 'Алдымен қолданбада сауалнаманы аяқтап, шот қосыңыз.' : 'Сначала завершите анкету в приложении и добавьте счёт — записывать пока некуда.',
-              DraftProblem.unsupported => kk ? 'Аударымдар мен қарыздар әзірге тек қолданбада жазылады. Мұнда — шығыс пен кіріс.' : 'Переводы и долги пока записываются только в приложении. Здесь — расходы и доходы.',
+              DraftProblem.needSecondAccount => kk ? 'Аударым үшін екінші шот керек — оны қолданбаның «Шоттар» бөлімінде қосыңыз.' : 'Для перевода нужен второй счёт — добавьте его в приложении в разделе «Счета».',
+              DraftProblem.noPerson => kk
+                  ? 'Қарыз кіммен екенін түсінбедім. Атымен жазыңыз: «Асхатқа 5000 қарыз бердім».'
+                  : 'Не понял, с кем долг. Напишите с именем: «дал в долг Асхату 5000» или «Асхат вернул мне 5000».',
               DraftProblem.noAmount => '${kk ? 'Соманы таппадым.' : 'Не нашёл сумму.'}\n\n${helpText(kk, origin: origin, voice: speech?.enabled == true)}',
             },
       );
@@ -665,7 +776,7 @@ class ChatEntry {
       Sql.named('INSERT INTO telegram_drafts (id, user_id, chat_id, data) VALUES (@id, @u, @c, @d:jsonb)'),
       parameters: {'id': id, 'u': userId, 'c': chatId, 'd': draft.toJson()},
     );
-    await telegram.send(chatId, draftText(draft, v, now), buttons: draftButtons(id, v, income: draft.income));
+    await telegram.send(chatId, draftText(draft, v, now), buttons: draftButtons(id, v, draft));
   }
 
   /// Нажатие быстрой операции: черновик с её суммой и категорией. Запись —
@@ -761,7 +872,7 @@ class ChatEntry {
         (await db.execute(Sql.named('UPDATE telegram_drafts SET status = @to WHERE id = @id AND status = @from'), parameters: {'id': id, 'from': from, 'to': to})).affectedRows > 0;
     Future<void> show(ChatDraft d) async {
       await db.execute(Sql.named("UPDATE telegram_drafts SET data = @d:jsonb WHERE id = @id AND status = 'pending'"), parameters: {'id': id, 'd': d.toJson()});
-      await telegram.edit(chatId, messageId, draftText(d, v, now), buttons: draftButtons(id, v, income: d.income));
+      await telegram.edit(chatId, messageId, draftText(d, v, now), buttons: draftButtons(id, v, d));
     }
 
     switch (parts[2]) {
@@ -788,27 +899,38 @@ class ChatEntry {
         await move('pending', 'cancelled');
         await telegram.edit(chatId, messageId, cancelledText(draft, v, now));
         return null;
-      case 'cat' when status == 'pending':
+      case 'cat' when status == 'pending' && !draft.transfer && !draft.debt:
         await telegram.edit(chatId, messageId, draftText(draft, v, now), buttons: categoryButtons(id, draft, v));
         return null;
       case 'acc' when status == 'pending':
         await telegram.edit(chatId, messageId, draftText(draft, v, now), buttons: accountButtons(id, v));
         return null;
-      case 'c' when status == 'pending' && chatCategories(v, income: draft.income).contains(arg):
+      case 'to' when status == 'pending' && draft.transfer:
+        await telegram.edit(chatId, messageId, draftText(draft, v, now), buttons: accountButtons(id, v, target: true));
+        return null;
+      case 'c' when status == 'pending' && !draft.transfer && !draft.debt && chatCategories(v, income: draft.income).contains(arg):
         await show(draft.copyWith(category: arg));
         return null;
-      case 'a' when status == 'pending':
+      case 'a' || 't' when status == 'pending':
         final accounts = chatAccounts(v);
         final i = int.tryParse(arg);
-        if (i == null || i < 0 || i >= accounts.length) return stale;
-        await show(draft.copyWith(account: accounts[i].id, who: _whoFor(v, accounts[i])));
+        if (i == null || i < 0 || i >= accounts.length || (parts[2] == 't' && !draft.transfer)) return stale;
+        final chosen = accounts[i];
+        if (parts[2] == 't') {
+          // Выбрали «куда» тот же счёт, что «откуда» — меняем их местами.
+          await show(draft.copyWith(toAccount: chosen.id, account: chosen.id == draft.account ? draft.toAccount : null));
+        } else if (draft.transfer) {
+          await show(draft.copyWith(account: chosen.id, toAccount: chosen.id == draft.toAccount ? draft.account : null));
+        } else {
+          await show(draft.copyWith(account: chosen.id, who: draft.kind == 'expense' ? _whoFor(v, chosen) : 'me'));
+        }
         return null;
-      case 'type' when status == 'pending':
+      case 'type' when status == 'pending' && !draft.transfer && !draft.debt:
         // Расход ↔ доход: категория другого типа не подходит — ставим общую,
         // её можно сменить кнопкой «Категория».
         final income = !draft.income;
         final account = chatAccounts(v).where((a) => a.id == draft.account).firstOrNull;
-        await show(draft.copyWith(income: income, category: income ? 'otherIncome' : 'other', who: income || account == null ? 'me' : _whoFor(v, account)));
+        await show(draft.copyWith(kind: income ? 'income' : 'expense', category: income ? 'otherIncome' : 'other', who: income || account == null ? 'me' : _whoFor(v, account)));
         return null;
       case 'back' when status == 'pending':
         await show(draft);
