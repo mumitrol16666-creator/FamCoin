@@ -125,6 +125,66 @@ void main() {
     expect(d.category, 'cafe');
   });
 
+  group('названия счетов', () {
+    // Так счета передаёт приложение: название целиком и каждое его слово.
+    const mine = [
+      VoiceAccount('gold', ['Kaspi Gold', 'Kaspi', 'Gold']),
+      VoiceAccount('second', ['Kaspi 2', 'Kaspi', '2']),
+      VoiceAccount('card', ['Карта для покупок', 'Карта', 'для', 'покупок']),
+      VoiceAccount('cash', ['Наличные']),
+      VoiceAccount('jusan', ['Jusan']),
+    ];
+    VoiceDraft q(String s) => parseVoice(s, accounts: mine);
+
+    test('цифра или слог из названия счёта не портят сумму и не выбирают счёт', () {
+      final d = parseVoice('кофе 1500', accounts: const [VoiceAccount('zero', ['Счёт 0', 'Счёт', '0'])]);
+      expect(d.amount, kzt(1500));
+      expect(d.accountId, isNull);
+      expect(q('такси 2000').accountId, isNull, reason: '«2» из «Kaspi 2» — не название');
+      expect(q('такси 2000').amount, kzt(2000));
+      expect(q('подарок для мамы 5000').accountId, isNull, reason: '«для» — служебное слово');
+      expect(parseVoice('налог 5000', accounts: const [VoiceAccount('cash', ['нал'])]).accountId, isNull, reason: 'короткое название — только целым словом');
+      expect(parseVoice('хлеб 300 нал', accounts: const [VoiceAccount('cash', ['нал'])]).accountId, 'cash');
+    });
+
+    test('латинское название узнаётся в русской записи — так его отдаёт распознавание речи', () {
+      expect(q('такси 2000 с каспи').accountId, 'gold');
+      expect(q('такси 2000 с каспи').note, 'Такси');
+      expect(q('Вчера такси 2000 с Каспи Голд.').accountId, 'gold');
+      expect(q('продукты 5000 с жусана').accountId, 'jusan');
+      expect(q('продукты 5000 с Jusan').accountId, 'jusan');
+    });
+
+    test('русское название узнаётся в другом падеже', () {
+      expect(q('хлеб 300 наличными').accountId, 'cash');
+      expect(q('хлеб 300 из наличных').accountId, 'cash');
+      expect(q('хлеб 300 наличными').note, 'Хлеб');
+      expect(q('хлеб 300 с карты').accountId, isNull, reason: 'короткое слово не склоняем: «карта» ≠ «картошка»');
+      expect(q('картошка 300').accountId, isNull);
+      expect(q('хлеб 300 карта').accountId, 'card');
+    });
+
+    test('перевод между счетами: откуда и куда', () {
+      final d = q('перевёл 20000 с каспи на жусан');
+      expect(d.kind, VoiceKind.transfer);
+      expect((d.accountId, d.toAccountId), ('gold', 'jusan'));
+      expect(d.amount, kzt(20000));
+    });
+  });
+
+  test('имя в долге пишут и с маленькой буквы; глагол в начале фразы — не имя', () {
+    VoiceDraft q(String s) => parseVoice(s, accounts: accounts);
+    expect(q('одолжил марату 10000').person, 'Марату');
+    expect(q('Одолжил Марату 10000').person, 'Марату');
+    expect(q('дал в долг асхату 5000 с каспи').person, 'Асхату');
+    expect(q('дал в долг асхату 5000 с каспи').accountId, 'kaspi');
+    expect(q('взял в долг у данияра 20 тысяч').person, 'Данияра');
+    expect(q('взял в долг 20 тысяч').person, isNull);
+    expect(q('взял в долг 20 тысяч').warnings, contains('no_person'));
+    // Имя, записанное раньше в другом падеже, узнаётся по основе.
+    expect(parseVoice('асхат вернул мне 5000', people: ['Асхату']).person, 'Асхату');
+  });
+
   test('копейки и «к»: «12,5к»', () {
     expect(p('одежда 12,5к').amount, kzt(12500));
   });

@@ -104,6 +104,10 @@ const _borrowVerbs = ['взял в долг', 'взяла в долг', 'зан�
 const _repayReceivedVerbs = ['вернул мне', 'вернула мне', 'мне вернул', 'мне вернула', 'отдал мне', 'отдала мне', 'қайтарды'];
 const _repayMadeVerbs = ['вернул долг', 'вернула долг', 'отдал долг', 'отдала долг', 'вернул', 'вернула', 'қайтардым'];
 
+/// Слова фразы о долге, которые не могут быть именем человека.
+const _debtWords = 'дал|дала|взял|взяла|в|долг|долга|одолжил|одолжила|занял|заняла|у|вернул|вернула|отдал|отдала|мне|ему|ей|'
+    'қарыз|бердім|алдым|қайтарды|қайтардым|тенге|теңге|тг|с|со|на|из|и|вчера|сегодня|позавчера';
+
 const Map<String, int> _numberWords = {
   'ноль': 0, 'один': 1, 'одна': 1, 'одну': 1, 'два': 2, 'две': 2, 'три': 3, 'четыре': 4, 'пять': 5, 'шесть': 6, 'семь': 7, 'восемь': 8, 'девять': 9,
   'десять': 10, 'одиннадцать': 11, 'двенадцать': 12, 'тринадцать': 13, 'четырнадцать': 14, 'пятнадцать': 15, 'шестнадцать': 16, 'семнадцать': 17, 'восемнадцать': 18, 'девятнадцать': 19,
@@ -219,6 +223,74 @@ String _stripDate(String text) => text.replaceAll(_word('позавчера|вч
 
 bool _hasAny(String text, List<String> phrases) => phrases.any((p) => text.contains(p));
 
+// ------------------------------------------------------- названия счетов
+
+/// Слова, которые встречаются в названиях счетов, но счёт не называют:
+/// «Карта для покупок» не должна узнаваться по «для».
+const _aliasStopWords = {'для', 'под', 'при', 'про', 'или', 'мой', 'моя', 'мое', 'мои', 'наш', 'это', 'the', 'for', 'and'};
+
+/// Названия, которые по-русски пишут не по буквам: «Jusan» — «Жусан».
+const Map<String, String> _brandsLatin = {
+  'jusan': 'жусан',
+  'freedom': 'фридом',
+  'home': 'хоум',
+  'visa': 'виза',
+  'eurasian': 'евразийский',
+  'cash': 'кэш',
+};
+
+const Map<String, String> _latinPairs = {'sh': 'ш', 'ch': 'ч', 'zh': 'ж', 'kh': 'х', 'ya': 'я', 'yu': 'ю', 'ts': 'ц'};
+const Map<String, String> _latinLetters = {
+  'a': 'а', 'b': 'б', 'c': 'к', 'd': 'д', 'e': 'е', 'f': 'ф', 'g': 'г', 'h': 'х', 'i': 'и', 'j': 'дж', 'k': 'к', 'l': 'л', 'm': 'м',
+  'n': 'н', 'o': 'о', 'p': 'п', 'q': 'к', 'r': 'р', 's': 'с', 't': 'т', 'u': 'у', 'v': 'в', 'w': 'в', 'x': 'кс', 'y': 'ы', 'z': 'з',
+};
+
+/// Латинское слово русскими буквами — так его произносят и так его отдаёт
+/// распознавание речи: «Kaspi» → «каспи», «Halyk» → «халык».
+String _toCyrillic(String word) {
+  final brand = _brandsLatin[word];
+  if (brand != null) return brand;
+  final out = StringBuffer();
+  for (var i = 0; i < word.length; i++) {
+    final pair = i + 1 < word.length ? _latinPairs[word.substring(i, i + 2)] : null;
+    if (pair != null) {
+      out.write(pair);
+      i++;
+    } else {
+      out.write(_latinLetters[word[i]] ?? word[i]);
+    }
+  }
+  return out.toString();
+}
+
+/// Шаблоны, по которым название счёта ищется во фразе: само название и его
+/// запись русскими буквами. Ищется только целое слово — цифра или слог
+/// внутри суммы и чужого слова счётом не считается. Длинное слово может
+/// стоять в другом падеже («наличными», «с депозита»).
+List<String> _aliasPatterns(String alias) {
+  final base = _normalize(alias);
+  // Меньше трёх букв (цифра, предлог) или служебное слово — не название.
+  if (RegExp(r'\p{L}', unicode: true).allMatches(base).length < 3 || _aliasStopWords.contains(base)) return const [];
+  final variants = {base};
+  if (RegExp('[a-z]').hasMatch(base)) {
+    variants.add(base.split(' ').map((w) => RegExp(r'^[a-z]+$').hasMatch(w) ? _toCyrillic(w) : w).join(' '));
+  }
+  return [
+    for (final v in variants)
+      () {
+        final words = v.split(' ');
+        var last = words.last;
+        final cyrillic = RegExp(r'^[а-яәіңғүұқөһ]+$').hasMatch(last);
+        // Окончание длинного русского слова отбрасывается: «наличные» → «наличн».
+        final stem = cyrillic && last.length >= 6 ? last.replaceFirst(RegExp(r'[аеиоуыэюяй]{1,2}$'), '') : last;
+        final inflected = cyrillic && last.length >= 5;
+        last = stem;
+        final body = [...words.take(words.length - 1), last].map(RegExp.escape).join(' ');
+        return '(?<![\\p{L}\\p{N}])$body${inflected ? '\\p{L}{0,3}' : ''}(?![\\p{L}\\p{N}])';
+      }(),
+  ];
+}
+
 String? _matchCategory(String text, Map<String, String> dict) {
   String? best;
   var bestLen = 0;
@@ -266,21 +338,24 @@ VoiceDraft parseVoice(
   String? account;
   String? toAccount;
   for (final a in accounts) {
-    for (final alias in a.aliases) {
-      final al = _normalize(alias);
-      if (al.isEmpty) continue;
-      final idx = rest.indexOf(al);
-      if (idx < 0) continue;
-      final before = rest.substring(0, idx).trimRight();
-      final isTarget = before.endsWith(' на') || before.endsWith(' в') || before == 'на' || before == 'в' || before.endsWith('-ға') || before.endsWith('-ге');
-      if (kind == VoiceKind.transfer && isTarget) {
-        toAccount ??= a.id;
-      } else {
-        account ??= a.id;
+    String? pattern;
+    RegExpMatch? match;
+    for (final p in a.aliases.expand(_aliasPatterns)) {
+      match = RegExp(p, unicode: true).firstMatch(rest);
+      if (match != null) {
+        pattern = p;
+        break;
       }
-      rest = rest.replaceFirst(RegExp('((?<!\\p{L})(с|со|на|в|из)\\s+)?$al\\p{L}*', unicode: true), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-      break;
     }
+    if (match == null || pattern == null) continue;
+    final before = rest.substring(0, match.start).trimRight();
+    final isTarget = before.endsWith(' на') || before.endsWith(' в') || before == 'на' || before == 'в' || before.endsWith('-ға') || before.endsWith('-ге');
+    if (kind == VoiceKind.transfer && isTarget) {
+      toAccount ??= a.id;
+    } else {
+      account ??= a.id;
+    }
+    rest = rest.replaceFirst(RegExp('((?<!\\p{L})(с|со|на|в|из)\\s+)?$pattern', unicode: true), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   }
   if (kind == VoiceKind.transfer && toAccount == null && account != null) {
     // «перевёл на депозит» — единственный названный счёт при переводе чаще получатель.
@@ -308,7 +383,10 @@ VoiceDraft parseVoice(
   rest = afterAmount;
   if (amount == null) warnings.add('no_amount');
 
-  // Человек для долга: первое слово с заглавной в исходной фразе или из списка.
+  // Человек для долга: из списка известных; иначе — единственное слово,
+  // оставшееся от фразы без суммы и служебных слов («одолжил марату 5000» —
+  // в переписке имена пишут и с маленькой буквы); иначе — первое слово с
+  // заглавной в исходной фразе.
   String? person;
   if (kind != VoiceKind.expense && kind != VoiceKind.income && kind != VoiceKind.transfer) {
     for (final p in people) {
@@ -317,7 +395,15 @@ VoiceDraft parseVoice(
         break;
       }
     }
-    person ??= RegExp(r'(?<!\p{L})([А-ЯӘІҢҒҮҰҚӨҺ][а-яёәіңғүұқөһ]{2,})', unicode: true).allMatches(phrase).map((m) => m.group(1)!).where((w) => !{'Вчера', 'Сегодня', 'Дал', 'Дала', 'Взял', 'Взяла', 'Вернул', 'Вернула', 'Занял', 'Заняла'}.contains(w)).firstOrNull;
+    if (person == null) {
+      final left = rest.replaceAll(_word(_debtWords), ' ').split(' ').where((w) => RegExp(r'^\p{L}{3,}$', unicode: true).hasMatch(w)).toList();
+      if (left.length == 1) person = _capitalize(left.single);
+    }
+    person ??= RegExp(r'(?<!\p{L})([А-ЯӘІҢҒҮҰҚӨҺ][а-яёәіңғүұқөһ]{2,})', unicode: true)
+        .allMatches(phrase)
+        .map((m) => m.group(1)!)
+        .where((w) => !_word(_debtWords).hasMatch(_normalize(w)))
+        .firstOrNull;
     if (person == null) warnings.add('no_person');
   }
 
