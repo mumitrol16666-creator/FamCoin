@@ -495,6 +495,31 @@ class InfoTip extends StatelessWidget {
   }
 }
 
+/// «После этой операции счёт уйдёт в минус» (D87) — для любой формы, где
+/// деньги уходят со счёта. Записать не мешает: человек знает о своих деньгах
+/// больше приложения. [returned] — сколько вернётся на счёт той же командой
+/// (правка уже записанной траты).
+class MinusWarning extends StatelessWidget {
+  const MinusWarning({super.key, required this.accountId, required this.amount, this.returned = 0});
+  final String? accountId;
+  final int? amount;
+  final int returned;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context).state;
+    final id = accountId;
+    final sum = amount;
+    if (id == null || sum == null || !state.ledger.hasAccount(id)) return const SizedBox.shrink();
+    final after = state.ledger.balance(id) + returned - sum;
+    if (after >= 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: InfoBanner(context.l10n.minusWarn(state.accountInfo(id)?.name ?? '', moneyInText(-after)), color: context.fam.warnBg, icon: Icons.warning_amber_outlined),
+    );
+  }
+}
+
 class InfoBanner extends StatelessWidget {
   const InfoBanner(this.text, {super.key, this.icon = Icons.info_outline, this.color});
   final String text;

@@ -108,6 +108,48 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
+  testWidgets('предупреждение «уйдёт в минус» (D87) — в форме операции и в оплате платежа, запись не блокирует', (tester) async {
+    final f = await pumpApp(
+      tester,
+      size: const Size(360, 732),
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => Column(children: [
+            FilledButton(onPressed: () => showAddTransactionSheet(context), child: const Text('add')),
+            FilledButton(
+              onPressed: () => showPayDueSheet(context, AppScope.of(context).state.dueItems(AppScope.of(context).state.monthEnd).first),
+              child: const Text('pay'),
+            ),
+          ]),
+        ),
+      ),
+    );
+    final s = f.state; // на счёте 100 000 ₸
+    await s.upsert('planned', 'rent', {'name': 'Аренда', 'amount': '${kzt(150000)}', 'day': 29, 'category': 'home', 'paid': []});
+
+    await tester.tap(find.text('add'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('уйдёт в минус'), findsNothing);
+    await tester.enterText(find.byType(TextField).first, '120000');
+    await tester.pump();
+    expect(find.textContaining('уйдёт в минус на 20'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '90000');
+    await tester.pump();
+    expect(find.textContaining('уйдёт в минус'), findsNothing);
+    Navigator.pop(tester.element(find.byType(BottomSheet)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('pay'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('уйдёт в минус на 50'), findsOneWidget, reason: 'платёж 150 000 ₸ при 100 000 ₸ на счёте');
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Оплатить').last);
+    await tester.pumpAndSettle();
+    expect(s.ledger.balance('cash'), -kzt(50000), reason: 'предупреждение не мешает записать');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 2));
+  });
+
   testWidgets('счёт в минусе (D87): карточка на главной просит пояснение и показывает его', (tester) async {
     final f = await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
     final s = f.state;

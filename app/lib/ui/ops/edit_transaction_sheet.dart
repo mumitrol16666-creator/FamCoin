@@ -164,6 +164,13 @@ class _EditSheetState extends State<_EditSheet> {
           if ({for (final p in _parts) p.category}.length != _parts.length)
             InfoBanner(l.splitDuplicate, color: fam.warnBg),
           AccountPicker(accounts: accounts, value: _account, onChanged: (v) => setState(() => _account = v)),
+          // Правка траты: прежняя сумма возвращается на счёт, новая списывается.
+          if (!_isIncome)
+            MinusWarning(
+              accountId: _account,
+              amount: _total,
+              returned: widget.tx.postings.where((p) => p.accountId == _account).fold(0, (sum, p) => sum - p.amount),
+            ),
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
             OutlinedButton.icon(

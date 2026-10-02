@@ -319,19 +319,12 @@ class _TransactionFieldsState extends State<TransactionFields> {
         InfoBanner('${l.voiceCheckFields}: ${missingHints.join(', ').toLowerCase()}', color: fam.warnBg, icon: Icons.record_voice_over_outlined),
       ],
       // Деньги уходят со счёта, а их там меньше — говорим заранее (D87).
-      // Записать можно: человек знает о своих деньгах больше приложения.
       ListenableBuilder(
         listenable: _amount,
-        builder: (context, _) {
-          final amount = parseAmount(_amount.text);
-          final outflow = _kind == FieldsKind.expense || _kind == FieldsKind.transfer || (_kind == FieldsKind.debt && (_debtKind == 'lendOut' || _debtKind == 'repaymentMade'));
-          final after = amount == null || _account == null || !outflow ? 0 : state.ledger.balance(_account!) - amount;
-          if (after >= 0) return const SizedBox.shrink();
-          return Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: InfoBanner(l.minusWarn(state.accountInfo(_account!)?.name ?? '', moneyInText(-after)), color: fam.warnBg, icon: Icons.warning_amber_outlined),
-          );
-        },
+        builder: (context, _) => MinusWarning(
+          accountId: _kind == FieldsKind.expense || _kind == FieldsKind.transfer || (_kind == FieldsKind.debt && (_debtKind == 'lendOut' || _debtKind == 'repaymentMade')) ? _account : null,
+          amount: parseAmount(_amount.text),
+        ),
       ),
       const SizedBox(height: 14),
       AppCard(

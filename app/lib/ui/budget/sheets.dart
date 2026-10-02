@@ -74,6 +74,7 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due) {
           const SizedBox(height: 12),
         ],
         AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
+        ListenableBuilder(listenable: amount, builder: (_, _) => MinusWarning(accountId: account, amount: parseAmount(amount.text))),
         const SizedBox(height: 20),
         SubmitButton(
           label: l.pay,
@@ -115,6 +116,10 @@ Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? princip
         AmountField(controller: interest, label: l.interestPart, hint: '0'),
         const SizedBox(height: 12),
         AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
+        ListenableBuilder(
+          listenable: Listenable.merge([principalField, interest]),
+          builder: (_, _) => MinusWarning(accountId: account, amount: (parseAmount(principalField.text, allowZero: true) ?? 0) + (parseAmount(interest.text, allowZero: true) ?? 0)),
+        ),
         const SizedBox(height: 20),
         SubmitButton(
           label: l.pay,
@@ -244,6 +249,7 @@ Future<void> showReserveSheet(BuildContext context, GoalInfo goal, {required boo
           Text(release ? '${l.inGoal}: ${formatMoney(inGoal)}' : '${l.availableOnAccount}: ${formatMoney(available)}', style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
           const SizedBox(height: 12),
           AmountField(controller: amount, label: l.amount, autofocus: true),
+          if (!release) ListenableBuilder(listenable: amount, builder: (_, _) => MinusWarning(accountId: account, amount: parseAmount(amount.text))),
           const SizedBox(height: 8),
           Text(l.reserveNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
           const SizedBox(height: 20),
