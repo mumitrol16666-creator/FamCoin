@@ -80,12 +80,23 @@ class Telegram {
   }
 
   /// [buttons] — ряды кнопок под сообщением; нажатие приходит в [onCallback].
-  Future<bool> send(int chatId, String text, {Buttons? buttons}) async =>
+  /// [keyboard] — постоянные кнопки внизу чата: нажатие приходит обычным
+  /// сообщением с текстом кнопки. У сообщения может быть что-то одно.
+  Future<bool> send(int chatId, String text, {Buttons? buttons, List<List<String>>? keyboard}) async =>
       (await call('sendMessage', {
         'chat_id': chatId,
         'text': text,
         'parse_mode': 'HTML',
-        if (buttons != null) 'reply_markup': {'inline_keyboard': buttons},
+        if (buttons != null)
+          'reply_markup': {'inline_keyboard': buttons}
+        else if (keyboard != null)
+          'reply_markup': {
+            'keyboard': [
+              for (final row in keyboard) [for (final label in row) {'text': label}],
+            ],
+            'resize_keyboard': true,
+            'is_persistent': true,
+          },
       })) !=
       null;
 

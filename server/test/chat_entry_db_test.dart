@@ -181,6 +181,45 @@ void main() {
     expect(l.expenseByCategory(DateTime(2000), DateTime(2100)), {'expense:transport': kzt(2000)});
   });
 
+  test('«Это доход»: черновик расхода становится доходом и записывается как доход', () async {
+    if (skip()) return;
+    final (chatId, userId) = await owner();
+    await say(chatId, 'премия 5000'); // слова «премия» в словаре доходов нет — бот считает расходом
+    expect(bot.last('sendMessage')['text'], contains('Расход · 5 000 ₸'));
+    await press(chatId, bot.button('Это доход'));
+    expect(bot.last('editMessageText')['text'], allOf(contains('Доход · 5 000 ₸'), contains('Прочий доход')));
+    await press(chatId, bot.button('Это расход'));
+    expect(bot.last('editMessageText')['text'], allOf(contains('Расход · 5 000 ₸'), contains('Прочее')));
+    await press(chatId, bot.button('Это доход'));
+    await press(chatId, bot.button('Записать'));
+    expect(await liquid(userId), kzt(105000));
+  });
+
+  test('быстрые операции: кнопка → черновик → запись; без быстрых — подсказка и клавиатура', () async {
+    if (skip()) return;
+    final (chatId, userId) = await owner();
+    await say(chatId, '⚡ Быстрые');
+    expect(bot.last('sendMessage')['text'], contains('Быстрых операций пока нет'));
+    expect(((bot.last('sendMessage')['reply_markup'] as Map)['keyboard'] as List).first, [
+      {'text': '⚡ Быстрые'},
+      {'text': '📅 Сегодня'},
+    ]);
+
+    await ledger.command(userId, {'type': 'upsertEntity', 'commandId': 'quick-$chatId', 'kind': 'quick', 'entityId': 'coffee', 'data': {'name': 'Кофе', 'category': 'cafe', 'amount': '${kzt(1500)}'}});
+    await say(chatId, '/quick');
+    final quick = bot.button('Кофе · 1 500 ₸');
+    await press(chatId, quick);
+    expect(bot.last('sendMessage')['text'], allOf(contains('Расход · 1 500 ₸'), contains('Кафе'), contains('Заметка: Кофе')));
+    expect(await liquid(userId), kzt(100000), reason: 'быстрая операция тоже ждёт подтверждения');
+    await press(chatId, bot.button('Записать'));
+    expect(await liquid(userId), kzt(98500));
+
+    await press(chatId, 'q:нет-такой');
+    expect(bot.last('answerCallbackQuery')['text'], contains('уже нет'));
+    await say(chatId, '📅 Сегодня');
+    expect(bot.last('sendMessage')['text'], contains('Потрачено: <b>1 500 ₸</b>'));
+  });
+
   test('«Отмена» ничего не записывает, кнопки после неё не действуют', () async {
     if (skip()) return;
     final (chatId, userId) = await owner();

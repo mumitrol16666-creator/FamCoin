@@ -153,8 +153,8 @@ class ChatDraft {
   /// Что распознано из голосового сообщения — человек видит, что услышал бот.
   final String heard;
 
-  ChatDraft copyWith({String? category, String? account, String? who, String? heard}) => ChatDraft(
-        income: income,
+  ChatDraft copyWith({bool? income, String? category, String? account, String? who, String? heard}) => ChatDraft(
+        income: income ?? this.income,
         amount: amount,
         category: category ?? this.category,
         account: account ?? this.account,
@@ -448,6 +448,7 @@ String helpText(bool kk, {String? origin, bool voice = false}) => [
       '',
       kk ? '/today — бүгінгі шығыс' : '/today — траты за сегодня',
       kk ? '/month — ай қорытындысы' : '/month — итоги месяца',
+      kk ? '/quick — жылдам операциялар' : '/quick — быстрые операции из приложения',
       if (origin != null && origin.startsWith('https://')) ...['', kk ? 'Қалғаны — қолданбада: $origin' : 'Всё остальное — в приложении: $origin'],
     ].join('\n');
 
@@ -455,15 +456,70 @@ String helpText(bool kk, {String? origin, bool voice = false}) => [
 
 Map<String, String> _button(String text, String data) => {'text': text, 'callback_data': data};
 
-Buttons draftButtons(String id, LedgerView v) {
+/// [income] — тип черновика сейчас: кнопка предлагает противоположный, на
+/// случай если бот понял фразу не так («вернули 5000» — это доход).
+Buttons draftButtons(String id, LedgerView v, {bool income = false}) {
   final kk = v.locale == 'kk';
   return [
     [_button(kk ? '✅ Жазу' : '✅ Записать', 'd:$id:ok'), _button(kk ? '✖ Болдырмау' : '✖ Отмена', 'd:$id:no')],
     [
       _button(kk ? 'Санат' : 'Категория', 'd:$id:cat'),
       if (chatAccounts(v).length > 1) _button(kk ? 'Шот' : 'Счёт', 'd:$id:acc'),
+      _button(income ? (kk ? 'Бұл шығыс' : 'Это расход') : (kk ? 'Бұл кіріс' : 'Это доход'), 'd:$id:type'),
     ],
   ];
+}
+
+// ------------------------------------------------------- быстрые операции
+
+/// Постоянные кнопки внизу чата (D85).
+const quickLabelRu = '⚡ Быстрые';
+const quickLabelKk = '⚡ Жылдам';
+const todayLabelRu = '📅 Сегодня';
+const todayLabelKk = '📅 Бүгін';
+
+List<List<String>> chatKeyboard(bool kk) => [
+      [kk ? quickLabelKk : quickLabelRu, kk ? todayLabelKk : todayLabelRu],
+    ];
+
+class ChatQuick {
+  const ChatQuick(this.id, this.name, this.category, this.amount);
+  final String id;
+  final String name;
+  final String category;
+  final int amount;
+}
+
+/// «Быстрые операции» владельца из приложения — те, у которых задана сумма
+/// (без суммы одним нажатием записывать нечего). Расходы: доходных быстрых
+/// операций в приложении нет.
+List<ChatQuick> chatQuicks(LedgerView v) => [
+      for (final e in v.of('quick').entries)
+        if (e.value['amount'] != null && parseMinor(e.value['amount']) > 0 && e.key.length <= 60)
+          ChatQuick(e.key, '${e.value['name'] ?? ''}'.trim(), e.value['category'] as String? ?? 'other', parseMinor(e.value['amount'])),
+    ];
+
+Buttons quickButtons(LedgerView v) => [
+      for (final q in chatQuicks(v)) [_button('${q.name.isEmpty ? categoryName(q.category, v) : q.name} · ${formatMoney(q.amount)}', 'q:${q.id}')],
+    ];
+
+/// Черновик из быстрой операции: сумма и категория готовы, счёт — как обычно.
+ChatDraft? quickDraft(ChatQuick q, LedgerView v, DateTime now) {
+  final accounts = chatAccounts(v);
+  if (accounts.isEmpty) return null;
+  final account = _lastUsed(v, accounts) ?? accounts.where((a) => a.liquid).firstOrNull ?? accounts.first;
+  return ChatDraft(
+    income: false,
+    amount: q.amount,
+    category: q.category,
+    account: account.id,
+    note: q.name,
+    date: dateToJson(DateTime(now.year, now.month, now.day)),
+    time: '${_two(now.hour)}:${_two(now.minute)}',
+    who: _whoFor(v, account),
+    txId: newChatId(),
+    undoId: newChatId(),
+  );
 }
 
 Buttons _grid(List<Map<String, String>> items, int perRow, Map<String, String> back) => [
@@ -510,8 +566,8 @@ class ChatEntry {
   void attach() {
     telegram.onMessage = onMessage;
     telegram.onCallback = onCallback;
-    telegram.setCommands(const {'today': 'Траты за сегодня', 'month': 'Итоги месяца', 'help': 'Как записать трату'});
-    telegram.setCommands(const {'today': 'Бүгінгі шығыс', 'month': 'Ай қорытындысы', 'help': 'Шығысты қалай жазу керек'}, language: 'kk');
+    telegram.setCommands(const {'today': 'Траты за сегодня', 'month': 'Итоги месяца', 'quick': 'Быстрые операции', 'help': 'Как записать трату'});
+    telegram.setCommands(const {'today': 'Бүгінгі шығыс', 'month': 'Ай қорытындысы', 'quick': 'Жылдам операциялар', 'help': 'Шығысты қалай жазу керек'}, language: 'kk');
   }
 
   DateTime _now() => DateTime.now().toUtc().add(kzOffset);
@@ -547,17 +603,33 @@ class ChatEntry {
       return true;
     }
     final text = (msg['text'] as String? ?? '').trim();
-    if (text.startsWith('/')) {
-      final reply = switch (text.split(RegExp(r'[\s@]')).first.toLowerCase()) {
-        '/today' => todayText(v, now),
+    final command = text.startsWith('/') ? text.split(RegExp(r'[\s@]')).first.toLowerCase() : null;
+    if (command == '/quick' || text == quickLabelRu || text == quickLabelKk) {
+      final buttons = quickButtons(v);
+      if (buttons.isEmpty) {
+        await telegram.send(
+          chatId,
+          kk
+              ? 'Жылдам операциялар әзірге жоқ. Оларды қолданбаның басты бетінде, «Жылдам операциялар» бөлімінде сомасымен қосыңыз — осында батырма болып шығады.'
+              : 'Быстрых операций пока нет. Добавьте их с суммой в приложении на главной, в блоке «Быстрые операции» — здесь они появятся кнопками.',
+          keyboard: chatKeyboard(kk),
+        );
+      } else {
+        await telegram.send(chatId, kk ? 'Жылдам операциялар — басыңыз, жобасын көрсетемін:' : 'Быстрые операции — нажмите, покажу черновик:', buttons: buttons);
+      }
+      return true;
+    }
+    if (command != null || text == todayLabelRu || text == todayLabelKk) {
+      final reply = switch (command) {
         '/month' => monthText(v, now),
+        '/today' || null => todayText(v, now),
         _ => helpText(kk, origin: origin, voice: speech?.enabled == true),
       };
-      await telegram.send(chatId, reply);
+      await telegram.send(chatId, reply, keyboard: chatKeyboard(kk));
       return true;
     }
     if (text.isEmpty || text.length > maxPhraseLength) {
-      await telegram.send(chatId, helpText(kk, origin: origin, voice: speech?.enabled == true));
+      await telegram.send(chatId, helpText(kk, origin: origin, voice: speech?.enabled == true), keyboard: chatKeyboard(kk));
       return true;
     }
 
@@ -583,13 +655,32 @@ class ChatEntry {
       );
       return;
     }
-    final draft = heard ? parsed.copyWith(heard: text) : parsed;
+    await _sendDraft(chatId, userId, v, heard ? parsed.copyWith(heard: text) : parsed, now);
+  }
+
+  /// Сохраняет черновик и показывает его с кнопками.
+  Future<void> _sendDraft(int chatId, String userId, LedgerView v, ChatDraft draft, DateTime now) async {
     final id = newChatId(6);
     await db.execute(
       Sql.named('INSERT INTO telegram_drafts (id, user_id, chat_id, data) VALUES (@id, @u, @c, @d:jsonb)'),
       parameters: {'id': id, 'u': userId, 'c': chatId, 'd': draft.toJson()},
     );
-    await telegram.send(chatId, draftText(draft, v, now), buttons: draftButtons(id, v));
+    await telegram.send(chatId, draftText(draft, v, now), buttons: draftButtons(id, v, income: draft.income));
+  }
+
+  /// Нажатие быстрой операции: черновик с её суммой и категорией. Запись —
+  /// всё равно только после «Записать», как и у набранной фразы.
+  Future<String?> _quick(int chatId, String quickId) async {
+    final userId = await _userOf(chatId);
+    final v = userId == null ? null : await ledger.view(userId);
+    if (userId == null || v == null) return 'Чат не привязан к аккаунту.';
+    final kk = v.locale == 'kk';
+    final quick = chatQuicks(v).where((q) => q.id == quickId).firstOrNull;
+    final now = _now();
+    final draft = quick == null ? null : quickDraft(quick, v, now);
+    if (draft == null) return kk ? 'Бұл жылдам операция енді жоқ.' : 'Этой быстрой операции уже нет.';
+    await _sendDraft(chatId, userId, v, draft, now);
+    return null;
   }
 
   /// Голосовое сообщение: скачать, распознать, дальше — как набранный текст.
@@ -640,7 +731,9 @@ class ChatEntry {
     final message = q['message'] as Map<String, dynamic>?;
     final chatId = (message?['chat'] as Map?)?['id'] as int?;
     final messageId = message?['message_id'] as int?;
-    final parts = (q['data'] as String? ?? '').split(':');
+    final data = q['data'] as String? ?? '';
+    if (data.startsWith('q:') && chatId != null) return _quick(chatId, data.substring(2));
+    final parts = data.split(':');
     if (parts.length < 3 || parts[0] != 'd' || chatId == null || messageId == null) return null;
     final id = parts[1];
     final arg = parts.length > 3 ? parts[3] : '';
@@ -668,7 +761,7 @@ class ChatEntry {
         (await db.execute(Sql.named('UPDATE telegram_drafts SET status = @to WHERE id = @id AND status = @from'), parameters: {'id': id, 'from': from, 'to': to})).affectedRows > 0;
     Future<void> show(ChatDraft d) async {
       await db.execute(Sql.named("UPDATE telegram_drafts SET data = @d:jsonb WHERE id = @id AND status = 'pending'"), parameters: {'id': id, 'd': d.toJson()});
-      await telegram.edit(chatId, messageId, draftText(d, v, now), buttons: draftButtons(id, v));
+      await telegram.edit(chatId, messageId, draftText(d, v, now), buttons: draftButtons(id, v, income: d.income));
     }
 
     switch (parts[2]) {
@@ -709,6 +802,13 @@ class ChatEntry {
         final i = int.tryParse(arg);
         if (i == null || i < 0 || i >= accounts.length) return stale;
         await show(draft.copyWith(account: accounts[i].id, who: _whoFor(v, accounts[i])));
+        return null;
+      case 'type' when status == 'pending':
+        // Расход ↔ доход: категория другого типа не подходит — ставим общую,
+        // её можно сменить кнопкой «Категория».
+        final income = !draft.income;
+        final account = chatAccounts(v).where((a) => a.id == draft.account).firstOrNull;
+        await show(draft.copyWith(income: income, category: income ? 'otherIncome' : 'other', who: income || account == null ? 'me' : _whoFor(v, account)));
         return null;
       case 'back' when status == 'pending':
         await show(draft);

@@ -186,8 +186,33 @@ void main() {
       for (final b in all) {
         expect(b['callback_data']!.codeUnits.length, lessThanOrEqualTo(64));
       }
-      expect(draftButtons(id, v)[1], hasLength(2));
+      expect(draftButtons(id, v)[1].map((b) => b['text']), ['Категория', 'Счёт', 'Это доход']);
+      expect(draftButtons(id, v, income: true)[1].last['text'], 'Это расход');
       expect(categoryButtons(id, d, v).expand((r) => r).map((b) => b['text']), containsAll(['Кафе', 'Собака', 'Прочее']));
+    });
+
+    test('быстрые операции: только с суммой; черновик — расход с её суммой, категорией и названием', () {
+      final v = _view();
+      v.entities['quick'] = {
+        'q1': {'name': 'Кофе', 'category': 'cafe', 'amount': '${kzt(1500)}'},
+        'q2': {'name': 'Такси', 'category': 'transport', 'amount': '0'},
+      };
+      expect(chatQuicks(v).map((q) => q.id), ['q1']);
+      expect(quickButtons(v), [
+        [{'text': 'Кофе · 1 500 ₸', 'callback_data': 'q:q1'}],
+      ]);
+      final d = quickDraft(chatQuicks(v).single, v, _now)!;
+      expect(d.command(), {
+        'type': 'expense',
+        'id': d.txId,
+        'date': '2026-10-01',
+        'account': 'kaspi',
+        'splits': {'cafe': '${kzt(1500)}'},
+        'meta': {'who': 'me', 'note': 'Кофе', 'time': '14:05'},
+      });
+      expect(chatKeyboard(false), [
+        ['⚡ Быстрые', '📅 Сегодня'],
+      ]);
     });
 
     test('скрытые категории в выбор не попадают', () {
