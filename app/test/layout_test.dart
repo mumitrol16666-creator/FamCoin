@@ -467,6 +467,8 @@ void main() {
     expect((context['expenseByCategory'] as List).first, containsPair('name', 'Кафе'));
     expect(context['dailyLimit'], isNull, reason: 'лимит не задан — так и передаём, а не ноль');
     expect(context['recordedIncome'], containsPair('looksIncomplete', false));
+    expect(context.containsKey('userFirstName'), isTrue);
+    expect(context.keys.where((k) => k.toLowerCase().contains('birth') || k.toLowerCase().contains('lastname')), isEmpty, reason: 'кроме имени, личных данных в сводке нет');
     expect(tester.takeException(), isNull);
 
     // Меню: что видит консультант и разбор прошлого месяца (составляется один раз).

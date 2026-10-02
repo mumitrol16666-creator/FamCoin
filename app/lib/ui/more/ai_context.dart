@@ -59,7 +59,12 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
   final goals = s.goals;
   final avgIncome = s.avgMonthlyIncome();
 
+  final firstName = '${s.profile['firstName'] ?? ''}'.trim();
+
   return {
+    // Только имя — чтобы консультант мог обратиться по имени; фамилия и дата
+    // рождения не передаются.
+    'userFirstName': firstName.isEmpty ? null : firstName,
     'today': dateToJson(s.today),
     'period': {'month': _month(month), 'todayDay': s.today.day, 'daysInMonth': s.daysInMonth},
     'thisMonth': {'income': _t(r.income), 'expense': _t(r.expense), 'incomeMinusExpense': _t(r.result), 'cashFlow': _t(r.cashFlow)},
