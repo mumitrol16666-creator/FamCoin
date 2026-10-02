@@ -45,6 +45,7 @@ class FakeServer {
   final aiMessages = <Map<String, dynamic>>[];
   final aiReviews = <String, String>{};
   bool aiDown = false;
+  List<String> aiUnverified = const [];
   int aiUsed = 0;
   int aiLimit = 100;
 
@@ -74,7 +75,7 @@ class FakeServer {
     aiMessages
       ..add({'id': 'q$aiUsed', 'role': 'user', 'text': body['question']})
       ..add({'id': 'a$aiUsed', 'role': 'assistant', 'text': answer});
-    return json({'answer': answer, 'insufficientData': false, 'quota': quota(), 'repeated': false});
+    return json({'answer': answer, 'insufficientData': false, 'unverified': aiUnverified, 'quota': quota(), 'repeated': false});
   }
 
   Future<http.Response> _handle(http.Request req) async {

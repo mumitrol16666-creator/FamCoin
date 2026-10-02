@@ -564,12 +564,25 @@ void main() {
     expect(context['dailyLimit'], isNull, reason: 'лимит не задан — так и передаём, а не ноль');
     expect(context['recordedIncome'], containsPair('looksIncomplete', false));
     expect(context.containsKey('userFirstName'), isTrue);
-    expect(context['operations'], [containsPair('category', 'Кафе')], reason: 'консультант видит операции (D86)');
-    expect((context['operations'] as List).single, allOf(containsPair('amount', 1500), containsPair('account', 'Kaspi Gold'), containsPair('type', 'expense'), containsPair('note', 'Латте')));
+    expect(context['operationsToday'], [containsPair('category', 'Кафе')], reason: 'консультант видит операции (D86), разложенные по дням (D91)');
+    expect((context['operationsToday'] as List).single, allOf(containsPair('amount', 1500), containsPair('account', 'Kaspi Gold'), containsPair('type', 'expense'), containsPair('note', 'Латте')));
+    for (final day in ['operationsYesterday', 'operationsDayBeforeYesterday', 'operationsEarlier']) {
+      expect(context[day], isEmpty, reason: 'пустой день — явный пустой список ($day)');
+    }
     expect(context['tracking'], containsPair('daysOfHistory', 1), reason: 'учёт начат сегодня — консультант это видит');
     expect((context['monthEndBalanceForecast'] as Map)['roughEstimate'], isNotNull);
     expect((context['observations'] as Map)['incomeDaySpendRatio'], isNull, reason: 'меньше трёх доходов — не закономерность');
     expect(context.keys.where((k) => k.toLowerCase().contains('birth') || k.toLowerCase().contains('lastname')), isEmpty, reason: 'кроме имени, личных данных в сводке нет');
+    expect(tester.takeException(), isNull);
+
+    // Сумма, которой нет в данных, — с пометкой «посчитал сам» (D91).
+    f.aiUnverified = ['50 100 ₸'];
+    await tester.enterText(find.byType(TextField), 'Сколько накоплю за 3 месяца?');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Консультант посчитал сам'), findsOneWidget);
+    expect(find.textContaining('50\u00A0100'), findsOneWidget);
+    f.aiUnverified = const [];
     expect(tester.takeException(), isNull);
 
     // Меню: что видит консультант и разбор прошлого месяца (составляется один раз).

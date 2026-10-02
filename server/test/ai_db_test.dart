@@ -16,10 +16,14 @@ class _FakeModel extends ChatModel {
   bool down = false;
   final seen = <List<Map<String, String>>>[];
 
+  /// Заготовленные ответы — по одному на обращение; без них «ответ N».
+  final scripted = <String>[];
+
   @override
-  Future<AiReply?> complete(List<Map<String, String>> messages) async {
+  Future<AiReply?> complete(List<Map<String, String>> messages, {Duration timeout = const Duration(seconds: 25)}) async {
     seen.add(messages);
-    return down ? null : AiReply('ответ ${seen.length}', tokensIn: 700, tokensOut: 90);
+    if (down) return null;
+    return AiReply(scripted.isEmpty ? 'ответ ${seen.length}' : scripted.removeAt(0), tokensIn: 700, tokensOut: 90);
   }
 }
 
@@ -99,6 +103,39 @@ void main() {
     final st = await ai.status(u);
     expect((st['messages'] as List).map((m) => (m as Map)['role']), ['user', 'assistant', 'user', 'assistant']);
     expect(st['quota'], {'used': 2, 'limit': 3, 'left': 1});
+  });
+
+  test('проверка сумм: чего нет в данных — модель перепроверяет; что осталось — помечается и сохраняется', () async {
+    if (skip()) return;
+    final u = await user();
+    // Первая попытка — выдуманная сумма, вторая — исправленная по данным.
+    model.scripted.addAll(['Вы заработали 345 678 ₸.', 'Вы заработали 300 000 ₸.']);
+    var calls = model.seen.length;
+    final fixed = await ai.chat(u, ask('Сколько я заработал?', 'c1'));
+    expect(fixed['answer'], 'Вы заработали 300 000 ₸.');
+    expect(fixed['unverified'], isEmpty);
+    expect(model.seen.length, calls + 2);
+    expect(model.seen.last.last['role'], 'system');
+    expect(model.seen.last.last['content'], allOf(contains('ПРОВЕРКА ОТВЕТА'), contains('345 678 ₸')));
+    expect(fixed['quota'], containsPair('used', 1), reason: 'перепроверка — тот же вопрос, квота одна');
+
+    // Модель настаивает на своём расчёте — ответ отдаётся с пометкой.
+    model.scripted.addAll(['За год это 3 600 000 ₸.', 'По моему расчёту за год это 3 600 000 ₸.']);
+    final own = await ai.chat(u, ask('А за год?', 'c2'));
+    expect(own['answer'], 'По моему расчёту за год это 3 600 000 ₸.');
+    expect(own['unverified'], ['3 600 000 ₸']);
+    expect((await ai.chat(u, ask('А за год?', 'c2')))['unverified'], ['3 600 000 ₸'], reason: 'повтор отдаёт сохранённую пометку');
+    final messages = (await ai.status(u))['messages'] as List;
+    expect((messages.last as Map)['unverified'], ['3 600 000 ₸']);
+    expect((messages[1] as Map)['unverified'], isEmpty);
+
+    // Суммы сходятся с данными — второго обращения к модели нет.
+    model.scripted.add('Вы заработали 300 000 ₸.');
+    calls = model.seen.length;
+    await ai.chat(u, ask('Ещё раз?', 'c3'));
+    expect(model.seen.length, calls + 1);
+    final tokens = await pool!.execute(Sql.named("SELECT tokens_in FROM ai_usage WHERE user_id = @u ORDER BY created_at"), parameters: {'u': u});
+    expect([for (final r in tokens) r[0]], [1400, 1400, 700], reason: 'токены перепроверки учтены в том же обращении');
   });
 
   test('повтор той же отправки: тот же ответ, модель не спрашивается, квота не списывается', () async {

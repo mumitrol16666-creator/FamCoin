@@ -1329,5 +1329,7 @@
   "purchaseSaveNote": "Можно просто помнить о покупке, а можно копить: «Копить в копилку» создаст цель с этой суммой и сроком. Деньги в копилке не считаются свободными и не попадают в дневной лимит.",
   "purchaseRemoveHint": "Копилка с накопленным останется среди целей.",
   "purchaseFromPiggy": "Из копилки на этот счёт вернётся {amount} — покупка оплатится с него.",
-  "@purchaseFromPiggy": {"placeholders": {"amount": {"type": "String"}}}
+  "@purchaseFromPiggy": {"placeholders": {"amount": {"type": "String"}}},
+  "aiUnverified": "Консультант посчитал сам, в данных приложения этих сумм нет: {amounts}. Перепроверьте.",
+  "@aiUnverified": {"placeholders": {"amounts": {"type": "String"}}}
 }

@@ -15,10 +15,13 @@ import 'tariff_screen.dart';
 String _keepAmounts(String text) => text.replaceAllMapped(RegExp(r'(\d) (?=\d{3}(?!\d)|₸)'), (m) => '${m[1]}\u00A0');
 
 class _Message {
-  _Message(this.user, this.text, {this.insufficient = false, this.requestId});
+  _Message(this.user, this.text, {this.insufficient = false, this.unverified = const [], this.requestId});
   final bool user;
   final String text;
   final bool insufficient;
+
+  /// Суммы, которых нет в данных приложения: их посчитал сам консультант (D91).
+  final List<String> unverified;
 
   /// Вопрос ещё не получил ответа: id отправки (повтор идёт с ним же) и
   /// текст ошибки, если отправка не удалась.
@@ -77,7 +80,7 @@ class _AiScreenState extends State<AiScreen> {
           ..clear()
           ..addAll([
             for (final m in (s['messages'] as List? ?? const []).cast<Map<String, dynamic>>())
-              _Message(m['role'] == 'user', m['text'] as String? ?? '', insufficient: m['insufficientData'] == true),
+              _Message(m['role'] == 'user', m['text'] as String? ?? '', insufficient: m['insufficientData'] == true, unverified: [...?(m['unverified'] as List?)?.cast<String>()]),
           ]);
       });
       _toEnd();
@@ -120,7 +123,7 @@ class _AiScreenState extends State<AiScreen> {
       if (!mounted) return;
       setState(() {
         _quota(r['quota']);
-        _messages.add(_Message(false, r['answer'] as String? ?? '', insufficient: r['insufficientData'] == true));
+        _messages.add(_Message(false, r['answer'] as String? ?? '', insufficient: r['insufficientData'] == true, unverified: [...?(r['unverified'] as List?)?.cast<String>()]));
       });
     } catch (e) {
       if (!mounted) return;
@@ -270,6 +273,8 @@ class _AiScreenState extends State<AiScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SelectableText(m.user ? m.text : _keepAmounts(m.text)),
           if (m.insufficient) Padding(padding: const EdgeInsets.only(top: 6), child: Text(l.aiInsufficient, style: TextStyle(fontSize: 12, color: fam.warn))),
+          if (m.unverified.isNotEmpty)
+            Padding(padding: const EdgeInsets.only(top: 6), child: Text(l.aiUnverified(_keepAmounts(m.unverified.join(', '))), style: TextStyle(fontSize: 12, color: fam.warn))),
           if (m.failed != null) ...[
             Padding(padding: const EdgeInsets.only(top: 6), child: Text(m.failed!, style: TextStyle(fontSize: 12, color: fam.expense))),
             TextButton(onPressed: _busy ? null : () => _send(m), child: Text(l.aiRetry)),
@@ -291,6 +296,7 @@ class _ReviewBody extends StatefulWidget {
 
 class _ReviewBodyState extends State<_ReviewBody> {
   String? _text;
+  List<String> _unverified = const [];
   String? _error;
   bool _busy = true;
   bool _started = false;
@@ -314,7 +320,12 @@ class _ReviewBodyState extends State<_ReviewBody> {
     });
     try {
       final review = await call(AppScope.of(context).state);
-      if (mounted) setState(() => _text = review?['text'] as String?);
+      if (mounted) {
+        setState(() {
+          _text = review?['text'] as String?;
+          _unverified = [...?(review?['unverified'] as List?)?.cast<String>()];
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = errorText(l, e));
     } finally {
@@ -327,7 +338,13 @@ class _ReviewBodyState extends State<_ReviewBody> {
     final l = context.l10n;
     final fam = context.fam;
     final locale = Localizations.localeOf(context).languageCode;
-    if (_text != null) return SelectableText(_keepAmounts(_text!));
+    if (_text != null) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SelectableText(_keepAmounts(_text!)),
+        if (_unverified.isNotEmpty)
+          Padding(padding: const EdgeInsets.only(top: 8), child: Text(l.aiUnverified(_keepAmounts(_unverified.join(', '))), style: TextStyle(fontSize: 12, color: fam.warn))),
+      ]);
+    }
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Text(l.aiReviewIntro, style: TextStyle(fontSize: 13, color: fam.text2)),
       const SizedBox(height: 4),

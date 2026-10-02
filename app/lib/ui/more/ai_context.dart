@@ -43,7 +43,7 @@ int _recentIncomes(AppState s) {
 
 /// Чего в сводке нет — чтобы консультант говорил «не вижу», а не домысливал.
 const _notIncluded = [
-  'операции старше прошлого месяца и мелкие операции сверх списка operations',
+  'операции старше прошлого месяца и мелкие операции сверх списков',
   'разбивка по членам семьи',
   'месяцы раньше прошлого',
   'категории и платежи сверх показанных в списках',
@@ -56,8 +56,11 @@ const _noteLength = 80;
 
 /// Расходы и доходы этого и прошлого месяца для консультанта (D86): последние
 /// по времени плюс самые крупные — с категорией, счётом и заметкой владельца.
-/// Переводы, долги и исправления сюда не входят.
-List<Map<String, Object?>> _operations(AppState s, AppLocalizations l) {
+/// Переводы, долги и исправления сюда не входят. Операции разложены по дням
+/// (D91): сегодня, вчера, позавчера и раньше. Пустой список прямо говорит «за
+/// этот день ничего нет» — считать дни в уме модель умеет плохо и вчерашнюю
+/// операцию называла позавчерашней.
+Map<String, Object?> _operations(AppState s, AppLocalizations l) {
   final from = s.monthOf(-1);
   final all = [
     for (final t in s.userTransactions)
@@ -72,31 +75,37 @@ List<Map<String, Object?>> _operations(AppState s, AppLocalizations l) {
   final bySize = [...all]..sort((a, b) => amount(b).compareTo(amount(a)));
   chosen.addAll(bySize.take(_largestOperations));
 
-  return [
-    for (final t in all)
-      if (chosen.contains(t))
-        () {
-          final expense = t.type == EventType.expense;
-          final kind = expense ? LedgerKind.expense : LedgerKind.income;
-          final categories = {
-            for (final p in t.postings)
-              if (s.ledger.account(p.accountId).kind == kind) categoryName(l, p.accountId.substring(p.accountId.indexOf(':') + 1)),
-          };
-          final account = t.postings.map((p) => s.accountInfo(p.accountId)).whereType<AccountInfo>().firstOrNull;
-          final note = '${t.meta['note'] ?? ''}'.trim();
-          return <String, Object?>{
-            'date': dateToJson(t.date),
-            // «Сегодня / вчера / позавчера» — готовым словом: дни модель путает.
-            if (s.today.difference(t.date).inDays case final d when d >= 0 && d <= 2) 'when': const ['сегодня', 'вчера', 'позавчера'][d],
-            'type': expense ? 'expense' : 'income',
-            'amount': _t(amount(t)),
-            'category': categories.join(', '),
-            if (account != null) 'account': account.name,
-            if (note.isNotEmpty) 'note': note.length > _noteLength ? '${note.substring(0, _noteLength)}…' : note,
-            if (t.meta['planned'] != null || t.meta['plannedPurchase'] == true) 'planned': true,
-          };
-        }(),
-  ];
+  Map<String, Object?> row(Transaction t, {required bool dated}) {
+    final expense = t.type == EventType.expense;
+    final kind = expense ? LedgerKind.expense : LedgerKind.income;
+    final categories = {
+      for (final p in t.postings)
+        if (s.ledger.account(p.accountId).kind == kind) categoryName(l, p.accountId.substring(p.accountId.indexOf(':') + 1)),
+    };
+    final account = t.postings.map((p) => s.accountInfo(p.accountId)).whereType<AccountInfo>().firstOrNull;
+    final note = '${t.meta['note'] ?? ''}'.trim();
+    return {
+      if (dated) 'date': dateToJson(t.date),
+      'type': expense ? 'expense' : 'income',
+      'amount': _t(amount(t)),
+      'category': categories.join(', '),
+      if (account != null) 'account': account.name,
+      if (note.isNotEmpty) 'note': note.length > _noteLength ? '${note.substring(0, _noteLength)}…' : note,
+      if (t.meta['planned'] != null || t.meta['plannedPurchase'] == true) 'planned': true,
+    };
+  }
+
+  final shown = [for (final t in all) if (chosen.contains(t)) t];
+  List<Map<String, Object?>> on(int daysAgo) => [for (final t in shown) if (daysBetween(t.date, s.today) == daysAgo) row(t, dated: false)];
+  return {
+    'operationsToday': on(0),
+    'operationsYesterday': on(1),
+    'operationsDayBeforeYesterday': on(2),
+    'operationsEarlier': [
+      for (final t in shown)
+        if (daysBetween(t.date, s.today) case final d when d > 2 || d < 0) row(t, dated: true),
+    ],
+  };
 }
 
 /// Категории месяца [month] с суммами прошлого месяца рядом — не больше 12.
@@ -269,8 +278,8 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       // Платежей больше, чем записано доходов: скорее всего, доходы внесены не все.
       'looksIncomplete': s.recurringMonthly > avgIncome,
     },
-    'operations': _operations(s, l),
-    'operationsNote': 'Расходы и доходы этого и прошлого месяца: последние $_recentOperations и $_largestOperations самых крупных. Заметки написал сам человек.',
+    ..._operations(s, l),
+    'operationsNote': 'Расходы и доходы этого и прошлого месяца по дням: последние $_recentOperations и $_largestOperations самых крупных. Пустой список — за этот день операций нет. Заметки написал сам человек.',
     'familyMode': s.familyMode,
   };
 }
