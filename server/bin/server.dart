@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:famcoin_server/admin.dart';
+import 'package:famcoin_server/ai.dart';
 import 'package:famcoin_server/api.dart';
 import 'package:famcoin_server/auth_service.dart';
 import 'package:famcoin_server/billing.dart';
@@ -61,8 +62,10 @@ Future<void> _run() async {
     days: int.tryParse(env['PRO_DAYS'] ?? ''),
   )..start();
   Maintenance(db).start();
+  final ai = AiService(db, ChatModel(apiKey: env['OPENAI_API_KEY'], model: env['OPENAI_CHAT_MODEL']), chatQuota: int.tryParse(env['AI_CHAT_QUOTA'] ?? ''));
+  print(ai.model.enabled ? 'ai: консультант — ${ai.model.model}, ${ai.chatQuota} сообщений в месяц' : 'ai: OPENAI_API_KEY не задан, консультант выключен');
   final admin = AdminService(db, password: env['ADMIN_PASSWORD']);
-  final handler = buildHandler(auth, ledger, notifications, admin, telegram: telegram, billing: billing, allowedOrigin: env['CORS_ORIGIN'] ?? '*');
+  final handler = buildHandler(auth, ledger, notifications, admin, telegram: telegram, billing: billing, ai: ai, allowedOrigin: env['CORS_ORIGIN'] ?? '*');
 
   // Бот слушает «/start <код>», сообщения с тратами и платежи только при заданном токене.
   if (telegram.enabled) {

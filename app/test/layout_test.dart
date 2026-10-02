@@ -13,6 +13,7 @@ import 'package:famcoin/theme/app_theme.dart';
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
 import 'package:famcoin/ui/auth/login_screen.dart';
 import 'package:famcoin/ui/budget/sheets.dart';
+import 'package:famcoin/ui/more/ai_screen.dart';
 import 'package:famcoin/ui/more/more_screen.dart';
 import 'package:famcoin/ui/more/settings_screen.dart';
 import 'package:famcoin/ui/onboarding/onboarding_screen.dart';
@@ -421,15 +422,71 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('«Ещё»: без пункта «Чек», ИИ подписан «скоро», а не Pro', (tester) async {
+  testWidgets('«Ещё»: без пункта «Чек»; консультант без Pro объясняет, что входит в Pro', (tester) async {
     await pumpApp(tester, home: const MoreScreen(), size: const Size(360, 732));
     expect(find.text('Чек'), findsNothing);
-    expect(find.text('ИИ-консультант'), findsOneWidget);
-    expect(find.text('скоро'), findsOneWidget);
+    expect(find.text('скоро'), findsNothing);
     await tester.tap(find.text('ИИ-консультант'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('ещё не готов'), findsOneWidget);
-    expect(find.text('Оформить Pro в Telegram'), findsNothing);
+    expect(find.textContaining('Консультант входит в Pro'), findsOneWidget);
+    expect(find.text('Ваш вопрос'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('консультант (D82): вопрос уходит со сводкой показателей, ответ и остаток квоты видны; ошибка — с повтором тем же id', (tester) async {
+    final f = await pumpApp(
+      tester,
+      size: const Size(360, 732),
+      home: Builder(builder: (context) => TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const AiScreen())), child: const Text('open'))),
+    );
+    f.billingPlan = 'pro';
+    f.aiLimit = 3;
+    await f.state.load();
+    await f.state.addExpense(amount: kzt(1500), category: 'cafe', account: 'cash', date: f.state.today);
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('отправляются сервису ИИ'), findsOneWidget);
+    expect(find.text('Осталось вопросов в этом месяце: 3 из 3'), findsOneWidget);
+
+    f.aiDown = true;
+    await tester.enterText(find.byType(TextField), 'Сколько ушло на кафе?');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Консультант сейчас недоступен'), findsOneWidget);
+    expect(find.text('Осталось вопросов в этом месяце: 3 из 3'), findsOneWidget);
+
+    f.aiDown = false;
+    await tester.tap(find.text('Повторить'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ответ на «Сколько ушло на кафе?»'), findsOneWidget);
+    expect(find.text('Осталось вопросов в этом месяце: 2 из 3'), findsOneWidget);
+    expect(f.aiRequests[0]['requestId'], f.aiRequests[1]['requestId'], reason: 'повтор — та же отправка');
+    final context = f.aiRequests.last['context'] as Map<String, dynamic>;
+    expect((context['thisMonth'] as Map)['expense'], 1500, reason: 'суммы уходят в тенге');
+    expect((context['expenseByCategory'] as List).first, containsPair('name', 'Кафе'));
+    expect(context['dailyLimit'], isNull, reason: 'лимит не задан — так и передаём, а не ноль');
+    expect(tester.takeException(), isNull);
+
+    // Меню: что видит консультант и разбор прошлого месяца (составляется один раз).
+    await tester.tap(find.byType(PopupMenuButton<VoidCallback>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Что видит консультант'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('"expenseByCategory"'), findsOneWidget);
+    Navigator.pop(tester.element(find.textContaining('"expenseByCategory"')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<VoidCallback>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Разбор: Август 2026'));
+    await tester.pumpAndSettle();
+    expect(find.text('Составить разбор'), findsOneWidget);
+    await tester.tap(find.text('Составить разбор'));
+    await tester.pumpAndSettle();
+    expect(find.text('Разбор за 2026-08'), findsOneWidget);
+    expect((f.aiRequests.last['context'] as Map)['period'], containsPair('month', '2026-08'));
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 

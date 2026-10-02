@@ -47,7 +47,7 @@ class ApiClient {
   final http.Client _http;
   final String baseUrl;
 
-  Future<Map<String, dynamic>> _send(String method, String path, {Map<String, Object?>? body, String? token}) async {
+  Future<Map<String, dynamic>> _send(String method, String path, {Map<String, Object?>? body, String? token, Duration timeout = const Duration(seconds: 20)}) async {
     http.Response res;
     try {
       final uri = Uri.parse('$baseUrl$path');
@@ -58,7 +58,7 @@ class ApiClient {
       final future = method == 'GET'
           ? _http.get(uri, headers: headers)
           : _http.post(uri, headers: headers, body: jsonEncode(body ?? const {}));
-      res = await future.timeout(const Duration(seconds: 20));
+      res = await future.timeout(timeout);
     } catch (_) {
       throw ApiException('network');
     }
@@ -173,4 +173,24 @@ class ApiClient {
 
   /// Ссылка на счёт в Telegram; открывается сразу с кнопкой «Оплатить».
   Future<String> billingInvoice(String token) async => (await _send('POST', '/billing/invoice', token: token))['url'] as String;
+
+  // ИИ-консультант (D82). Модель отвечает несколько секунд, сервер ждёт её до
+  // 25 — обычных 20 секунд ожидания здесь мало.
+  static const _aiTimeout = Duration(seconds: 32);
+
+  /// Доступность, остаток квоты и сообщения текущего разговора.
+  Future<Map<String, dynamic>> aiStatus(String token) => _send('GET', '/ai', token: token);
+
+  /// Вопрос консультанту; [requestId] при повторе той же отправки не меняется.
+  Future<Map<String, dynamic>> aiChat(String token, {required String question, required Map<String, Object?> context, required String requestId, required String locale}) =>
+      _send('POST', '/ai/chat', body: {'question': question, 'context': context, 'requestId': requestId, 'locale': locale}, token: token, timeout: _aiTimeout);
+
+  Future<void> aiClear(String token) => _send('POST', '/ai/clear', token: token);
+
+  /// Готовый разбор месяца `ГГГГ-ММ` или `null`.
+  Future<Map<String, dynamic>?> aiReview(String token, String period) async =>
+      (await _send('GET', '/ai/review/$period', token: token))['review'] as Map<String, dynamic>?;
+
+  Future<Map<String, dynamic>?> aiMakeReview(String token, {required String period, required Map<String, Object?> context, required String locale}) async =>
+      (await _send('POST', '/ai/review', body: {'period': period, 'context': context, 'locale': locale}, token: token, timeout: _aiTimeout))['review'] as Map<String, dynamic>?;
 }

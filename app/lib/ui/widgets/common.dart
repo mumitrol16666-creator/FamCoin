@@ -85,6 +85,8 @@ String errorText(AppLocalizations l, Object e) {
     'network' => l.errNetwork,
     'busy' || 'timeout' => l.errBusy,
     'rate_limited' => l.errRateLimited,
+    'ai_quota' => l.aiQuotaOut,
+    'ai_unavailable' => l.aiUnavailable,
     _ => l.errUnknown,
   };
 }

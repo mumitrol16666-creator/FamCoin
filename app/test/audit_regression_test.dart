@@ -39,6 +39,43 @@ class FakeServer {
   bool tgConfirmed = false;
   int tgChecks = 0;
 
+  /// ИИ-консультант (D82): что прислало приложение и что «ответила модель».
+  final aiRequests = <Map<String, dynamic>>[];
+  final aiMessages = <Map<String, dynamic>>[];
+  final aiReviews = <String, String>{};
+  bool aiDown = false;
+  int aiUsed = 0;
+  int aiLimit = 100;
+
+  http.Response _ai(http.Request req) {
+    Map<String, Object> quota() => {'used': aiUsed, 'limit': aiLimit, 'left': aiLimit - aiUsed};
+    http.Response json(Object body, [int status = 200]) => http.Response.bytes(utf8.encode(jsonEncode(body)), status);
+    final path = req.url.path;
+    if (path == '/ai') return json({'available': true, 'pro': billingPlan == 'pro', 'quota': quota(), 'messages': aiMessages});
+    if (path == '/ai/clear') {
+      aiMessages.clear();
+      return json({'status': 'ok'});
+    }
+    if (path.startsWith('/ai/review/')) {
+      final text = aiReviews[path.split('/').last];
+      return json({'review': text == null ? null : {'period': path.split('/').last, 'text': text}});
+    }
+    final body = jsonDecode(req.body) as Map<String, dynamic>;
+    aiRequests.add(body);
+    if (aiDown) return json({'error': 'ai_unavailable'}, 503);
+    if (path == '/ai/review') {
+      aiReviews[body['period'] as String] = 'Разбор за ${body['period']}';
+      return json({'review': {'period': body['period'], 'text': aiReviews[body['period']]}});
+    }
+    if (aiUsed >= aiLimit) return json({'error': 'ai_quota'}, 429);
+    aiUsed++;
+    final answer = 'Ответ на «${body['question']}»';
+    aiMessages
+      ..add({'id': 'q$aiUsed', 'role': 'user', 'text': body['question']})
+      ..add({'id': 'a$aiUsed', 'role': 'assistant', 'text': answer});
+    return json({'answer': answer, 'insufficientData': false, 'quota': quota(), 'repeated': false});
+  }
+
   Future<http.Response> _handle(http.Request req) async {
     if (offline) throw http.ClientException('offline');
     if (req.url.path == '/state') return http.Response(jsonEncode(_snapshot()), 200);
@@ -55,6 +92,7 @@ class FakeServer {
       final ok = {'status': 'ok', 'token': 'session-token', 'user': {'id': 'u1', 'email': 'tg1@telegram.local', 'locale': 'ru', 'name': 'Test'}};
       return http.Response(jsonEncode(tgConfirmed ? ok : {'status': 'pending'}), 200);
     }
+    if (req.url.path.startsWith('/ai')) return _ai(req);
     final cmd = jsonDecode(req.body) as Map<String, dynamic>;
     final id = cmd['commandId'] as String;
     if (seen.contains(id)) return http.Response(jsonEncode({'revision': revision, 'repeated': true}), 200);

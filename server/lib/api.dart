@@ -9,6 +9,7 @@ import 'package:shelf_router/shelf_router.dart';
 
 import 'admin.dart';
 import 'admin_page.dart';
+import 'ai.dart';
 import 'auth_service.dart';
 import 'billing.dart';
 import 'export.dart';
@@ -50,6 +51,7 @@ Handler buildHandler(
   AdminService admin, {
   required Telegram telegram,
   required BillingService billing,
+  required AiService ai,
   String allowedOrigin = '*',
 }) {
   Future<String> user(Request req) async {
@@ -136,6 +138,21 @@ Handler buildHandler(
       await deleteUserData(auth.db, id);
       ledger.forget(id);
       return _json(200, {'status': 'ok'});
+    })
+    // ИИ-консультант (D82): чат по снимку показателей и ежемесячный разбор
+    ..get('/ai', (Request req) async => _json(200, await ai.status(await user(req))))
+    ..post('/ai/chat', (Request req) async {
+      final id = await user(req);
+      return _json(200, await ai.chat(id, await _body(req)));
+    })
+    ..post('/ai/clear', (Request req) async {
+      await ai.clear(await user(req));
+      return _json(200, {'status': 'ok'});
+    })
+    ..get('/ai/review/<period>', (Request req, String period) async => _json(200, await ai.reviewFor(await user(req), period)))
+    ..post('/ai/review', (Request req) async {
+      final id = await user(req);
+      return _json(200, await ai.review(id, await _body(req)));
     })
     // Тариф: оплата Pro звёздами Telegram (D52)
     ..get('/billing', (Request req) async => _json(200, await billing.info(await user(req))))

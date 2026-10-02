@@ -6,6 +6,7 @@ import '../analytics/analytics_screen.dart';
 import '../budget/calendar_screen.dart';
 import '../ops/voice_sheet.dart';
 import 'accounts_screen.dart';
+import 'ai_screen.dart';
 import 'categories_screen.dart';
 import 'family_screen.dart';
 import 'notifications_screen.dart';
@@ -35,19 +36,7 @@ class MoreScreen extends StatelessWidget {
       (Icons.family_restroom_outlined, l.family, _Badge.none, () => open(const FamilyScreen())),
       (Icons.label_outline, l.categories, _Badge.none, () => open(const CategoriesScreen())),
       (Icons.mic_none, l.voice, _Badge.none, () => showVoiceSheet(context)),
-      (
-        Icons.auto_awesome_outlined,
-        l.ai,
-        _Badge.soon,
-        () => showDialog<void>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: Text(l.ai),
-                content: Text(l.aiSoonNote),
-                actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: Text(l.later))],
-              ),
-            ),
-      ),
+      (Icons.auto_awesome_outlined, l.ai, _Badge.none, () => open(const AiScreen())),
       (Icons.notifications_none, l.notifications, _Badge.none, () => open(const NotificationsScreen())),
       (Icons.workspace_premium_outlined, l.tariff, _Badge.none, () => open(const TariffScreen())),
       (Icons.shield_outlined, l.security, _Badge.none, () => open(const SecurityScreen())),

@@ -52,6 +52,9 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       # Ключ поставщика ИИ: распознавание голосовых в боте, консультант.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-}
+      OPENAI_TRANSCRIBE_MODEL: ${OPENAI_TRANSCRIBE_MODEL:-}
+      AI_CHAT_QUOTA: ${AI_CHAT_QUOTA:-}
     ports: !override []
     restart: unless-stopped
 
