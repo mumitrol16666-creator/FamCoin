@@ -133,7 +133,7 @@
   "voice": "Голос",
   "receipt": "Чек",
   "addOperation": "Записать операцию",
-  "transferNote": "Перевод не является расходом",
+  "transferNote": "Перевод между своими счетами — в расходы он не попадает.",
   "debtNote": "Деньги ушли со счёта, но это не трата — их вам вернут",
   "lendOut": "Дал в долг",
   "borrow": "Взял в долг",
@@ -251,7 +251,7 @@
   "delete": "Удалить",
   "deleteGoal": "Удалить цель?",
   "deleteGoalHint": "Деньги из копилки вернутся на основной счёт, копилка отправится в архив.",
-  "deleteHint": "Операция исчезнет из остатков, но останется в истории.",
+  "deleteHint": "Остатки пересчитаются так, будто этой операции не было. Вернуть её можно во вкладке «Операции» → «Удалённые».",
   "deleteLimit": "Удалить лимит?",
   "deleteMember": "Удалить человека?",
   "deleteMemberHint": "Прошлые операции сохранятся.",
@@ -1294,5 +1294,14 @@
   "aiExample1": "Куда ушло больше всего в этом месяце?",
   "aiExample2": "Хватит ли денег до конца месяца?",
   "aiExample3": "Почему сегодня доступно столько?",
-  "aiRetry": "Повторить"
+  "aiRetry": "Повторить",
+  "minusWarn": "После этой операции счёт «{account}» уйдёт в минус на {amount}.",
+  "@minusWarn": {"placeholders": {"account": {"type": "String"}, "amount": {"type": "String"}}},
+  "minusCardTitle": "«{account}» в минусе на {amount}",
+  "@minusCardTitle": {"placeholders": {"account": {"type": "String"}, "amount": {"type": "String"}}},
+  "minusCardAsk": "Почему так вышло? Например: «овердрафт до зарплаты», «пополню завтра», «не записал доход». Пояснение увидит и консультант.",
+  "minusExplain": "Пояснить",
+  "minusNoteHint": "Ваше пояснение",
+  "minusNoteLabel": "Ваше пояснение: {note}",
+  "@minusNoteLabel": {"placeholders": {"note": {"type": "String"}}}
 }

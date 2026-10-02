@@ -94,6 +94,7 @@ class HomeScreen extends StatelessWidget {
                 const _PushPromptCard(),
                 const QuickActionsRow(),
 
+                for (final a in state.accountsInMinus) _MinusCard(a),
                 SectionHeader(l.accounts, action: '${l.all} ›', onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountsScreen()))),
                 SizedBox(
                   height: 82,
@@ -541,6 +542,54 @@ class _Kpi extends StatelessWidget {
       Text(label, style: TextStyle(fontSize: 12, color: context.fam.text2)),
       MoneyText(value, color: color, style: const TextStyle(fontSize: 18)),
     ]);
+  }
+}
+
+/// Счёт в минусе (D87): это бывает — овердрафт, не записанный доход, платёж
+/// до зарплаты. Просим пояснить одной фразой; пояснение увидит и консультант.
+class _MinusCard extends StatelessWidget {
+  const _MinusCard(this.info);
+  final AccountInfo info;
+
+  Future<void> _explain(BuildContext context, AppState state, String current) async {
+    final l = context.l10n;
+    final input = TextEditingController(text: current);
+    final note = await showFormSheet<String>(
+      context,
+      title: l.minusExplain,
+      builder: (ctx) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(l.minusCardAsk, style: TextStyle(fontSize: 13, color: ctx.fam.text2)),
+        const SizedBox(height: 12),
+        TextField(controller: input, autofocus: true, maxLength: 200, minLines: 1, maxLines: 3, decoration: InputDecoration(labelText: l.minusNoteHint)),
+        const SizedBox(height: 12),
+        FilledButton(onPressed: () => Navigator.pop(ctx, input.text), child: Text(l.save)),
+      ]),
+    );
+    if (note == null || !context.mounted) return;
+    await runAction(context, () => state.setMinusNote(info.id, note));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final fam = context.fam;
+    final state = AppScope.of(context).state;
+    final note = state.minusNote(info.id);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: AppCard(
+        color: fam.warnBg,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(l.minusCardTitle(info.name, moneyInText(-state.ledger.balance(info.id))), style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(note == null ? l.minusCardAsk : l.minusNoteLabel(note), style: const TextStyle(fontSize: 13)),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(onPressed: () => _explain(context, state, note ?? ''), child: Text(note == null ? l.minusExplain : l.edit)),
+          ),
+        ]),
+      ),
+    );
   }
 }
 

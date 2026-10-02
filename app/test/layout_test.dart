@@ -88,6 +88,22 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('счёт в минусе (D87): карточка на главной просит пояснение и показывает его', (tester) async {
+    final f = await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
+    final s = f.state;
+    await s.addExpense(amount: kzt(110000), category: 'home', account: 'cash', date: s.today);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.scrollUntilVisible(find.textContaining('в минусе на'), 200, scrollable: find.byType(Scrollable).first);
+    expect(find.textContaining('«Kaspi Gold» в минусе на 10'), findsOneWidget);
+    expect(find.textContaining('Почему так вышло?'), findsOneWidget);
+    await s.setMinusNote('cash', 'Овердрафт до зарплаты');
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Ваше пояснение: Овердрафт до зарплаты'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 2)); // дать догореть таймерам прокрутки
+  });
+
   testWidgets('форма операции на 360×732: подписи в строку, «Сохранить» видна, черновик защищён', (tester) async {
     await pumpApp(
       tester,

@@ -237,8 +237,15 @@ Future<void> showTransactionSheet(BuildContext context, Transaction tx) {
         Center(child: BigMoney(v.amount)),
         const SizedBox(height: 12),
         row(l.date, '${DateFormat.yMMMMd(locale).format(tx.date)}${time == null ? '' : ' · ${timeToField(time)}'}'),
-        for (final s in v.subtitle) row('', s),
-        if (tx.type == EventType.transfer) InfoBanner(l.transferNote),
+        if (tx.type == EventType.transfer) ...[
+          // Откуда и куда — отдельными строками: это главное, что нужно знать о переводе.
+          for (final (label, positive) in [(l.fromAccount, false), (l.toAccount, true)])
+            row(
+              label,
+              state.accountInfo(tx.postings.firstWhere((p) => (p.amount > 0) == positive && state.ledger.account(p.accountId).isMoney).accountId)?.name ?? '',
+            ),
+        ] else
+          for (final s in v.subtitle) row('', s),
         if (tx.type == EventType.lendOut) InfoBanner(l.debtNote),
         if (tx.type == EventType.opening) InfoBanner(l.openingNote),
         if (tx.type == EventType.adjustment) InfoBanner(l.adjustmentNote),

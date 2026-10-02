@@ -87,7 +87,7 @@ List<Map<String, Object?>> _operations(AppState s, AppLocalizations l) {
           return <String, Object?>{
             'date': dateToJson(t.date),
             // «Сегодня / вчера / позавчера» — готовым словом: дни модель путает.
-            if (s.today.difference(t.date).inDays case final d when d >= 0 && d <= 2) 'when': const ['today', 'yesterday', 'dayBeforeYesterday'][d],
+            if (s.today.difference(t.date).inDays case final d when d >= 0 && d <= 2) 'when': const ['сегодня', 'вчера', 'позавчера'][d],
             'type': expense ? 'expense' : 'income',
             'amount': _t(amount(t)),
             'category': categories.join(', '),
@@ -176,7 +176,13 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'onAccounts': _t(ex.liquid),
       'reservedForGoals': _t(ex.reserves),
       'accounts': [
-        for (final a in s.activeAccounts) {'name': a.name, 'balance': _t(s.ledger.balance(a.id))},
+        for (final a in s.activeAccounts)
+          {
+            'name': a.name,
+            'balance': _t(s.ledger.balance(a.id)),
+            // Счёт в минусе: что об этом сказал сам человек (D87); `null` — не пояснял.
+            if (s.ledger.balance(a.id) < 0) ...{'inMinus': true, 'ownerExplanation': s.minusNote(a.id)},
+          },
       ],
     },
     'dailyLimit': s.dailyLimit == null

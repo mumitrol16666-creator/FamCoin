@@ -432,6 +432,33 @@ void main() {
     expect(s.limitExplain.shortfall, kzt(8000));
   });
 
+  test('D87: пояснение к минусу действует, пока счёт в минусе, и не переносится на следующий минус', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    expect(s.accountsInMinus, isEmpty);
+    await s.addExpense(amount: kzt(110000), category: 'home', account: 'cash', date: s.today);
+    expect(s.accountsInMinus.map((a) => a.id), ['cash']);
+    expect(s.minusNote('cash'), isNull);
+
+    await s.setMinusNote('cash', '  Овердрафт до зарплаты  ');
+    expect(s.minusNote('cash'), 'Овердрафт до зарплаты');
+    f.now = f.now.add(const Duration(days: 3));
+    expect(s.minusNote('cash'), 'Овердрафт до зарплаты', reason: 'счёт всё ещё в минусе');
+
+    await s.addIncome(amount: kzt(50000), source: 'salary', account: 'cash', date: s.today);
+    expect(s.accountsInMinus, isEmpty);
+    expect(s.minusNote('cash'), isNull);
+    f.now = f.now.add(const Duration(days: 2));
+    await s.addExpense(amount: kzt(60000), category: 'home', account: 'cash', date: s.today);
+    expect(s.accountsInMinus, hasLength(1));
+    expect(s.minusNote('cash'), isNull, reason: 'новый минус — старое пояснение к нему не относится');
+
+    await s.setMinusNote('cash', 'Пополню завтра');
+    await s.setMinusNote('cash', '');
+    expect(s.minusNote('cash'), isNull);
+  });
+
   test('D73: перерасход остаётся отрицательным — ограничение срезает только плюс', () async {
     final f = FakeServer();
     await f.init();

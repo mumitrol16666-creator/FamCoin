@@ -320,6 +320,37 @@ class AppState extends ChangeNotifier {
     return upsert('account', accountId, data);
   }
 
+  /// Счета, остаток которых сейчас меньше нуля (D87).
+  List<AccountInfo> get accountsInMinus => activeAccounts.where((a) => ledger.balance(a.id) < 0).toList();
+
+  /// Пояснение владельца, почему счёт в минусе (D87). Действует, пока счёт
+  /// остаётся в минусе с дня пояснения: вышел в плюс и ушёл в минус снова —
+  /// это уже другая история, старое пояснение к ней не относится.
+  String? minusNote(String accountId) {
+    final meta = _kind('account')[accountId] ?? const {};
+    final note = '${meta['minusNote'] ?? ''}'.trim();
+    if (note.isEmpty || meta['minusNoteAt'] == null || ledger.balance(accountId) >= 0) return null;
+    var day = dateFromJson(meta['minusNoteAt']);
+    final oldest = today.subtract(const Duration(days: 90));
+    if (day.isBefore(oldest)) day = oldest;
+    for (; !day.isAfter(today); day = DateTime(day.year, day.month, day.day + 1)) {
+      if (ledger.balance(accountId, asOf: day) >= 0) return null;
+    }
+    return note;
+  }
+
+  Future<void> setMinusNote(String accountId, String note) {
+    final data = Map<String, dynamic>.from(_kind('account')[accountId] ?? const {})
+      ..remove('minusNote')
+      ..remove('minusNoteAt');
+    final text = note.trim();
+    if (text.isNotEmpty) {
+      data['minusNote'] = text.length > 200 ? text.substring(0, 200) : text;
+      data['minusNoteAt'] = _date(today);
+    }
+    return upsert('account', accountId, data);
+  }
+
   /// Счета для трат и переводов — без архивных и без копилок целей.
   List<AccountInfo> get activeAccounts => moneyAccounts.where((a) => !a.archived && a.type != piggyType).toList();
 
