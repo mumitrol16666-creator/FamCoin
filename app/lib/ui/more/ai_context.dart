@@ -23,6 +23,31 @@ double? _share(double? v) => v == null || v > 100 ? null : _round1(v);
 
 String _month(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
+/// День первой записанной траты или дохода: с него начинается учёт.
+DateTime? _trackedFrom(AppState s) {
+  DateTime? first;
+  for (final t in s.ledger.transactions) {
+    if (t.type != EventType.expense && t.type != EventType.income) continue;
+    if (first == null || t.date.isBefore(first)) first = t.date;
+  }
+  return first;
+}
+
+/// Сколько доходов записано за последние три месяца: по одному-двум
+/// «траты в дни дохода» не закономерность, а случайность.
+int _recentIncomes(AppState s) {
+  final from = s.monthOf(-2);
+  return s.ledger.transactions.where((t) => t.type == EventType.income && !s.ledger.isReversed(t.id) && !t.date.isBefore(from)).length;
+}
+
+/// Чего в сводке нет — чтобы консультант говорил «не вижу», а не домысливал.
+const _notIncluded = [
+  'отдельные операции, их даты и заметки',
+  'разбивка по членам семьи',
+  'месяцы раньше прошлого',
+  'категории и платежи сверх показанных в списках',
+];
+
 /// Категории месяца [month] с суммами прошлого месяца рядом — не больше 12.
 List<Map<String, Object?>> _categories(AppState s, AppLocalizations l, DateTime month, {required bool withPrevious}) {
   final prev = {for (final e in s.categoriesFor(DateTime(month.year, month.month - 1, 1))) e.key: e.value};
@@ -60,15 +85,39 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
   final avgIncome = s.avgMonthlyIncome();
 
   final firstName = '${s.profile['firstName'] ?? ''}'.trim();
+  final trackedFrom = _trackedFrom(s);
+  final allCategories = s.categoriesFor(month).length;
 
   return {
     // Только имя — чтобы консультант мог обратиться по имени; фамилия и дата
     // рождения не передаются.
     'userFirstName': firstName.isEmpty ? null : firstName,
     'today': dateToJson(s.today),
+    'tracking': {
+      // С какого дня ведётся учёт: до этой даты «нет данных», а не «было 0».
+      'recordedFrom': trackedFrom == null ? null : dateToJson(trackedFrom),
+      'daysOfHistory': trackedFrom == null ? 0 : s.today.difference(trackedFrom).inDays + 1,
+      'notIncludedInThisSummary': _notIncluded,
+    },
     'period': {'month': _month(month), 'todayDay': s.today.day, 'daysInMonth': s.daysInMonth},
-    'thisMonth': {'income': _t(r.income), 'expense': _t(r.expense), 'incomeMinusExpense': _t(r.result), 'cashFlow': _t(r.cashFlow)},
-    'previousMonth': hasPrev ? {'month': _month(prevMonth), 'income': _t(pr.income), 'expense': _t(pr.expense)} : null,
+    'thisMonth': {
+      'income': _t(r.income),
+      'expense': _t(r.expense),
+      'incomeMinusExpense': _t(r.result),
+      'cashFlow': _t(r.cashFlow),
+      // Месяц идёт: суммы — «на сегодня», сравнивать их с целым прошлым месяцем нельзя.
+      'monthInProgress': true,
+      'daysElapsed': s.today.day,
+    },
+    'previousMonth': hasPrev
+        ? {
+            'month': _month(prevMonth),
+            'income': _t(pr.income),
+            'expense': _t(pr.expense),
+            // Учёт начат посреди того месяца — его суммы неполные.
+            'incomplete': trackedFrom != null && trackedFrom.isAfter(prevMonth),
+          }
+        : null,
     'money': {
       'onAccounts': _t(ex.liquid),
       'reservedForGoals': _t(ex.reserves),
@@ -88,6 +137,8 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     'paymentsUntilMonthEnd': {
       'unpaidTotal': _t(due.fold(0, (sum, d) => sum + d.planned.amount)),
       'overdueTotal': _t(due.where((d) => d.date.isBefore(s.today)).fold(0, (sum, d) => sum + d.planned.amount)),
+      'overdueNote': 'Просроченным считается платёж, не отмеченный оплаченным в приложении; он мог быть оплачен без отметки',
+      'unpaidCount': due.length,
       'notEnoughMoneyNowBy': _t(ex.shortfall),
       'unpaid': [
         for (final d in due.take(10)) {'name': d.planned.name, 'amount': _t(d.planned.amount), 'date': dateToJson(d.date)},
@@ -103,8 +154,13 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
             ],
           },
     'expenseByCategory': _categories(s, l, month, withPrevious: hasPrev),
+    'expenseCategoriesTotal': allCategories,
     'expenseByType': _types(s, month),
     'monthEndBalanceForecast': {
+      // Средний расход в день взят по прошедшим дням месяца: в первую неделю
+      // одна покупка сильно сдвигает оценку.
+      'basedOnDays': s.today.day,
+      'roughEstimate': s.today.day < 7,
       'estimate': _t(forecast.estimate),
       'rangeLow': _t(forecast.rangeLow),
       'rangeHigh': _t(forecast.rangeHigh),
@@ -123,7 +179,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     'observations': {
       'eveningShareOfDiscretionaryPercent': _round1(s.eveningDiscretionaryShare(month)),
       'largeExpensesWithoutLimit': s.unplannedLargeExpenses(month).length,
-      'incomeDaySpendRatio': _round1(s.paydaySpendRatio()),
+      'incomeDaySpendRatio': _recentIncomes(s) < 3 ? null : _round1(s.paydaySpendRatio()),
       'recurringPaymentsShareOfIncomePercent': _share(s.recurringShareOfIncome),
     },
     'recordedIncome': {

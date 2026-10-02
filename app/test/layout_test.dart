@@ -468,6 +468,9 @@ void main() {
     expect(context['dailyLimit'], isNull, reason: 'лимит не задан — так и передаём, а не ноль');
     expect(context['recordedIncome'], containsPair('looksIncomplete', false));
     expect(context.containsKey('userFirstName'), isTrue);
+    expect(context['tracking'], containsPair('daysOfHistory', 1), reason: 'учёт начат сегодня — консультант это видит');
+    expect((context['monthEndBalanceForecast'] as Map)['roughEstimate'], isNotNull);
+    expect((context['observations'] as Map)['incomeDaySpendRatio'], isNull, reason: 'меньше трёх доходов — не закономерность');
     expect(context.keys.where((k) => k.toLowerCase().contains('birth') || k.toLowerCase().contains('lastname')), isEmpty, reason: 'кроме имени, личных данных в сводке нет');
     expect(tester.takeException(), isNull);
 
