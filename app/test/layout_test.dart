@@ -443,7 +443,7 @@ void main() {
     f.billingPlan = 'pro';
     f.aiLimit = 3;
     await f.state.load();
-    await f.state.addExpense(amount: kzt(1500), category: 'cafe', account: 'cash', date: f.state.today);
+    await f.state.addExpense(amount: kzt(1500), category: 'cafe', account: 'cash', date: f.state.today, note: 'Латте');
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.textContaining('отправляются сервису ИИ'), findsOneWidget);
@@ -468,6 +468,8 @@ void main() {
     expect(context['dailyLimit'], isNull, reason: 'лимит не задан — так и передаём, а не ноль');
     expect(context['recordedIncome'], containsPair('looksIncomplete', false));
     expect(context.containsKey('userFirstName'), isTrue);
+    expect(context['operations'], [containsPair('category', 'Кафе')], reason: 'консультант видит операции (D86)');
+    expect((context['operations'] as List).single, allOf(containsPair('amount', 1500), containsPair('account', 'Kaspi Gold'), containsPair('type', 'expense'), containsPair('note', 'Латте')));
     expect(context['tracking'], containsPair('daysOfHistory', 1), reason: 'учёт начат сегодня — консультант это видит');
     expect((context['monthEndBalanceForecast'] as Map)['roughEstimate'], isNotNull);
     expect((context['observations'] as Map)['incomeDaySpendRatio'], isNull, reason: 'меньше трёх доходов — не закономерность');

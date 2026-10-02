@@ -10,6 +10,7 @@ import 'package:famcoin_core/famcoin_core.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../../state/models.dart';
 import '../widgets/common.dart';
 
 /// Тиыны → тенге: целое, если копеек нет.
@@ -42,11 +43,61 @@ int _recentIncomes(AppState s) {
 
 /// Чего в сводке нет — чтобы консультант говорил «не вижу», а не домысливал.
 const _notIncluded = [
-  'отдельные операции, их даты и заметки',
+  'операции старше прошлого месяца и мелкие операции сверх списка operations',
   'разбивка по членам семьи',
   'месяцы раньше прошлого',
   'категории и платежи сверх показанных в списках',
 ];
+
+/// Сколько последних и сколько самых крупных операций видит консультант.
+const _recentOperations = 30;
+const _largestOperations = 10;
+const _noteLength = 80;
+
+/// Расходы и доходы этого и прошлого месяца для консультанта (D86): последние
+/// по времени плюс самые крупные — с категорией, счётом и заметкой владельца.
+/// Переводы, долги и исправления сюда не входят.
+List<Map<String, Object?>> _operations(AppState s, AppLocalizations l) {
+  final from = s.monthOf(-1);
+  final all = [
+    for (final t in s.userTransactions)
+      if ((t.type == EventType.expense || t.type == EventType.income) && !t.date.isBefore(from)) t,
+  ]; // уже по убыванию даты
+  int amount(Transaction t) {
+    final kind = t.type == EventType.expense ? LedgerKind.expense : LedgerKind.income;
+    return t.postings.where((p) => s.ledger.account(p.accountId).kind == kind).fold(0, (sum, p) => sum + p.amount.abs());
+  }
+
+  final chosen = {...all.take(_recentOperations)};
+  final bySize = [...all]..sort((a, b) => amount(b).compareTo(amount(a)));
+  chosen.addAll(bySize.take(_largestOperations));
+
+  return [
+    for (final t in all)
+      if (chosen.contains(t))
+        () {
+          final expense = t.type == EventType.expense;
+          final kind = expense ? LedgerKind.expense : LedgerKind.income;
+          final categories = {
+            for (final p in t.postings)
+              if (s.ledger.account(p.accountId).kind == kind) categoryName(l, p.accountId.substring(p.accountId.indexOf(':') + 1)),
+          };
+          final account = t.postings.map((p) => s.accountInfo(p.accountId)).whereType<AccountInfo>().firstOrNull;
+          final note = '${t.meta['note'] ?? ''}'.trim();
+          return <String, Object?>{
+            'date': dateToJson(t.date),
+            // «Сегодня / вчера / позавчера» — готовым словом: дни модель путает.
+            if (s.today.difference(t.date).inDays case final d when d >= 0 && d <= 2) 'when': const ['today', 'yesterday', 'dayBeforeYesterday'][d],
+            'type': expense ? 'expense' : 'income',
+            'amount': _t(amount(t)),
+            'category': categories.join(', '),
+            if (account != null) 'account': account.name,
+            if (note.isNotEmpty) 'note': note.length > _noteLength ? '${note.substring(0, _noteLength)}…' : note,
+            if (t.meta['planned'] != null || t.meta['plannedPurchase'] == true) 'planned': true,
+          };
+        }(),
+  ];
+}
 
 /// Категории месяца [month] с суммами прошлого месяца рядом — не больше 12.
 List<Map<String, Object?>> _categories(AppState s, AppLocalizations l, DateTime month, {required bool withPrevious}) {
@@ -93,6 +144,9 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     // рождения не передаются.
     'userFirstName': firstName.isEmpty ? null : firstName,
     'today': dateToJson(s.today),
+    // Готовые даты: считать дни в уме модель умеет плохо.
+    'yesterday': dateToJson(s.today.subtract(const Duration(days: 1))),
+    'dayBeforeYesterday': dateToJson(s.today.subtract(const Duration(days: 2))),
     'tracking': {
       // С какого дня ведётся учёт: до этой даты «нет данных», а не «было 0».
       'recordedFrom': trackedFrom == null ? null : dateToJson(trackedFrom),
@@ -194,6 +248,8 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       // Платежей больше, чем записано доходов: скорее всего, доходы внесены не все.
       'looksIncomplete': s.recurringMonthly > avgIncome,
     },
+    'operations': _operations(s, l),
+    'operationsNote': 'Расходы и доходы этого и прошлого месяца: последние $_recentOperations и $_largestOperations самых крупных. Заметки написал сам человек.',
     'familyMode': s.familyMode,
   };
 }

@@ -89,11 +89,13 @@ void main() {
     expect(a['quota'], {'used': 1, 'limit': 3, 'left': 2});
     final sent = model.seen.last;
     expect(sent.first['role'], 'system');
-    expect(sent.first['content'], allOf(contains('"income":300000'), contains('Отвечай на русском')));
+    expect(sent.first['content'], allOf(contains('Отвечай на русском'), isNot(contains('300000'))), reason: 'данные человека не смешиваются с правилами');
+    expect(sent[1], containsPair('role', 'user'));
+    expect(sent[1]['content'], allOf(startsWith('ДАННЫЕ ПРИЛОЖЕНИЯ'), contains('"income":300000')));
     expect(sent.last, {'role': 'user', 'content': 'Сколько я заработал?'});
 
     await ai.chat(u, ask('А потратил?', 'r2'));
-    expect(model.seen.last.map((m) => m['role']), ['system', 'user', 'assistant', 'user']);
+    expect(model.seen.last.map((m) => m['role']), ['system', 'user', 'user', 'assistant', 'user']);
     final st = await ai.status(u);
     expect((st['messages'] as List).map((m) => (m as Map)['role']), ['user', 'assistant', 'user', 'assistant']);
     expect(st['quota'], {'used': 2, 'limit': 3, 'left': 1});
