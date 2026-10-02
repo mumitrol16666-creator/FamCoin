@@ -21,6 +21,7 @@ import 'briefs.dart';
 import 'ledger_service.dart';
 import 'notifications.dart';
 import 'speech.dart';
+import 'statement_import.dart';
 import 'telegram.dart';
 
 /// Длиннее фразы об одной трате не бывают; остальное — не ввод операции.
@@ -531,7 +532,7 @@ String monthText(LedgerView v, DateTime now) {
   ].join('\n');
 }
 
-String helpText(bool kk, {String? origin, bool voice = false}) => [
+String helpText(bool kk, {String? origin, bool voice = false, bool statements = false}) => [
       kk
           ? 'Шығысты, кірісті, аударымды немесе қарызды жай хабарламамен жазыңыз — мен жобасын көрсетемін, растағаннан кейін жазамын.'
           : 'Напишите трату, доход, перевод или долг обычным сообщением — я покажу черновик и запишу после подтверждения.',
@@ -544,6 +545,12 @@ String helpText(bool kk, {String? origin, bool voice = false}) => [
       kk ? '• Асхатқа 5000 қарыз бердім' : '• перевёл 20000 с каспи на наличные',
       if (!kk) '• дал в долг Асхату 5000',
       if (voice) ...['', kk ? 'Дауыстық хабарламамен де болады — қысқаша айтыңыз.' : 'Можно и голосовым сообщением — скажите то же самое вслух.'],
+      if (statements) ...[
+        '',
+        kk
+            ? '📄 Kaspi Gold үзінді көшірмесін PDF-файлмен жіберіңіз — әлі жазылмаған операцияларды қосамын.'
+            : '📄 Пришлите PDF-выписку Kaspi Gold — добавлю операции, которых ещё нет в учёте.',
+      ],
       '',
       kk ? '/today — бүгінгі шығыс' : '/today — траты за сегодня',
       kk ? '/month — ай қорытындысы' : '/month — итоги месяца',
@@ -658,7 +665,7 @@ Buttons undoButtons(String id, bool kk) => [
 // ----------------------------------------------------------------- сервис
 
 class ChatEntry {
-  ChatEntry(this.db, this.ledger, this.telegram, {this.origin, this.speech});
+  ChatEntry(this.db, this.ledger, this.telegram, {this.origin, this.speech, this.imports});
 
   final Pool db;
   final LedgerService ledger;
@@ -669,6 +676,11 @@ class ChatEntry {
 
   /// Распознавание голосовых; без него бот просит написать текстом.
   final Speech? speech;
+
+  /// Импорт выписки банка из присланного PDF (D94).
+  final StatementImport? imports;
+
+  String _help(bool kk) => helpText(kk, origin: origin, voice: speech?.enabled == true, statements: imports?.reader.enabled == true);
 
   /// Подключает бота: сообщения, кнопки и меню команд.
   void attach() {
@@ -710,6 +722,12 @@ class ChatEntry {
       );
       return true;
     }
+    final document = msg['document'] as Map<String, dynamic>?;
+    if (document != null && imports != null) {
+      // Разбор файла занимает секунды — не ждём его в общем опросе бота.
+      unawaited(imports!.onDocument(chatId, userId, document).catchError((Object e, StackTrace st) => stderr.writeln('telegram import: ${e.runtimeType}\n$st')));
+      return true;
+    }
     final text = (msg['text'] as String? ?? '').trim();
     final command = text.startsWith('/') ? text.split(RegExp(r'[\s@]')).first.toLowerCase() : null;
     if (command == '/quick' || text == quickLabelRu || text == quickLabelKk) {
@@ -731,13 +749,13 @@ class ChatEntry {
       final reply = switch (command) {
         '/month' => monthText(v, now),
         '/today' || null => todayText(v, now),
-        _ => helpText(kk, origin: origin, voice: speech?.enabled == true),
+        _ => _help(kk),
       };
       await telegram.send(chatId, reply, keyboard: chatKeyboard(kk));
       return true;
     }
     if (text.isEmpty || text.length > maxPhraseLength) {
-      await telegram.send(chatId, helpText(kk, origin: origin, voice: speech?.enabled == true), keyboard: chatKeyboard(kk));
+      await telegram.send(chatId, _help(kk), keyboard: chatKeyboard(kk));
       return true;
     }
 
@@ -761,7 +779,7 @@ class ChatEntry {
               DraftProblem.noPerson => kk
                   ? 'Қарыз кіммен екенін түсінбедім. Атымен жазыңыз: «Асхатқа 5000 қарыз бердім».'
                   : 'Не понял, с кем долг. Напишите с именем: «дал в долг Асхату 5000» или «Асхат вернул мне 5000».',
-              DraftProblem.noAmount => '${kk ? 'Соманы таппадым.' : 'Не нашёл сумму.'}\n\n${helpText(kk, origin: origin, voice: speech?.enabled == true)}',
+              DraftProblem.noAmount => '${kk ? 'Соманы таппадым.' : 'Не нашёл сумму.'}\n\n${_help(kk)}',
             },
       );
       return;
@@ -844,6 +862,7 @@ class ChatEntry {
     final messageId = message?['message_id'] as int?;
     final data = q['data'] as String? ?? '';
     if (data.startsWith('q:') && chatId != null) return _quick(chatId, data.substring(2));
+    if (data.startsWith('i:') && chatId != null && messageId != null && imports != null) return imports!.press(chatId, messageId, data.split(':'));
     final parts = data.split(':');
     if (parts.length < 3 || parts[0] != 'd' || chatId == null || messageId == null) return null;
     final id = parts[1];

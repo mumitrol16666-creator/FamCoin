@@ -106,4 +106,21 @@ void main() {
       throwsA(isA<LedgerException>()),
     );
   });
+
+  test('начальный остаток заменяется как правка: прежний не лежит в корзине и не восстанавливается (D94)', () {
+    final l = Ledger()..addMoneyAccount('kaspi');
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o1', 'date': '2026-09-20', 'account': 'kaspi', 'amount': '5000000'});
+    applyLedgerCommand(l, {'type': 'reverse', 'txId': 'o1', 'id': 'o1-rev'});
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o2', 'date': '2026-09-01', 'account': 'kaspi', 'amount': '8000000', 'meta': {'edited': 'o1'}});
+    expect(l.balance('kaspi'), kzt(80000));
+    expect(l.byId('o2')!.meta['edited'], 'o1');
+    expect(l.isDeleted('o1'), isFalse);
+    expect(() => l.restore('o1', newId: 'x'), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'restoreSuperseded')));
+    // Замена начального остатка — не поток месяца: ни прежняя запись, ни её отмена.
+    expect(l.report(DateTime(2026, 9), DateTime(2026, 10)).cashFlow, 0);
+    // Без меты команда работает как раньше.
+    applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'cash'});
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o3', 'date': '2026-09-01', 'account': 'cash', 'amount': '100'});
+    expect(l.byId('o3')!.meta, isEmpty);
+  });
 }

@@ -10,7 +10,9 @@ import 'package:famcoin_server/chat_entry.dart';
 import 'package:famcoin_server/ledger_service.dart';
 import 'package:famcoin_server/maintenance.dart';
 import 'package:famcoin_server/notifications.dart';
+import 'package:famcoin_server/pdf_words.dart';
 import 'package:famcoin_server/speech.dart';
+import 'package:famcoin_server/statement_import.dart';
 import 'package:famcoin_server/telegram.dart';
 import 'package:famcoin_server/webpush.dart';
 import 'package:postgres/postgres.dart';
@@ -67,10 +69,15 @@ Future<void> _run() async {
   final admin = AdminService(db, password: env['ADMIN_PASSWORD']);
   final handler = buildHandler(auth, ledger, notifications, admin, telegram: telegram, billing: billing, ai: ai, allowedOrigin: env['CORS_ORIGIN'] ?? '*');
 
+  // Чтение PDF-выписок банка (D94). Разборщик проверяется на своём крошечном
+  // файле: сработал — импорт в боте включён, и в журнале видно, как он запущен.
+  final reader = PdfReader();
+  unawaited(reader.probe().then((ok) => print(ok ? 'import: чтение PDF-выписок — pdftotext, ${reader.describe}' : 'import: pdftotext не найден, импорт выписок выключен')));
+
   // Бот слушает «/start <код>», сообщения с тратами и платежи только при заданном токене.
   if (telegram.enabled) {
     final speech = Speech(apiKey: env['OPENAI_API_KEY'], model: env['OPENAI_TRANSCRIBE_MODEL']);
-    ChatEntry(db, ledger, telegram, origin: env['CORS_ORIGIN'], speech: speech).attach();
+    ChatEntry(db, ledger, telegram, origin: env['CORS_ORIGIN'], speech: speech, imports: StatementImport(db, ledger, telegram, reader, proLink: billing.proLink)).attach();
     print(speech.enabled ? 'speech: голосовые в боте распознаёт ${speech.model}' : 'speech: OPENAI_API_KEY не задан, голосовые в боте выключены');
     telegram.pollForever();
     print('telegram: бот включён, Pro — ${billing.proStars} ⭐ на ${billing.proDays} дней');

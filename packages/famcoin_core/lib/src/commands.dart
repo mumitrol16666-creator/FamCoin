@@ -88,7 +88,7 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
       l.requireActiveMoney(s('accountId'));
       l.archiveAccount(s('accountId'), archived: c['archived'] != false);
     case 'opening':
-      l.openingBalance(id: s('id'), date: date(), account: s('account'), amount: m('amount'));
+      l.openingBalance(id: s('id'), date: date(), account: s('account'), amount: m('amount'), meta: meta());
     case 'openingDebt':
       l.openingDebt(id: s('id'), date: date(), debtId: s('debtId'), amount: m('amount'));
     case 'openingReceivable':

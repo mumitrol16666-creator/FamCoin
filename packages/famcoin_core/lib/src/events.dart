@@ -107,18 +107,22 @@ extension LedgerEvents on Ledger {
 
   // ------------------------------------------------------ O20 начальные
 
-  /// Начальный остаток денежного счёта на дату начала учёта.
+  /// Начальный остаток денежного счёта на дату начала учёта. [meta] нужен,
+  /// когда остаток заменяют по выписке банка (D94): `edited` → id прежней
+  /// записи, чтобы она не лежала в корзине как отдельная удалённая операция.
   Transaction openingBalance({
     required String id,
     required DateTime date,
     required String account,
     required int amount,
+    Map<String, Object?> meta = const {},
   }) =>
       _post(Transaction(
         id: id,
         date: date,
         type: EventType.opening,
         postings: [Posting(_money(account), amount), Posting(_equity(equityOpening), amount)],
+        meta: meta,
       ));
 
   /// Уже существующий долг на дату начала учёта — без фиктивного дохода.

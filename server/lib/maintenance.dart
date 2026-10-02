@@ -44,6 +44,9 @@ class Maintenance {
       await clean('telegram_links', 'DELETE FROM telegram_links WHERE expires_at < now()');
       // Кнопки под сообщением недельной давности уже никто не нажимает.
       await clean('telegram_drafts', "DELETE FROM telegram_drafts WHERE created_at < now() - interval '7 days'");
+      // Импорт выписки можно отменить кнопкой в течение месяца; дальше строки
+      // выписки хранить незачем.
+      await clean('telegram_imports', "DELETE FROM telegram_imports WHERE created_at < now() - interval '30 days'");
     } finally {
       _busy = false;
     }

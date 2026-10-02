@@ -22,7 +22,12 @@ jobs:
           cache: true
       - name: Ядро
         run: cd packages/famcoin_core && dart pub get && dart analyze && dart test
+      # pdftotext читает PDF-выписку банка: тест прогоняет через него настоящий PDF.
+      - name: Чтение PDF
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
       - name: Сервер
+        env:
+          TEST_PDFTOTEXT_REQUIRED: '1'
         run: cd server && dart pub get && dart analyze && dart test
       - name: Приложение
         run: cd app && flutter pub get && flutter analyze lib test && flutter test
@@ -44,11 +49,19 @@ jobs:
           exit 1
       - uses: dart-lang/setup-dart@v1
       # Все тесты, которым нужна база: вход через Telegram, напоминания, бот,
-      # консультант и виды справочников (ограничение таблицы против списка в коде).
+      # консультант, импорт выписки и виды справочников (ограничение таблицы
+      # против списка в коде).
       - name: Тесты сервера на настоящей базе
         env:
           TEST_DB_REQUIRED: '1'
-        run: cd server && dart pub get && dart test test/telegram_login_db_test.dart test/month_nudge_db_test.dart test/chat_entry_db_test.dart test/ai_db_test.dart test/entity_kinds_db_test.dart
+        run: cd server && dart pub get && dart test test/telegram_login_db_test.dart test/month_nudge_db_test.dart test/chat_entry_db_test.dart test/ai_db_test.dart test/entity_kinds_db_test.dart test/statement_import_db_test.dart
+      # Сервер при старте читает свой проверочный PDF: в образе должен быть
+      # pdftotext, и запускаться он должен без прав и с потолком памяти.
+      - name: Чтение PDF в образе сервера
+        run: |
+          docker compose logs api | grep 'import: чтение PDF-выписок — pdftotext, без прав, с потолком памяти и времени' && exit 0
+          docker compose logs api | grep 'import:'
+          exit 1
       - name: Параллельные запросы и повторы
         run: python3 deploy/concurrency_check.py
       - name: Нагрузка (100 пользователей, шторм входов)

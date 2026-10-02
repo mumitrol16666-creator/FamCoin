@@ -98,6 +98,15 @@ class BillingService {
     return {'url': url, 'stars': proStars, 'days': proDays};
   }
 
+  /// Та же ссылка для кнопки в чате бота; `null` — оплата не подключена.
+  Future<String?> proLink(String userId) async {
+    try {
+      return (await invoice(userId))['url'] as String?;
+    } on ApiError {
+      return null;
+    }
+  }
+
   // ------------------------------------------------------------------ бот
 
   /// Payload вида `pro:<uuid>`; иначе счёт не наш.
