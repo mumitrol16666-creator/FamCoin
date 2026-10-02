@@ -376,15 +376,13 @@ class AppState extends ChangeNotifier {
   }
 
   /// Сколько откладывать в месяц, чтобы к месяцу покупки набралась вся сумма:
-  /// то, чего ещё не хватает, поровну на оставшиеся месяцы, считая текущий;
-  /// вверх до 100 ₸. `0` — уже накоплено.
+  /// то, чего ещё не хватает, поровну на месяцы до покупки. Считается той же
+  /// формулой, что «нужно в месяц» у цели, — у покупки с копилкой и на
+  /// карточке её цели число одно и то же. `0` — уже накоплено.
   int purchaseMonthly(PlannedInfo p) {
     final m = p.onceMonth!;
-    final months = (m.year - today.year) * 12 + (m.month - today.month) + 1;
-    final left = p.amount - purchaseSaved(p);
-    if (left <= 0) return 0;
-    final step = 100 * minorPerUnit;
-    return ((left / (months < 1 ? 1 : months)) / step).ceil() * step;
+    final months = (m.year - today.year) * 12 + (m.month - today.month);
+    return goalStatus(saved: purchaseSaved(p), target: p.amount, plannedContributionsLeft: months < 1 ? 1 : months).requiredContribution ?? 0;
   }
 
   /// Завести копилку под покупку: цель с тем же названием, суммой и сроком —

@@ -443,7 +443,7 @@ void main() {
     final p = s.purchases.single;
     expect(p.once, '2027-03');
     expect(p.entityKind, 'purchase');
-    expect(s.purchaseMonthly(p), kzt(14300), reason: '100 000 на 7 месяцев (сентябрь–март), вверх до 100 ₸');
+    expect(s.purchaseMonthly(p), kzt(16667), reason: '100 000 на 6 месяцев до марта, вверх до целого тенге');
     expect(s.recurringMonthly, 0, reason: 'разовая покупка — не постоянный платёж');
     expect(s.upcoming, isEmpty, reason: 'до марта далеко — в ближайших платежах её нет');
     expect(s.obligationsUntilIncome, 0);
@@ -475,7 +475,7 @@ void main() {
     await s.setDailyLimit(kzt(5000));
     await s.addPurchase(name: 'Колёса', amount: kzt(60000), month: DateTime(2026, 12, 1), category: 'transport');
     expect(s.purchaseGoal(s.purchases.single), isNull);
-    expect(s.purchaseMonthly(s.purchases.single), kzt(15000), reason: '60 000 на 4 месяца');
+    expect(s.purchaseMonthly(s.purchases.single), kzt(20000), reason: '60 000 на 3 месяца до декабря');
 
     await s.startSavingFor(s.purchases.single);
     final goal = s.purchaseGoal(s.purchases.single)!;
@@ -484,7 +484,8 @@ void main() {
 
     await s.depositToGoal(goal, from: 'cash', amount: kzt(20000));
     expect(s.purchaseSaved(s.purchases.single), kzt(20000));
-    expect(s.purchaseMonthly(s.purchases.single), kzt(10000), reason: 'осталось 40 000 на 4 месяца');
+    expect(s.purchaseMonthly(s.purchases.single), kzt(13334), reason: 'осталось 40 000 на 3 месяца');
+    expect(s.goalStatusFor(goal).requiredContribution, s.purchaseMonthly(s.purchases.single), reason: 'то же число, что на карточке цели');
     expect(s.ledger.freeLiquid(), kzt(80000), reason: 'отложенное в копилку — не свободные деньги');
     expect(s.spentToday(), 0);
 
