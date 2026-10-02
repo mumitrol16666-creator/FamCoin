@@ -56,13 +56,13 @@ class BudgetScreen extends StatelessWidget {
               const LimitsSection(),
 
               SectionHeader(l.planned, action: l.calendar, onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen()))),
-              if (state.planned.isEmpty)
+              if (state.planned.every((p) => p.once != null))
                 EmptyHint(l.noPlanned, icon: Icons.event_repeat_outlined)
               else
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Column(children: [
-                    for (final p in state.planned)
+                    for (final p in state.planned.where((p) => p.once == null))
                       Builder(builder: (context) {
                         final next = nextDue.where((d) => d.planned.id == p.id).firstOrNull;
                         final paidNow = p.paid.contains(period);
@@ -90,6 +90,45 @@ class BudgetScreen extends StatelessWidget {
                   ]),
                 ),
               OutlinedButton.icon(onPressed: () => addPlannedFlow(context), icon: const Icon(Icons.add), label: Text(l.addPayment)),
+
+              // Разовые покупки (D88): колёса к зиме, страховка, отпуск — не
+              // ежемесячный платёж и не обязательно копилка, а «в марте уйдёт 100 000».
+              SectionHeader(l.purchases, action: l.add, onAction: () => addPurchaseFlow(context)),
+              if (state.purchases.isEmpty)
+                EmptyHint(l.noPurchases, icon: Icons.shopping_bag_outlined)
+              else
+                AppCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Column(children: [
+                    for (final p in state.purchases)
+                      Builder(builder: (context) {
+                        final m = p.onceMonth!;
+                        final name = toBeginningOfSentenceCase(DateFormat.yMMMM(locale).format(m));
+                        final overdue = m.isBefore(state.monthStart);
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CategoryAvatar(categoryById(p.category).icon),
+                          title: Text(p.name),
+                          subtitle: Text(
+                            overdue
+                                ? l.purchaseOverdue(name)
+                                : m == state.monthStart
+                                    ? l.purchaseThisMonth(name)
+                                    : l.purchaseBy(name, moneyInText(state.purchaseMonthly(p))),
+                            style: TextStyle(fontSize: 12, color: overdue ? fam.expense : fam.text2),
+                          ),
+                          trailing: MoneyText(p.amount),
+                          // «Купил»: расход записывается вне дневного лимита, покупка уходит из плана.
+                          onTap: () => showPayDueSheet(context, DueItem(p, DateTime(m.year, m.month + 1, 0), p.once!)),
+                          onLongPress: () async {
+                            if (await confirm(context, title: l.deletePurchase, action: l.delete) && context.mounted) {
+                              await runAction(context, () => state.delete('purchase', p.id));
+                            }
+                          },
+                        );
+                      }),
+                  ]),
+                ),
 
               SectionHeader(l.goals, action: l.add, onAction: () => showGoalSheet(context)),
               if (state.goals.isEmpty) EmptyHint(l.noGoals, icon: Icons.flag_outlined),

@@ -12,6 +12,7 @@ import 'package:famcoin/state/settings.dart';
 import 'package:famcoin/theme/app_theme.dart';
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
 import 'package:famcoin/ui/auth/login_screen.dart';
+import 'package:famcoin/ui/budget/budget_screen.dart';
 import 'package:famcoin/ui/budget/sheets.dart';
 import 'package:famcoin/ui/more/ai_screen.dart';
 import 'package:famcoin/ui/more/more_screen.dart';
@@ -86,6 +87,25 @@ void main() {
     }
     expect(find.textContaining('Доступное ограничено деньгами на счетах', skipOffstage: false), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('разовые покупки (D88): раздел в «Бюджете», подсказка сколько откладывать, форма добавления открывается', (tester) async {
+    final f = await pumpApp(tester, home: const BudgetScreen(), size: const Size(360, 732));
+    await f.state.addPurchase(name: 'Колёса', amount: kzt(100000), month: DateTime(2027, 3, 1), category: 'transport');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.scrollUntilVisible(find.text('Колёса'), 200, scrollable: find.byType(Scrollable).first);
+    expect(find.text('Разовые покупки', skipOffstage: false), findsOneWidget);
+    expect(find.textContaining('Март 2027'), findsOneWidget);
+    expect(find.textContaining('в месяц'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Колёса'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'форма «купил» открывается без переполнений');
+    Navigator.pop(tester.element(find.byType(BottomSheet)));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('счёт в минусе (D87): карточка на главной просит пояснение и показывает его', (tester) async {

@@ -362,7 +362,32 @@ class AppState extends ChangeNotifier {
   List<Member> get members => [for (final e in _kind('member').entries) Member.fromJson(e.key, e.value)];
   List<LimitInfo> get limits => [for (final e in _kind('limit').entries) LimitInfo.fromJson(e.key, e.value)];
   List<GoalInfo> get goals => [for (final e in _kind('goal').entries) GoalInfo.fromJson(e.key, e.value)];
-  List<PlannedInfo> get planned => [for (final e in _kind('planned').entries) PlannedInfo.fromJson(e.key, e.value)];
+  /// Плановые платежи и разовые покупки (D88) — одним списком: у них общие
+  /// сроки, календарь и оплата. Разовая покупка отличается полем `once`.
+  List<PlannedInfo> get planned => [
+        for (final e in _kind('planned').entries) PlannedInfo.fromJson(e.key, e.value),
+        for (final e in _kind('purchase').entries)
+          if (RegExp(r'^\d{4}-\d{2}$').hasMatch('${e.value['once']}')) PlannedInfo.fromJson(e.key, e.value),
+      ];
+
+  /// Разовые покупки, которые ещё впереди (не куплены).
+  List<PlannedInfo> get purchases => planned.where((p) => p.once != null && !p.paid.contains(p.once)).toList()..sort((a, b) => a.once!.compareTo(b.once!));
+
+  /// Сколько откладывать в месяц, чтобы к месяцу покупки набралась вся сумма:
+  /// поровну на оставшиеся месяцы, считая текущий; вверх до 100 ₸.
+  int purchaseMonthly(PlannedInfo p) {
+    final m = p.onceMonth!;
+    final months = (m.year - today.year) * 12 + (m.month - today.month) + 1;
+    final step = 100 * minorPerUnit;
+    return ((p.amount / (months < 1 ? 1 : months)) / step).ceil() * step;
+  }
+
+  /// Новая разовая покупка на месяц [month]. Срок — последний день месяца:
+  /// «в марте» не значит «первого числа», просрочки до конца месяца нет.
+  Future<void> addPurchase({required String name, required int amount, required DateTime month, required String category}) {
+    final id = newId();
+    return upsert('purchase', id, PlannedInfo(id, name, amount, 31, category, null, const {}, once: _period(month)).toJson());
+  }
   List<DebtInfo> get bankDebts => [for (final e in _kind('debt').entries) DebtInfo.fromJson(e.key, e.value)];
   List<QuickAction> get quickActions => [for (final e in _kind('quick').entries) QuickAction.fromJson(e.key, e.value)];
 
@@ -622,7 +647,8 @@ class AppState extends ChangeNotifier {
     final todayIdx = today.year * 12 + today.month - 1;
     for (final p in planned) {
       if (!_plannedDebtActive(p)) continue; // долг уже закрыт (F10)
-      final from = p.start ?? monthStart;
+      // Разовая покупка — один срок в своём месяце (и просрочка после него).
+      final from = p.onceMonth ?? p.start ?? monthStart;
       // Не раньше 10 лет назад и не дальше двух месяцев вперёд.
       final startIdx = (from.year * 12 + from.month - 1).clamp(todayIdx - 120, todayIdx + 2);
       for (var i = startIdx; i <= todayIdx + 2; i++) {
@@ -630,6 +656,7 @@ class AppState extends ChangeNotifier {
         if (date.isAfter(until)) break;
         if (p.start != null && date.isBefore(p.start!)) continue;
         final period = _period(date);
+        if (p.once != null && period != p.once) continue;
         if (p.paid.contains(period)) continue;
         items.add(DueItem(p, date, period));
       }
@@ -867,7 +894,7 @@ class AppState extends ChangeNotifier {
         : {'type': 'expense', 'id': newId(), 'date': d, 'account': account, 'splits': {p.category: amount.toString()}, 'meta': {'who': 'shared', 'note': p.name, ...link}};
     return sendBatch([
       fact,
-      {'type': 'upsertEntity', 'kind': 'planned', 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, due.period})},
+      {'type': 'upsertEntity', 'kind': p.entityKind, 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, due.period})},
     ], commandId: commandId);
   }
 
@@ -970,7 +997,7 @@ class AppState extends ChangeNotifier {
   /// Платёж уже оплачен — внесён обычным расходом или вне приложения: срок
   /// отмечается оплаченным без новой операции.
   Future<void> markDuePaid(DueItem due) =>
-      send({'type': 'upsertEntity', 'kind': 'planned', 'entityId': due.planned.id, 'data': due.planned.toJson(paid: {...due.planned.paid, due.period})});
+      send({'type': 'upsertEntity', 'kind': due.planned.entityKind, 'entityId': due.planned.id, 'data': due.planned.toJson(paid: {...due.planned.paid, due.period})});
 
   /// Итоги месяца для сверки: доходы, расходы, куда ушло больше всего, платежи,
   /// расхождения остатков и средний расход в день из дневного лимита.
@@ -986,6 +1013,7 @@ class AppState extends ChangeNotifier {
       if (!_plannedDebtActive(p)) continue;
       final date = _onDay(start.year, start.month, p.day);
       if (p.start != null && date.isBefore(p.start!)) continue;
+      if (p.once != null && p.once != _period(start)) continue;
       total++;
       if (p.paid.contains(_period(start))) paid++;
     }
@@ -1072,7 +1100,7 @@ class AppState extends ChangeNotifier {
   /// (F10). Строки списка и его сумма должны показывать одно и то же
   /// (повторный аудит, F01): `recurringMonthly` — это сумма именно этого
   /// списка, не всех `planned` без разбора.
-  List<PlannedInfo> get activePlanned => planned.where(_plannedDebtActive).toList();
+  List<PlannedInfo> get activePlanned => planned.where((p) => p.once == null && _plannedDebtActive(p)).toList();
 
   /// Постоянные ежемесячные обязательства (раздел 9.11): плановые платежи,
   /// включая платежи по кредитам — они заводятся как планы со ссылкой на долг.
@@ -1287,7 +1315,7 @@ class AppState extends ChangeNotifier {
       if (p != null && p.paid.contains(period)) {
         return sendBatch([
           reverse,
-          {'type': 'upsertEntity', 'kind': 'planned', 'entityId': p.id, 'data': p.toJson(paid: {...p.paid}..remove(period))},
+          {'type': 'upsertEntity', 'kind': p.entityKind, 'entityId': p.id, 'data': p.toJson(paid: {...p.paid}..remove(period))},
         ], commandId: commandId);
       }
     }
@@ -1306,7 +1334,7 @@ class AppState extends ChangeNotifier {
       if (p != null && !p.paid.contains(period)) {
         return sendBatch([
           restore,
-          {'type': 'upsertEntity', 'kind': 'planned', 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, period})},
+          {'type': 'upsertEntity', 'kind': p.entityKind, 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, period})},
         ], commandId: commandId);
       }
     }

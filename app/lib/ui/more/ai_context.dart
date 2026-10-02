@@ -236,6 +236,13 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     'bankDebts': debt.totalDebt == 0
         ? null
         : {'totalDebt': _t(debt.totalDebt), 'monthlyPayments': _t(debt.monthlyPayments), 'shareOfIncomePercent': _share(debt.incomeSharePercent)},
+    // Разовые покупки впереди (D88): что, сколько, в каком месяце и сколько
+    // откладывать в месяц, чтобы успеть.
+    'plannedPurchases': s.purchases.isEmpty
+        ? null
+        : [
+            for (final p in s.purchases) {'name': p.name, 'amount': _t(p.amount), 'month': p.once, 'toSavePerMonth': _t(s.purchaseMonthly(p))},
+          ],
     'goals': goals.isEmpty
         ? null
         : [

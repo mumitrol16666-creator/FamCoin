@@ -1303,5 +1303,18 @@
   "minusExplain": "Пояснить",
   "minusNoteHint": "Ваше пояснение",
   "minusNoteLabel": "Ваше пояснение: {note}",
-  "@minusNoteLabel": {"placeholders": {"note": {"type": "String"}}}
+  "@minusNoteLabel": {"placeholders": {"note": {"type": "String"}}},
+  "purchases": "Разовые покупки",
+  "addPurchase": "Запланировать покупку",
+  "noPurchases": "Колёса к зиме, страховка, отпуск — запишите заранее: покупка появится в календаре, а приложение подскажет, сколько откладывать.",
+  "purchaseName": "Что купить",
+  "purchaseNameHint": "Например, зимние колёса",
+  "purchaseMonth": "Когда",
+  "purchaseBy": "{month} · откладывать ≈ {amount} в месяц",
+  "@purchaseBy": {"placeholders": {"month": {"type": "String"}, "amount": {"type": "String"}}},
+  "purchaseThisMonth": "{month} · в этом месяце",
+  "@purchaseThisMonth": {"placeholders": {"month": {"type": "String"}}},
+  "purchaseOverdue": "{month} · срок прошёл",
+  "@purchaseOverdue": {"placeholders": {"month": {"type": "String"}}},
+  "deletePurchase": "Убрать покупку из плана?"
 }

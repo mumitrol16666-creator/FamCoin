@@ -147,7 +147,7 @@ class GoalInfo {
 
 /// Плановый платёж: план не меняет баланс, факт оплаты проводится отдельно (D14).
 class PlannedInfo {
-  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start});
+  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once});
   factory PlannedInfo.fromJson(String id, Map<String, dynamic> d) => PlannedInfo(
         id,
         d['name'] as String? ?? '',
@@ -157,6 +157,7 @@ class PlannedInfo {
         d['debtId'] as String?,
         {...((d['paid'] as List?) ?? const []).cast<String>()},
         start: d['start'] == null ? null : dateFromJson(d['start']),
+        once: d['once'] as String?,
       );
   final String id;
   final String name;
@@ -175,6 +176,16 @@ class PlannedInfo {
   /// Дата добавления: более ранние сроки не считаются просроченными.
   final DateTime? start;
 
+  /// Разовая покупка (D88): единственный месяц `YYYY-MM`, в котором она
+  /// запланирована. `null` — обычный ежемесячный платёж.
+  final String? once;
+
+  /// Вид справочника на сервере: разовые покупки хранятся отдельно.
+  String get entityKind => once == null ? 'planned' : 'purchase';
+
+  /// Первое число месяца разовой покупки.
+  DateTime? get onceMonth => once == null ? null : DateTime(int.parse(once!.substring(0, 4)), int.parse(once!.substring(5, 7)), 1);
+
   Map<String, Object?> toJson({Set<String>? paid}) => {
         'name': name,
         'amount': amount.toString(),
@@ -183,6 +194,7 @@ class PlannedInfo {
         if (debtId != null) 'debtId': debtId,
         'paid': [...(paid ?? this.paid)]..sort(),
         if (start != null) 'start': dateToJson(start!),
+        if (once != null) 'once': once,
       };
 }
 

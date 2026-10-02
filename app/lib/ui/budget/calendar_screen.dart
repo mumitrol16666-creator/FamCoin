@@ -37,6 +37,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         for (final p in state.planned) {
           final d = DateTime(month.year, month.month, p.day.clamp(1, daysInMonth));
           if (p.start != null && d.isBefore(p.start!) && !p.paid.contains(period)) continue;
+          if (p.once != null && p.once != period) continue; // разовая покупка — только в своём месяце
           items.add((p, d, p.paid.contains(period)));
         }
         items.sort((a, b) => a.$2.compareTo(b.$2));

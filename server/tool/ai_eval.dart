@@ -36,6 +36,7 @@ const _steady = <String, dynamic>{
   'expenseCategoriesTotal': 3,
   'monthEndBalanceForecast': {'basedOnDays': 20, 'roughEstimate': false, 'estimate': 184000, 'rangeLow': 170000, 'rangeHigh': 198000},
   'bankDebts': null,
+  'plannedPurchases': [{'name': 'Зимние колёса', 'amount': 100000, 'month': '2027-03', 'toSavePerMonth': 16700}],
   'goals': [{'name': 'Отпуск', 'target': 300000, 'saved': 60000, 'deadline': '2027-06-01'}],
   'observations': {'eveningShareOfDiscretionaryPercent': null, 'largeExpensesWithoutLimit': 0, 'incomeDaySpendRatio': null, 'recurringPaymentsShareOfIncomePercent': 42.9},
   'recordedIncome': {'averagePerMonth': 350000, 'recurringPaymentsPerMonth': 150000, 'looksIncomplete': false},
@@ -170,6 +171,8 @@ const _cases = <_Case>[
   // Счёт в минусе: с пояснением человека и без.
   _Case('минус: с пояснением', 'Почему у меня Kaspi Gold в минусе?', context: _thin, must: ['10 996', 'овердрафт|зарплат']),
   _Case('минус: без пояснения — не угадывать', 'Почему счёт Halyk в минусе?', context: _thin, must: ['2 000', 'поясн'], mustNot: ['овердрафт', 'потому что вы']),
+  _Case('покупка: сколько откладывать', 'Сколько мне откладывать на колёса?', must: ['16 700', 'март']),
+  _Case('покупка: куда занести', 'Хочу в мае купить ноутбук за 300 тысяч, куда это записать?', must: ['Бюджет', 'разов|покупк']),
   // Обычные ответы: цифры из сводки, имя, язык.
   _Case('ответ: категория', 'Сколько я потратил на продукты в этом месяце?', must: ['65 000']),
   _Case('ответ: имя', 'Как меня зовут?', must: ['Владислав']),

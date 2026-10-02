@@ -432,6 +432,40 @@ void main() {
     expect(s.limitExplain.shortfall, kzt(8000));
   });
 
+  test('D88: разовая покупка — один срок в своём месяце, не ежемесячный платёж; «купил» — расход вне лимита', () async {
+    final f = FakeServer(); // сегодня 28 сентября 2026
+    await f.init();
+    final s = f.state;
+    await s.setDailyLimit(kzt(5000));
+    await s.addPurchase(name: 'Колёса', amount: kzt(100000), month: DateTime(2027, 3, 1), category: 'transport');
+    final p = s.purchases.single;
+    expect(p.once, '2027-03');
+    expect(p.entityKind, 'purchase');
+    expect(s.purchaseMonthly(p), kzt(14300), reason: '100 000 на 7 месяцев (сентябрь–март), вверх до 100 ₸');
+    expect(s.recurringMonthly, 0, reason: 'разовая покупка — не постоянный платёж');
+    expect(s.upcoming, isEmpty, reason: 'до марта далеко — в ближайших платежах её нет');
+    expect(s.obligationsUntilIncome, 0);
+    expect(s.monthSummary(DateTime(2026, 10, 1)).paymentsTotal, 0);
+
+    f.now = DateTime(2027, 3, 5);
+    final due = s.dueItems(s.monthEnd).single;
+    expect((due.period, due.date), ('2027-03', DateTime(2027, 3, 31)));
+    expect(s.monthSummary(DateTime(2027, 3, 1)).paymentsTotal, 1);
+
+    await s.payDue(due, account: 'cash', amount: kzt(95000));
+    expect(s.purchases, isEmpty, reason: 'куплено — из плана ушла');
+    expect(s.spentToday(), 0, reason: 'запланированная покупка не тратит дневной лимит');
+    expect(s.ledger.balance('cash'), kzt(5000));
+    expect(f.entities['purchase']!.values.single['paid'], ['2027-03']);
+
+    // Удалили расход — покупка снова в плане.
+    await s.deleteTransaction(s.userTransactions.firstWhere((t) => t.type == EventType.expense).id);
+    expect(s.purchases, hasLength(1));
+
+    f.now = DateTime(2027, 4, 2);
+    expect(s.dueItems(s.today).single.date, DateTime(2027, 3, 31), reason: 'не купили в срок — висит как просроченная');
+  });
+
   test('D87: пояснение к минусу действует, пока счёт в минусе, и не переносится на следующий минус', () async {
     final f = FakeServer();
     await f.init();

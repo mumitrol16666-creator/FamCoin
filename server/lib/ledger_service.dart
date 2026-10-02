@@ -13,7 +13,9 @@ import 'package:postgres/postgres.dart';
 
 import 'auth_service.dart';
 
-const entityKinds = {'account', 'member', 'limit', 'goal', 'planned', 'debt', 'category', 'quick'};
+/// `purchase` — разовая запланированная покупка (D88): отдельный вид, чтобы
+/// прежние версии приложения не приняли её за ежемесячный платёж.
+const entityKinds = {'account', 'member', 'limit', 'goal', 'planned', 'purchase', 'debt', 'category', 'quick'};
 const maxEntityBytes = 8 * 1024;
 
 /// Предел размера профиля: он хранится одним JSON, и без предела клиент мог бы

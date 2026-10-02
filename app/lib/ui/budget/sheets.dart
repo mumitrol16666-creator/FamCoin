@@ -3,10 +3,12 @@ library;
 
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../state/app_scope.dart';
 import '../../state/models.dart';
 import '../../theme/app_theme.dart';
+import '../more/categories_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../widgets/common.dart';
 
@@ -85,7 +87,7 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due) {
         TextButton(
           onPressed: () async {
             final nav = Navigator.of(ctx);
-            if (await runAction(ctx, () => state.upsert('planned', p.id, p.toJson(paid: {...p.paid, due.period})))) nav.pop();
+            if (await runAction(ctx, () => state.upsert(p.entityKind, p.id, p.toJson(paid: {...p.paid, due.period})))) nav.pop();
           },
           child: Text(l.markPaidOnly),
         ),
@@ -310,6 +312,55 @@ Future<void> addPlannedFlow(BuildContext context) async {
   if (r == null || !context.mounted) return;
   final id = newId();
   await runAction(context, () => state.upsert('planned', id, PlannedInfo(id, r.name, r.amount, r.day, r.category, null, const {}, start: state.plannedStart(r.day, paidThisMonth: r.paidThisMonth)).toJson()));
+}
+
+/// Новая разовая покупка (D88): что, сколько и в каком месяце.
+Future<void> addPurchaseFlow(BuildContext context) async {
+  final l = context.l10n;
+  final state = AppScope.of(context).state;
+  final locale = Localizations.localeOf(context).toString();
+  final name = TextEditingController();
+  final amount = TextEditingController();
+  final months = [for (var i = 0; i < 24; i++) state.monthOf(i)];
+  var month = months[1];
+  var category = 'other';
+  await showFormSheet<void>(
+    context,
+    title: l.addPurchase,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        TextField(controller: name, autofocus: true, maxLength: 60, decoration: InputDecoration(labelText: l.purchaseName, hintText: l.purchaseNameHint, counterText: '')),
+        const SizedBox(height: 12),
+        AmountField(controller: amount, label: l.amount),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<DateTime>(
+          initialValue: month,
+          decoration: InputDecoration(labelText: l.purchaseMonth),
+          items: [for (final m in months) DropdownMenuItem(value: m, child: Text(toBeginningOfSentenceCase(DateFormat.yMMMM(locale).format(m))))],
+          onChanged: (m) => set(() => month = m ?? month),
+        ),
+        const SizedBox(height: 12),
+        CategoryPicker(
+          options: expenseCategories,
+          value: category,
+          onChanged: (c) => set(() => category = c),
+          onAdd: () async {
+            final id = await showCategorySheet(ctx);
+            if (id != null) set(() => category = id);
+          },
+        ),
+        const SizedBox(height: 20),
+        SubmitButton(
+          label: l.add,
+          onSubmit: () async {
+            final a = parseAmount(amount.text);
+            if (name.text.trim().isEmpty || a == null) return false;
+            return runAction(ctx, () => state.addPurchase(name: name.text.trim(), amount: a, month: month, category: category));
+          },
+        ),
+      ]),
+    ),
+  );
 }
 
 /// Новый кредит, рассрочка или кредитка с текущим остатком.
