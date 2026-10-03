@@ -6,6 +6,8 @@
 /// Расчёты — только в ядре.
 library;
 
+import 'dart:async';
+
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 
@@ -18,6 +20,39 @@ class AppState extends ChangeNotifier {
   final ApiClient api;
   final String token;
   final DateTime Function() _clock;
+
+  Timer? _dayTimer;
+  DateTime? _observedDay;
+
+  /// В открытом приложении дата сама по себе не вызывает перерисовку.
+  /// Следим за местной полуночью, чтобы «сегодня» и текущий месяц обновились
+  /// даже без операций и сети. Запускается один раз при создании сессии.
+  void startDayUpdates() {
+    _observedDay ??= today;
+    checkDayChange();
+  }
+
+  /// Вызывается также при возвращении из фона: телефон мог усыпить таймер,
+  /// а человек — сменить часовой пояс. Прошлый перенос не сбрасываем:
+  /// формулы просто пересчитываются на новую календарную дату.
+  void checkDayChange() {
+    if (_observedDay == null) return;
+    final now = _clock();
+    final day = DateTime(now.year, now.month, now.day);
+    final changed = day != _observedDay;
+    _observedDay = day;
+    _dayTimer?.cancel();
+    final midnight = DateTime(now.year, now.month, now.day + 1);
+    _dayTimer = Timer(midnight.difference(now), checkDayChange);
+    if (changed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _dayTimer?.cancel();
+    _observedDay = null;
+    super.dispose();
+  }
 
   Ledger ledger = Ledger();
   String plan = 'free';

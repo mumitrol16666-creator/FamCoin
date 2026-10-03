@@ -19,8 +19,9 @@ Future<void> main() async {
 }
 
 class FamCoinApp extends StatefulWidget {
-  const FamCoinApp({super.key, required this.settings});
+  const FamCoinApp({super.key, required this.settings, this.clock});
   final Settings settings;
+  final DateTime Function()? clock;
 
   @override
   State<FamCoinApp> createState() => _FamCoinAppState();
@@ -53,6 +54,7 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.resumed:
         settings.noteResumed();
+        _state?.checkDayChange();
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
       case AppLifecycleState.inactive:
@@ -73,7 +75,8 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
     }
     if (_state?.token == token) return;
     _state?.dispose();
-    final state = AppState(api: settings.api, token: token);
+    final state = AppState(api: settings.api, token: token, clock: widget.clock);
+    state.startDayUpdates();
     setState(() => _state = state);
     state.load().then((_) {
       final e = state.loadError;
