@@ -43,7 +43,7 @@ class HomeScreen extends StatelessWidget {
         final upcoming = state.upcoming.take(5).toList();
         final riskLimits = [
           for (final def in state.limits)
-            if (state.limitStatusFor(def) case final st when st.warn80 || st.forecastExceeds) (def, st),
+            if (state.limitStatusFor(def) case final st when state.limitAtRisk(def, st)) (def, st),
         ];
         final recent = state.userTransactions.take(5).toList();
 
@@ -145,10 +145,15 @@ class HomeScreen extends StatelessWidget {
                             const SizedBox(height: 6),
                             UsageBar(value: st.spent, max: st.limit),
                             const SizedBox(height: 4),
-                            Text(
-                              '${st.usedPercent?.round() ?? '—'}%${st.linearForecast != null ? ' · ${l.forecastToEnd}: ≈ ${formatMoney(st.linearForecast!)}' : ''}',
-                              style: TextStyle(fontSize: 12, color: st.forecastExceeds ? fam.warn : fam.text2),
-                            ),
+                            // Сравнение с прошлым месяцем вместо линейного прогноза (D95):
+                            // без прошлого месяца — только процент.
+                            if (state.lastMonthSpent(def.category) case final last?)
+                              Text(
+                                '${st.usedPercent?.round() ?? '—'}% · ${l.vsLastMonth(DateFormat.LLLL(locale).format(state.monthOf(-1)), formatMoney(last.toDay), formatMoney(last.total))}',
+                                style: TextStyle(fontSize: 12, color: st.spent > last.toDay ? fam.warn : fam.text2),
+                              )
+                            else
+                              Text('${st.usedPercent?.round() ?? '—'}%', style: TextStyle(fontSize: 12, color: fam.text2)),
                           ]),
                         ),
                     ]),

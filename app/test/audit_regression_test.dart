@@ -288,6 +288,26 @@ void main() {
     expect(s.closedStreakFrom(DateTime(2026, 8, 1)), 0);
   });
 
+  test('D95: лимит сравнивается с прошлым месяцем к тому же дню, а без прошлого месяца — ни с чем', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    f.now = DateTime(2026, 10, 2);
+    await s.addExpense(amount: kzt(2090), category: 'cafe', account: 'cash', date: DateTime(2026, 10, 2));
+    expect(s.lastMonthSpent('cafe'), isNull, reason: 'сентября в учёте нет — сравнивать не с чем');
+
+    await s.addExpense(amount: kzt(1500), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 2));
+    await s.addExpense(amount: kzt(3000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 3));
+    await s.addExpense(amount: kzt(9000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 25));
+    expect(s.lastMonthSpent('cafe'), (toDay: kzt(1500), total: kzt(13500)));
+    expect(s.lastMonthSpent('food'), (toDay: 0, total: 0), reason: 'месяц вёлся, в категории ничего не было');
+
+    final def = LimitInfo('l1', 'cafe', kzt(10000));
+    expect(s.limitAtRisk(def, s.limitStatusFor(def)), isTrue, reason: '2 090 к 2 октября против 1 500 к 2 сентября');
+    f.now = DateTime(2026, 10, 30);
+    expect(s.lastMonthSpent('cafe')!.toDay, kzt(13500), reason: 'к 30-му — весь сентябрь');
+  });
+
   test('D75: итоги месяца — доходы, расходы, куда ушло, сравнение, платежи, расхождения; запланированная покупка не в среднем', () async {
     final f = FakeServer();
     await f.init();

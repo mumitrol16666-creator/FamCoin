@@ -110,7 +110,7 @@
   "recent": "Соңғы операциялар",
   "all": "Барлығы",
   "ofLimit": "/",
-  "forecastToEnd": "Ай соңына болжам",
+  "vsLastMonth": "{month}: осы күнге дейін {toDay}, ай ішінде {total}",
   "reportIncome": "Кірістер",
   "reportExpense": "Шығыстар",
   "reportResult": "Қалды",

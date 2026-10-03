@@ -660,6 +660,27 @@ class AppState extends ChangeNotifier {
   int spentInCategory(String category) =>
       ledger.expenseByCategory(monthStart, monthEnd)[expenseAccount(category)] ?? 0;
 
+  /// Траты по категории в прошлом месяце — к такому же дню и за весь месяц
+  /// (D95). Это замена линейному «прогнозу к концу месяца», который просто
+  /// умножал первые дни на их число. `null` — прошлый месяц в приложении не
+  /// вёлся, сравнивать не с чем, и ничего не показывается.
+  ({int toDay, int total})? lastMonthSpent(String category) {
+    final prev = monthOf(-1);
+    if (!hasActivityIn(prev)) return null;
+    final acc = expenseAccount(category);
+    final sameDay = DateTime(prev.year, prev.month, today.day + 1);
+    final end = sameDay.isAfter(monthStart) ? monthStart : sameDay;
+    return (toDay: ledger.expenseByCategory(prev, end)[acc] ?? 0, total: ledger.expenseByCategory(prev, monthStart)[acc] ?? 0);
+  }
+
+  /// Лимит стоит показать на главной: он почти исчерпан или траты идут
+  /// быстрее, чем к этому же дню прошлого месяца.
+  bool limitAtRisk(LimitInfo def, LimitStatus st) {
+    if (st.warn80) return true;
+    final last = lastMonthSpent(def.category);
+    return last != null && st.spent > last.toDay && last.total > 0;
+  }
+
   /// Список лимитов считает расходы одним проходом по журналу, даже если
   /// категорий десятки. Подробности одного лимита используют тот же расчёт.
   List<({LimitInfo def, LimitStatus status})> get currentLimitStatuses {
