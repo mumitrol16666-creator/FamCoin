@@ -36,7 +36,9 @@ class QuickActionsRow extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       SectionHeader(l.quickActions),
       SizedBox(
-        height: 92,
+        // Высота растёт вместе с размером шрифта: при 200 % подпись и сумма
+        // не помещались в 92 px.
+        height: 92 + 70 * (MediaQuery.textScalerOf(context).scale(1) - 1).clamp(0.0, 2.0),
         child: ListView(
           scrollDirection: Axis.horizontal,
           children: [

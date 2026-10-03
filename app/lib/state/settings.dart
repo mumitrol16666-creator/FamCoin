@@ -77,6 +77,34 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Советы на главной (D96): выключатель в настройках, по умолчанию включены.
+  bool get tipsEnabled => _prefs.getBool('tipsEnabled') ?? true;
+  set tipsEnabled(bool value) {
+    _prefs.setBool('tipsEnabled', value);
+    notifyListeners();
+  }
+
+  /// Номер текущего совета. Раз в сутки сдвигается на один сам (по
+  /// локальной дате [today]), «Ещё совет» сдвигает сразу — см. [nextTip].
+  /// Хранится на устройстве: совет — мелочь интерфейса, синхронизировать
+  /// его между телефонами незачем.
+  int tipCursor(DateTime today) {
+    final day = '${today.year}-${today.month}-${today.day}';
+    final stored = _prefs.getString('tipDay');
+    var cursor = _prefs.getInt('tipCursor') ?? 0;
+    if (stored != day) {
+      if (stored != null) cursor++;
+      _prefs.setInt('tipCursor', cursor);
+      _prefs.setString('tipDay', day);
+    }
+    return cursor;
+  }
+
+  Future<void> nextTip() async {
+    await _prefs.setInt('tipCursor', (_prefs.getInt('tipCursor') ?? 0) + 1);
+    notifyListeners();
+  }
+
   /// Код входа через Telegram, который ждёт подтверждения в боте (D77).
   /// Хранится на устройстве: пока человек в Telegram, Android может усыпить
   /// или выгрузить приложение, и ожидание в памяти теряется. `null` — кода

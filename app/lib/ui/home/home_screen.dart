@@ -8,9 +8,11 @@ import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../analytics/analytics_screen.dart';
 import '../budget/calendar_screen.dart';
+import '../budget/limits_section.dart';
 import '../budget/month_close_screen.dart';
 import '../budget/sheets.dart';
 import '../more/accounts_screen.dart';
+import '../more/notifications_screen.dart';
 import '../more/settings_screen.dart';
 import '../more/tariff_screen.dart';
 import '../ops/transaction_tile.dart';
@@ -19,6 +21,7 @@ import '../../state/push.dart';
 import '../widgets/common.dart';
 import '../widgets/push_enable.dart';
 import 'quick_actions.dart';
+import 'tips.dart';
 
 /// S07 — главная: ориентир → счета → обязательства → лимиты с риском →
 /// отчёт за месяц → последние операции.
@@ -95,9 +98,13 @@ class HomeScreen extends StatelessWidget {
                 const QuickActionsRow(),
 
                 for (final a in state.accountsInMinus) _MinusCard(a),
+                // Совет дня (D96): после предупреждений, до разделов с цифрами.
+                const _TipCard(),
                 SectionHeader(l.accounts, action: '${l.all} ›', onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountsScreen()))),
                 SizedBox(
-                  height: 82,
+                  // Высота растёт вместе с размером шрифта: при 200 % две
+                  // строки карточки не помещались в 82 px.
+                  height: 82 + 60 * (MediaQuery.textScalerOf(context).scale(1) - 1).clamp(0.0, 2.0),
                   child: ListView(
                     scrollDirection: Axis.horizontal,
                     children: [
@@ -355,7 +362,10 @@ class _GuideCard extends StatelessWidget {
           Row(children: [
             Expanded(child: Text(showTotal ? l.guideTotalTitle : l.leftToday, style: const TextStyle(fontSize: 13))),
             InfoTip(showTotal ? l.tipTotal : l.tipDailyLimit, title: showTotal ? l.guideTotalTitle : l.dailyLimitTitle, color: FamColors.onGuide),
-            if (!showTotal) Text('${l.dailyLimitTitle} ›', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            // Ссылка сжимается с многоточием: на 320 px при шрифте 200 % она
+            // выходила за карточку.
+            if (!showTotal)
+              Flexible(child: Text('${l.dailyLimitTitle} ›', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
           ]),
           const SizedBox(height: 4),
           if (headline != null)
@@ -502,6 +512,91 @@ class _PushPromptCardState extends State<_PushPromptCard> {
           ],
         ]),
       ]),
+    );
+  }
+}
+
+/// Совет дня (D96): лампочка, один короткий совет, «Ещё совет». Подсказки
+/// про приложение ведут в нужное место и исчезают, когда сделано; общие —
+/// ориентиры финграмотности. Один совет в сутки, выключается в настройках.
+class _TipCard extends StatelessWidget {
+  const _TipCard();
+
+  void _act(BuildContext context, AppState state, TipAction action) {
+    void push(Widget screen) => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => screen));
+    switch (action) {
+      case TipAction.setLimit:
+        HomeScreen.showLimitSheet(context, state);
+      case TipAction.addGoal:
+        showGoalSheet(context);
+      case TipAction.openCalendar:
+        push(const CalendarScreen());
+      case TipAction.openLimits:
+        push(const LimitsScreen());
+      case TipAction.addQuick:
+        showQuickActionSheet(context);
+      case TipAction.voice:
+        showVoiceSheet(context);
+      case TipAction.telegram:
+        push(const NotificationsScreen());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    final settings = scope.settings;
+    final state = scope.state;
+    final l = context.l10n;
+    final fam = context.fam;
+    // Карточка — const внутри главной: без своей подписки «Ещё совет» и
+    // выключатель в настройках её не перестроят; состояние тоже нужно —
+    // подсказка «задайте лимит» уходит сразу, как лимит задан.
+    return ListenableBuilder(
+      listenable: Listenable.merge([settings, state]),
+      builder: (context, _) {
+        if (!settings.tipsEnabled) return const SizedBox.shrink();
+        final tip = tipAt(tipsFor(state, l), settings.tipCursor(state.today));
+        if (tip == null) return const SizedBox.shrink();
+        return AppCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(Icons.lightbulb_outline, size: 20, color: fam.accent),
+              const SizedBox(width: 10),
+              Expanded(child: Text(l.adviceTitle, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fam.text2))),
+            ]),
+            const SizedBox(height: 6),
+            // Текст меняется — лёгкое затухание, чтобы смена была заметна.
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: Text(tip.text, key: ValueKey(tip.id), style: const TextStyle(fontSize: 14, height: 1.35)),
+            ),
+            const SizedBox(height: 2),
+            // Кнопки переносятся на две строки, когда не помещаются в одну
+            // (узкий экран, крупный шрифт).
+            Wrap(
+              alignment: tip.action == null ? WrapAlignment.end : WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (tip.action != null)
+                  TextButton(
+                    onPressed: () => _act(context, state, tip.action!),
+                    child: Text('${tip.actionLabel} ›', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                TextButton(
+                  onPressed: settings.nextTip,
+                  style: TextButton.styleFrom(foregroundColor: fam.text2),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.refresh, size: 16),
+                    const SizedBox(width: 6),
+                    Flexible(child: Text(l.adviceNext, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ]),
+                ),
+              ],
+            ),
+          ]),
+        );
+      },
     );
   }
 }
