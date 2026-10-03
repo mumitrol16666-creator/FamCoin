@@ -149,7 +149,7 @@ class HomeScreen extends StatelessWidget {
                             // без прошлого месяца — только процент.
                             if (state.lastMonthSpent(def.category) case final last?)
                               Text(
-                                '${st.usedPercent?.round() ?? '—'}% · ${l.vsLastMonth(DateFormat.LLLL(locale).format(state.monthOf(-1)), formatMoney(last.toDay), formatMoney(last.total))}',
+                                '${st.usedPercent?.round() ?? '—'}% · ${l.limitVsLastMonth(DateFormat.LLLL(locale).format(state.monthOf(-1)), formatMoney(last.toDay), formatMoney(last.total))}',
                                 style: TextStyle(fontSize: 12, color: st.spent > last.toDay ? fam.warn : fam.text2),
                               )
                             else
