@@ -145,8 +145,20 @@ class PdfReader {
   /// Слова файла; `null` — файл не читается как PDF (или разборщика нет).
   Future<List<PdfWord>?> words(List<int> pdf) async {
     final l = _launch;
-    if (l == null || pdf.length < 5 || latin1.decode(pdf.sublist(0, 5)) != '%PDF-') return null;
+    if (l == null || !_looksLikePdf(pdf)) return null;
     return _words(l, pdf);
+  }
+
+  /// Файл начинается с «%PDF-». Сравнение побайтно, без декодирования:
+  /// чужой ввод может быть чем угодно, в том числе не байтами вовсе, и
+  /// декодер на нём бросал исключение вместо «не прочитал».
+  static bool _looksLikePdf(List<int> bytes) {
+    const magic = [0x25, 0x50, 0x44, 0x46, 0x2D]; // %PDF-
+    if (bytes.length < magic.length) return false;
+    for (var i = 0; i < magic.length; i++) {
+      if (bytes[i] != magic[i]) return false;
+    }
+    return true;
   }
 
   Future<List<PdfWord>?> _words(_Launch l, List<int> pdf) async {
