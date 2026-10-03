@@ -300,7 +300,10 @@ void main() {
     await s.addExpense(amount: kzt(3000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 3));
     await s.addExpense(amount: kzt(9000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 25));
     expect(s.lastMonthSpent('cafe'), (toDay: kzt(1500), total: kzt(13500)));
-    expect(s.lastMonthSpent('food'), (toDay: 0, total: 0), reason: 'месяц вёлся, в категории ничего не было');
+    expect(s.lastMonthSpent('food'), isNull, reason: 'к этому дню в категории ноль — сравнивать не с чем, строка не показывается');
+    await s.addExpense(amount: kzt(700), category: 'food', account: 'cash', date: DateTime(2026, 9, 20));
+    expect(s.lastMonthSpent('food'), isNull, reason: 'учёт начался позже этого дня — ноль к 2 сентября не считается');
+    expect(s.limitAtRisk(LimitInfo('l2', 'food', kzt(50000)), s.limitStatusFor(LimitInfo('l2', 'food', kzt(50000)))), isFalse);
 
     final def = LimitInfo('l1', 'cafe', kzt(10000));
     expect(s.limitAtRisk(def, s.limitStatusFor(def)), isTrue, reason: '2 090 к 2 октября против 1 500 к 2 сентября');

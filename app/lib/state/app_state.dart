@@ -670,7 +670,11 @@ class AppState extends ChangeNotifier {
     final acc = expenseAccount(category);
     final sameDay = DateTime(prev.year, prev.month, today.day + 1);
     final end = sameDay.isAfter(monthStart) ? monthStart : sameDay;
-    return (toDay: ledger.expenseByCategory(prev, end)[acc] ?? 0, total: ledger.expenseByCategory(prev, monthStart)[acc] ?? 0);
+    final toDay = ledger.expenseByCategory(prev, end)[acc] ?? 0;
+    // Ноль к этому дню — чаще всего учёт начался позже, а не «ничего не
+    // тратил»: сравнение с нулём ничего не говорит, лучше промолчать.
+    if (toDay <= 0) return null;
+    return (toDay: toDay, total: ledger.expenseByCategory(prev, monthStart)[acc] ?? 0);
   }
 
   /// Лимит стоит показать на главной: он почти исчерпан или траты идут
@@ -678,7 +682,7 @@ class AppState extends ChangeNotifier {
   bool limitAtRisk(LimitInfo def, LimitStatus st) {
     if (st.warn80) return true;
     final last = lastMonthSpent(def.category);
-    return last != null && st.spent > last.toDay && last.total > 0;
+    return last != null && st.spent > last.toDay;
   }
 
   /// Список лимитов считает расходы одним проходом по журналу, даже если
