@@ -6,6 +6,8 @@ library;
 
 import 'package:famcoin_core/famcoin_core.dart';
 
+import 'chat_entry.dart';
+
 class Brief {
   const Brief(this.title, this.body);
   final String title;
@@ -43,13 +45,19 @@ List<(Map<String, dynamic>, DateTime)> _due(List<Map<String, dynamic>> planned, 
 }
 
 class BriefInput {
-  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale});
+  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}});
   final Ledger ledger;
   final DateTime today;
   final Map<String, dynamic> profile;
   final List<Map<String, dynamic>> planned;
   final List<Map<String, dynamic>> limits;
   final String locale;
+
+  /// Свои категории владельца: id → данные (`name`). Встроенные называются
+  /// тем же словарём, что и в боте, — в сводке не бывает `food` или id.
+  final Map<String, Map<String, dynamic>> categories;
+
+  String categoryName(String id) => chatCategoryName(id, locale, categories);
 }
 
 String _kzt(int minor) => formatMoney(minor);
@@ -104,7 +112,7 @@ Brief eveningBrief(BriefInput i) {
       ? (kk ? 'Бүгін шығыс жазылмады.' : 'Сегодня расходов не записано.')
       : (kk ? 'Бүгін жұмсалды: <b>${_kzt(spentToday)}</b>.' : 'Сегодня потрачено: <b>${_kzt(spentToday)}</b>.'));
   for (final e in top.take(3)) {
-    lines.add('• ${e.key}: ${_kzt(e.value)}');
+    lines.add('• ${i.categoryName(e.key)}: ${_kzt(e.value)}');
   }
   lines.add(kk ? 'Ай басынан: кіріс ${_kzt(report.income)}, шығыс ${_kzt(report.expense)}.' : 'С начала месяца: доходы ${_kzt(report.income)}, расходы ${_kzt(report.expense)}.');
 
@@ -112,8 +120,8 @@ Brief eveningBrief(BriefInput i) {
   final elapsed = today.day;
   final daysInMonth = monthEnd.difference(monthStart).inDays;
   for (final lim in i.limits) {
-    final cat = lim['category'] as String? ?? '';
-    final st = limitStatus(spent: spentByCat[expenseAccount(cat)] ?? 0, limit: _minor(lim['amount']), elapsedFullDays: elapsed, periodDays: daysInMonth);
+    final cat = i.categoryName(lim['category'] as String? ?? '');
+    final st = limitStatus(spent: spentByCat[expenseAccount(lim['category'] as String? ?? '')] ?? 0, limit: _minor(lim['amount']), elapsedFullDays: elapsed, periodDays: daysInMonth);
     if (st.exceeded) {
       lines.add(kk ? '⚠ «$cat» лимиті асып кетті: ${_kzt(st.spent)} / ${_kzt(st.limit)}.' : '⚠ Лимит «$cat» превышен: ${_kzt(st.spent)} из ${_kzt(st.limit)}.');
     } else if (st.warn80) {

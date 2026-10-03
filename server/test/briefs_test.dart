@@ -29,4 +29,24 @@ void main() {
     expect(morningBrief(_input(DateTime(2027, 3, 31), [bought])).body, isNot(contains('Колёса')));
     expect(morningBrief(_input(DateTime(2027, 4, 30), [tyres])).body, isNot(contains('Колёса')));
   });
+
+  test('вечерний отчёт называет категории словами, а не кодами', () {
+    final l = Ledger();
+    applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o', 'date': '2026-10-01', 'account': 'card', 'amount': '${kzt(100000)}'});
+    applyLedgerCommand(l, {'type': 'expense', 'id': 'e1', 'date': '2026-10-02', 'account': 'card', 'splits': {'food': '${kzt(2180)}', 'c569095a1a770': '${kzt(1300)}'}});
+    final input = BriefInput(
+      ledger: l,
+      today: DateTime(2026, 10, 2),
+      profile: const {},
+      planned: const [],
+      limits: [{'category': 'food', 'amount': '${kzt(2000)}'}],
+      locale: 'ru',
+      categories: const {'c569095a1a770': {'name': 'Собака'}},
+    );
+    final body = eveningBrief(input).body;
+    expect(body, allOf(contains('• Продукты: 2 180 ₸'), contains('• Собака: 1 300 ₸'), contains('Лимит «Продукты» превышен')));
+    expect(body, isNot(contains('food')));
+    expect(eveningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 2), profile: const {}, planned: const [], limits: const [], locale: 'kk')).body, contains('Азық-түлік'));
+  });
 }

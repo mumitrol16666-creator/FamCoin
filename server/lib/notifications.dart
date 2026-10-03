@@ -166,6 +166,7 @@ class NotificationService {
       planned: [...ofKind('planned'), ...ofKind('purchase')],
       limits: ofKind('limit'),
       locale: s['locale'] as String? ?? 'ru',
+      categories: {for (final e in entities) if (e['kind'] == 'category') e['id'] as String: Map<String, dynamic>.from(e['data'] as Map)},
     );
     final brief = kind == 'morning' ? morningBrief(input) : eveningBrief(input);
     await notify(userId, kind, brief.title, brief.body);

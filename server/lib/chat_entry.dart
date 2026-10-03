@@ -67,10 +67,13 @@ const _expenseIds = ['food', 'cafe', 'transport', 'health', 'kids', 'home', 'uti
 const _incomeIds = ['salary', 'side', 'cashback', 'interestIncome', 'otherIncome'];
 
 /// Название категории: встроенной — на языке владельца, своей — как он её назвал.
-String categoryName(String id, LedgerView v) {
+String categoryName(String id, LedgerView v) => chatCategoryName(id, v.locale, v.of('category'));
+
+/// То же без [LedgerView]: [custom] — свои категории владельца (id → данные).
+String chatCategoryName(String id, String locale, Map<String, Map<String, dynamic>> custom) {
   final builtin = _categoryNames[id];
-  if (builtin != null) return v.locale == 'kk' ? builtin.$2 : builtin.$1;
-  return v.of('category')[id]?['name'] as String? ?? id;
+  if (builtin != null) return locale == 'kk' ? builtin.$2 : builtin.$1;
+  return custom[id]?['name'] as String? ?? id;
 }
 
 /// Категории для выбора кнопкой — тот же набор, что в форме приложения:
