@@ -80,7 +80,7 @@ class FakeServer {
 
   Future<http.Response> _handle(http.Request req) async {
     if (offline) throw http.ClientException('offline');
-    if (req.url.path == '/state') return http.Response(jsonEncode(_snapshot()), 200);
+    if (req.url.path == '/state') return http.Response(jsonEncode(_snapshot()), 200, headers: {'content-type': 'application/json; charset=utf-8'});
     if (req.url.path == '/notifications/settings') {
       if (req.method == 'POST') notif.addAll((jsonDecode(req.body) as Map).cast<String, dynamic>());
       return http.Response(jsonEncode({'morning': notif['morning'] ?? true, 'evening': notif['evening'] ?? true, 'month': notif['month'] ?? true, 'telegramLinked': false, 'telegramAvailable': false, 'pushDevices': 0}), 200);

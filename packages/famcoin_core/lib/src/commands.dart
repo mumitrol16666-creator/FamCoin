@@ -24,6 +24,7 @@ const profileKeys = {
   'firstName',
   'lastName',
   'birthDate',
+  'offerGoalsOnIncome',
 };
 
 /// Типы команд, которые меняют журнал.

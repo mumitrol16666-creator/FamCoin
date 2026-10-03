@@ -7,6 +7,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
@@ -718,6 +719,79 @@ class AppState extends ChangeNotifier {
       plannedContributionsLeft: months ?? 0,
     );
   }
+
+  // -------------------------------------------------- доход → цели (D96)
+
+  /// Предлагать ли после записи дохода отложить часть в копилки целей.
+  /// По умолчанию да; выключается ссылкой в самом листе или в настройках.
+  bool get offerGoalsOnIncome => profile['offerGoalsOnIncome'] != false;
+  Future<void> setOfferGoalsOnIncome(bool on) => send({'type': 'updateProfile', 'profile': {'offerGoalsOnIncome': on}});
+
+  /// Доход от этой суммы считается заметным: на кэшбэк в 300 ₸ вопрос
+  /// «отложить на цели?» не нужен.
+  static const incomeOfferMin = 5000 * minorPerUnit;
+
+  /// Цели, на которые есть смысл откладывать: с копилкой и ещё не достигнутые.
+  List<GoalInfo> get openGoals => [
+        for (final g in goals)
+          if (g.account != null && ledger.hasAccount(g.account!) && !goalStatusFor(g).reached) g,
+      ];
+
+  /// Показывать ли после дохода [amount] лист «Отложить часть на цели?».
+  bool shouldOfferGoals(int amount) => offerGoalsOnIncome && amount >= incomeOfferMin && openGoals.isNotEmpty;
+
+  /// Сколько отложено в копилку цели за месяц, в который попадает [day]:
+  /// переводы в копилку минус переводы из неё, не меньше нуля; отменённые
+  /// записи не считаются.
+  int goalDepositedInMonth(GoalInfo g, DateTime day) {
+    final acc = g.account;
+    if (acc == null) return 0;
+    final from = DateTime(day.year, day.month, 1);
+    final to = DateTime(day.year, day.month + 1, 1);
+    var sum = 0;
+    for (final tx in ledger.transactions) {
+      if (tx.type != EventType.transfer || ledger.isReversed(tx.id)) continue;
+      if (tx.date.isBefore(from) || !tx.date.isBefore(to)) continue;
+      sum += tx.amountOn(acc);
+    }
+    return math.max(0, sum);
+  }
+
+  /// Подсказка взноса с дохода от [date]: «нужно в месяц» (та же формула,
+  /// что на карточке цели) за вычетом уже отложенного в этом месяце, не
+  /// больше остатка до цели. `null` — у цели нет срока, считать не от чего.
+  int? goalSuggestedDeposit(GoalInfo g, {required DateTime date}) {
+    final st = goalStatusFor(g);
+    final need = st.requiredContribution;
+    if (need == null) return null;
+    return math.max(0, math.min(need - goalDepositedInMonth(g, date), st.remaining));
+  }
+
+  /// Подсказки по открытым целям для дохода [amount]: по порядку целей, пока
+  /// хватает дохода, — сумма подсказок не превышает сам доход. Цели без
+  /// подсказки в ответ не попадают (поле остаётся пустым).
+  Map<String, int> incomeGoalSuggestions(int amount, {required DateTime date}) {
+    var left = amount;
+    final out = <String, int>{};
+    for (final g in openGoals) {
+      final s = goalSuggestedDeposit(g, date: date);
+      if (s == null || s <= 0) continue;
+      final v = math.min(s, left);
+      if (v <= 0) break;
+      out[g.id] = v;
+      left -= v;
+    }
+    return out;
+  }
+
+  /// Отложить с дохода на несколько целей: одна пачка переводов датой дохода
+  /// со счёта, куда пришёл доход. [commandId] лист создаёт один раз на
+  /// попытку — повтор после обрыва связи не задвоит переводы.
+  Future<void> allocateToGoals(Map<GoalInfo, int> amounts, {required String from, required DateTime date, String? commandId}) =>
+      sendBatch([
+        for (final e in amounts.entries)
+          if (e.value > 0) {'type': 'transfer', 'id': newId(), 'date': _date(date), 'from': from, 'to': e.key.account!, 'amount': e.value.toString()},
+      ], commandId: commandId);
 
   // ------------------------------------------------------------- периоды
 

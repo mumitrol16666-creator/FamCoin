@@ -12,6 +12,7 @@ import '../more/categories_screen.dart';
 import 'voice_sheet.dart';
 import '../widgets/common.dart';
 import 'big_purchase.dart';
+import 'income_goals_sheet.dart';
 
 enum FieldsKind { expense, income, transfer, debt }
 
@@ -265,7 +266,11 @@ class _TransactionFieldsState extends State<TransactionFields> {
     }
     if (!mounted) return;
     widget.dirty?.value = false;
-    Navigator.pop(context);
+    final nav = Navigator.of(context);
+    nav.pop();
+    // После дохода — предложение отложить часть на цели (D96). Лист сам
+    // говорит, что доход записан, поэтому «Операция записана» не дублируем.
+    if (_kind == FieldsKind.income && await offerIncomeToGoals(nav.context, amount: amount, account: account, source: _source, date: _date)) return;
     messenger.showSnackBar(SnackBar(content: Text(l.saved)));
   }
 

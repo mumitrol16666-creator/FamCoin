@@ -1335,5 +1335,21 @@
   "@aiUnverified": {"placeholders": {"amounts": {"type": "String"}}},
   "incomeIncompleteNote": "Платежей в месяц больше, чем записано доходов. Похоже, в приложении внесены не все доходы — доли и прогноз пока неточны.",
   "incomeIncompleteShort": "доходы записаны не все?",
-  "forecastEarly": "Месяц только начался: оценка грубая и меняется от каждой траты."
+  "forecastEarly": "Месяц только начался: оценка грубая и меняется от каждой траты.",
+  "incomeGoalsTitle": "Отложить часть на цели?",
+  "incomeGoalsSaved": "Доход записан: {source}, {amount} на «{account}». Часть можно сразу отложить в копилки — впишите суммы.",
+  "@incomeGoalsSaved": {"placeholders": {"source": {"type": "String"}, "amount": {"type": "String"}, "account": {"type": "String"}}},
+  "incomeGoalsNeed": "нужно в месяц {amount}",
+  "@incomeGoalsNeed": {"placeholders": {"amount": {"type": "String"}}},
+  "incomeGoalsTotal": "Итого {total} · на счёте останется {left}",
+  "@incomeGoalsTotal": {"placeholders": {"total": {"type": "String"}, "left": {"type": "String"}}},
+  "incomeGoalsSubmit": "Отложить",
+  "notNow": "Не сейчас",
+  "incomeGoalsMute": "Не предлагать при доходе",
+  "incomeGoalsMuted": "Больше не предлагаем. Включить снова можно в настройках.",
+  "incomeGoalsDone": "Отложено на цели: {total}",
+  "@incomeGoalsDone": {"placeholders": {"total": {"type": "String"}}},
+  "incomeGoalsToggle": "Предлагать отложить на цели при доходе",
+  "incomeGoalsToggleDesc": "После записи дохода от {min} приложение предлагает отложить часть в копилки целей. Подсказка суммы — «нужно в месяц» за вычетом уже отложенного в этом месяце.",
+  "@incomeGoalsToggleDesc": {"placeholders": {"min": {"type": "String"}}}
 }

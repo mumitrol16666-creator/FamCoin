@@ -124,6 +124,16 @@ class SettingsScreen extends StatelessWidget {
                   onChanged: (v) => runAction(context, () => state.setDailyLimitCarryOn(v)),
                 ),
               ),
+              if (state.goals.isNotEmpty || !state.offerGoalsOnIncome)
+                AppCard(
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l.incomeGoalsToggle),
+                    subtitle: Text(l.incomeGoalsToggleDesc(moneyInText(AppState.incomeOfferMin)), style: TextStyle(fontSize: 12, color: fam.text2)),
+                    value: state.offerGoalsOnIncome,
+                    onChanged: (v) => runAction(context, () => state.setOfferGoalsOnIncome(v)),
+                  ),
+                ),
               AppCard(
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TariffScreen())),
                 child: Row(children: [
