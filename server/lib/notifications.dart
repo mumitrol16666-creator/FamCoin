@@ -149,7 +149,7 @@ class NotificationService {
   Future<void> sendMonthNudge(String userId, DateTime month) async {
     final s = await ledger.state(userId);
     final r = _ledgerOf(s).report(month, DateTime(month.year, month.month + 1, 1));
-    final brief = monthNudge(month: month, income: r.income, expense: r.expense, locale: s['locale'] as String? ?? 'ru');
+    final brief = monthNudge(month: month, income: r.income, expense: r.total, locale: s['locale'] as String? ?? 'ru');
     await notify(userId, 'system', brief.title, brief.body, openQuery: 'close=${monthKey(month)}');
   }
 

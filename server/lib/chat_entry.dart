@@ -55,6 +55,8 @@ const _categoryNames = <String, (String, String)>{
   'gifts': ('Подарки', 'Сыйлықтар'),
   'fees': ('Комиссии', 'Комиссиялар'),
   'interest': ('Проценты', 'Пайыз'),
+  // Строка отчётов, не категория записи (D98).
+  'debts': ('Кредиты и долги', 'Несиелер мен қарыздар'),
   'other': ('Прочее', 'Басқа'),
   'salary': ('Зарплата', 'Жалақы'),
   'side': ('Подработка', 'Қосымша табыс'),
@@ -523,15 +525,22 @@ String monthText(LedgerView v, DateTime now) {
   final from = DateTime(now.year, now.month, 1);
   final to = DateTime(now.year, now.month + 1, 1);
   final r = v.ledger.report(from, to);
-  final top = (v.ledger.expenseByCategory(from, to).entries.where((e) => e.value > 0).toList()..sort((a, b) => b.value.compareTo(a.value))).take(5).toList();
+  // Платежи по кредитам и долгам — строкой среди категорий (D98).
+  final top = ([
+    for (final e in v.ledger.expenseByCategory(from, to).entries)
+      if (e.value > 0) (e.key.substring(8), e.value),
+    if (r.debtPayments > 0) ('debts', r.debtPayments),
+  ]..sort((a, b) => b.$2.compareTo(a.$2)))
+      .take(5)
+      .toList();
   final name = monthName(now.month, v.locale);
   return [
     '<b>${name[0].toUpperCase()}${name.substring(1)} ${now.year}</b>',
     '${kk ? 'Кіріс' : 'Доходы'}: ${formatMoney(r.income)}',
-    '${kk ? 'Шығыс' : 'Расходы'}: ${formatMoney(r.expense)}',
+    '${kk ? 'Шығыс' : 'Расходы'}: ${formatMoney(r.total)}',
     '${kk ? 'Ай қорытындысы' : 'Итог месяца'}: <b>${r.result > 0 ? '+' : ''}${formatMoney(r.result)}</b>',
     if (top.isNotEmpty) kk ? 'Ең көп шығыс:' : 'Больше всего ушло:',
-    for (final e in top) '• ${escapeHtml(categoryName(e.key.substring(8), v))} — ${formatMoney(e.value)}',
+    for (final e in top) '• ${escapeHtml(categoryName(e.$1, v))} — ${formatMoney(e.$2)}',
   ].join('\n');
 }
 

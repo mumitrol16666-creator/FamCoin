@@ -42,6 +42,22 @@ void main() {
     expect(eveningBrief(_input(today, const [])).body, isNot(contains('💡')));
   });
 
+  test('вечерний отчёт: платёж по кредиту — в «потрачено» и в расходах месяца, отдельной строкой (D98)', () {
+    final l = Ledger();
+    applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o', 'date': '2026-10-01', 'account': 'card', 'amount': '${kzt(300000)}'});
+    applyLedgerCommand(l, {'type': 'openingDebt', 'id': 'd', 'date': '2026-10-01', 'debtId': 'red', 'amount': '${kzt(500000)}'});
+    applyLedgerCommand(l, {'type': 'loanPayment', 'id': 'p1', 'date': '2026-10-02', 'account': 'card', 'debtId': 'red', 'principal': '${kzt(40000)}', 'interest': '${kzt(12000)}'});
+    applyLedgerCommand(l, {'type': 'expense', 'id': 'e1', 'date': '2026-10-02', 'account': 'card', 'splits': {'food': '${kzt(2180)}'}});
+    final body = eveningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 2), profile: const {}, planned: const [], limits: const [], locale: 'ru')).body;
+    expect(body, contains('Сегодня потрачено: <b>54 180 ₸</b>'));
+    expect(body, contains('С начала месяца: доходы 0 ₸, расходы 54 180 ₸.'));
+    expect(body, contains('В том числе кредиты и долги: 40 000 ₸.'));
+
+    final nudge = monthNudge(month: DateTime(2026, 10, 1), income: 0, expense: l.report(DateTime(2026, 10, 1), DateTime(2026, 11, 1)).total, locale: 'ru');
+    expect(nudge.body, contains('расходы 54 180 ₸'));
+  });
+
   test('вечерний отчёт называет категории словами, а не кодами', () {
     final l = Ledger();
     applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});

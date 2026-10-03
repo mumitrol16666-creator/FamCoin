@@ -143,13 +143,24 @@ class PeriodReport {
     required this.income,
     required this.expense,
     required this.cashFlow,
+    this.debtPayments = 0,
   });
   final int income;
+
+  /// Расход по категориям — без платежей по долгам.
   final int expense;
+
+  /// Платежи по кредитам и долгам за период: тело, без процентов (проценты и
+  /// так в [expense]). См. [Ledger.debtPaymentsBetween].
+  final int debtPayments;
+
+  /// Всё, что ушло: расходы плюс платежи по долгам. Это то, что человек
+  /// называет «расходами за месяц» (D98); в отчётах показывается как «Расходы».
+  int get total => expense + debtPayments;
 
   /// Чистый денежный поток через границу денежных счетов.
   final int cashFlow;
-  int get result => income - expense;
+  int get result => income - total;
 }
 
 class Ledger {
@@ -526,9 +537,45 @@ class Ledger {
         income: sumPostings((a) => a.kind == LedgerKind.income, from: from, to: to),
         expense:
             sumPostings((a) => a.kind == LedgerKind.expense, from: from, to: to),
+        debtPayments: debtPaymentsBetween(from, to),
         cashFlow: sumPostings((a) => a.isMoney,
             from: from, to: to, skipOpening: true),
       );
+
+  /// Платежи по долгам за период, которые считаются расходом (D98): тело
+  /// кредита и возврат личных долгов. Проценты не входят — они уже расход по
+  /// категории «Проценты». Долги, покупки по которым записаны в приложении
+  /// (`creditPurchase`), не считаются: та покупка уже была расходом, и платёж
+  /// по ней был бы учтён второй раз.
+  List<Transaction> debtPaymentsIn(DateTime from, DateTime to) {
+    final purchased = <String>{};
+    for (final tx in _transactions) {
+      if (tx.type != EventType.creditPurchase || _reversed.contains(tx.id)) continue;
+      for (final p in tx.postings) {
+        if (_accounts[p.accountId]!.kind == LedgerKind.liability) purchased.add(p.accountId);
+      }
+    }
+    return [
+      for (final tx in _transactions)
+        if ((tx.type == EventType.loanPayment || tx.type == EventType.repaymentMade) &&
+            !_reversed.contains(tx.id) &&
+            !tx.date.isBefore(from) &&
+            tx.date.isBefore(to) &&
+            tx.postings.any((p) => _accounts[p.accountId]!.kind == LedgerKind.liability && !purchased.contains(p.accountId)))
+          tx,
+    ];
+  }
+
+  /// Сумма [debtPaymentsIn]: сколько ушло на долги за период, без процентов.
+  int debtPaymentsBetween(DateTime from, DateTime to) {
+    var sum = 0;
+    for (final tx in debtPaymentsIn(from, to)) {
+      for (final p in tx.postings) {
+        if (_accounts[p.accountId]!.kind == LedgerKind.liability) sum -= p.amount;
+      }
+    }
+    return sum;
+  }
 
   /// Корректировки остатков за период (O21): меняют капитал, но не доход и
   /// не расход, поэтому показываются в отчёте отдельной строкой.

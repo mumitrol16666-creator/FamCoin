@@ -24,6 +24,8 @@ const Map<String, ExpenseType> _builtin = {
   'phone': ExpenseType.mandatory,
   'subscriptions': ExpenseType.mandatory,
   'interest': ExpenseType.mandatory,
+  // Платежи по кредитам и долгам — не категория журнала, а строка отчётов (D98).
+  'debts': ExpenseType.mandatory,
   'fees': ExpenseType.mandatory,
   'food': ExpenseType.regular,
   'transport': ExpenseType.regular,

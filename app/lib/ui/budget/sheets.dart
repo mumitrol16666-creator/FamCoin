@@ -53,21 +53,38 @@ String? _firstAccount(BuildContext context) {
 }
 
 /// Оплата срока планового платежа (факт отдельно от плана, D14).
-Future<void> showPayDueSheet(BuildContext context, DueItem due) {
+/// [date] — дата оплаты (по умолчанию сегодня); из сверки месяца приходит дата
+/// срока: «уже оплачено» записывается фактом, а не только галочкой (D98).
+Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date, String? title}) {
   final l = context.l10n;
   final state = AppScope.of(context).state;
+  final locale = Localizations.localeOf(context).toString();
   final p = due.planned;
   final amount = TextEditingController(text: amountToField(p.amount));
   final interest = TextEditingController();
   var account = _firstAccount(context);
+  var payDate = date == null || date.isAfter(state.today) ? state.today : date;
   // Покупка из копилки (D90): накопленное вернётся на счёт оплаты той же командой.
   final fromPiggy = p.once == null ? 0 : state.purchaseSaved(p);
   return showFormSheet<void>(
     context,
-    title: '${l.pay}: ${p.name}',
+    title: title ?? '${l.pay}: ${p.name}',
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         AmountField(controller: amount, label: l.amount),
+        const SizedBox(height: 8),
+        Row(children: [
+          Text(l.date, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+          const SizedBox(width: 8),
+          ActionChip(
+            avatar: const Icon(Icons.calendar_month_outlined, size: 16),
+            label: Text(DateFormat.MMMd(locale).format(payDate)),
+            onPressed: () async {
+              final picked = await showDatePicker(context: ctx, initialDate: payDate, firstDate: DateTime(2000), lastDate: state.today);
+              if (picked != null) set(() => payDate = DateTime(picked.year, picked.month, picked.day));
+            },
+          ),
+        ]),
         const SizedBox(height: 12),
         if (p.debtId != null) ...[
           AmountField(controller: interest, label: l.interestPart, hint: '0'),
@@ -85,7 +102,7 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due) {
             final a = parseAmount(amount.text);
             final i = parseAmount(interest.text, allowZero: true) ?? 0;
             if (a == null || account == null || i > a) return false;
-            return runAction(ctx, () => state.payDue(due, account: account!, amount: a, interest: i));
+            return runAction(ctx, () => state.payDue(due, account: account!, amount: a, interest: i, date: payDate));
           },
         ),
         TextButton(
@@ -233,6 +250,46 @@ Future<void> showGoalSheet(BuildContext context, {GoalInfo? initial}) async {
 }
 
 /// Отложить в копилку или забрать из неё — это перевод между своими счетами.
+/// «Реализовать цель» (D98): накопленное возвращается на счёт и тут же
+/// списывается с него расходом в выбранную категорию; цель закрывается.
+Future<void> showRealizeGoalSheet(BuildContext context, GoalInfo goal) {
+  final l = context.l10n;
+  final state = AppScope.of(context).state;
+  final saved = state.goalSaved(goal);
+  final amount = TextEditingController(text: amountToField(saved));
+  var account = _firstAccount(context);
+  var category = 'other';
+  return showFormSheet<void>(
+    context,
+    title: l.goalRealizeTitle(goal.name),
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(l.goalRealizeNote, style: TextStyle(fontSize: 13, color: ctx.fam.text2)),
+        const SizedBox(height: 12),
+        AmountField(controller: amount, label: l.amount),
+        const SizedBox(height: 4),
+        Text(l.goalRealizeSaved(moneyInText(saved)), style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+        const SizedBox(height: 12),
+        Text(l.category, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+        const SizedBox(height: 6),
+        CategoryPicker(options: ensureIncluded(state.visibleExpenseCategories, category), value: category, onChanged: (c) => set(() => category = c)),
+        const SizedBox(height: 12),
+        AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
+        ListenableBuilder(listenable: amount, builder: (_, _) => MinusWarning(accountId: account, amount: parseAmount(amount.text), returned: saved)),
+        const SizedBox(height: 20),
+        SubmitButton(
+          label: l.goalRealize,
+          onSubmit: () async {
+            final a = parseAmount(amount.text);
+            if (a == null || account == null) return false;
+            return runAction(ctx, () => state.realizeGoal(goal, amount: a, category: category, account: account!));
+          },
+        ),
+      ]),
+    ),
+  );
+}
+
 Future<void> showReserveSheet(BuildContext context, GoalInfo goal, {required bool release, int? initial}) {
   final l = context.l10n;
   final state = AppScope.of(context).state;

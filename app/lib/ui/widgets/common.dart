@@ -41,6 +41,7 @@ String categoryName(AppLocalizations l, String id) => switch (id) {
       'fees' => l.catFees,
       'otherIncome' => l.catOtherIncome,
       'other' => l.catOther,
+      debtsCategory => l.catDebts,
       _ => customCategories[id]?.name ?? l.catOther,
     };
 

@@ -60,8 +60,9 @@ class OverviewTab extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(child: _kv(context, l.reportIncome, report.income, fam.income)),
-              Expanded(child: _kv(context, l.reportExpense, -report.expense, fam.expense)),
+              Expanded(child: _kv(context, l.reportExpense, -report.total, fam.expense)),
             ]),
+            if (report.debtPayments > 0) Text(l.reportIncludesDebts(moneyInText(report.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
             const Divider(height: 20),
             _row(context, l.incomeMinusExpense, report.result, sign: true, bold: true),
             _row(context, l.cashFlow, report.cashFlow, sign: true),

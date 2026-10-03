@@ -102,8 +102,11 @@ class _MonthCloseScreenState extends State<MonthCloseScreen> {
                       DueTile(due: d, locale: locale),
                       Align(
                         alignment: Alignment.centerRight,
+                        // «Уже оплачено» записывает факт датой срока (D98):
+                        // иначе платёж пропадал из расходов, а остаток
+                        // расходился с банком.
                         child: TextButton(
-                          onPressed: () => runAction(context, () => state.markDuePaid(d)),
+                          onPressed: () => showPayDueSheet(context, d, date: d.date, title: l.payAlreadyTitle(d.planned.name)),
                           child: Text(l.monthAlreadyPaid),
                         ),
                       ),
@@ -225,6 +228,11 @@ class _SummaryCard extends StatelessWidget {
           Expanded(child: kpi(l.reportIncome, sum.income, fam.income)),
           Expanded(child: kpi(l.reportExpense, sum.expense, fam.expense)),
         ]),
+        if (sum.debtPayments > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(l.reportIncludesDebts(moneyInText(sum.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
+          ),
         const Divider(height: 20),
         Row(children: [
           Expanded(child: Text(l.reportResult, style: TextStyle(color: fam.text2))),

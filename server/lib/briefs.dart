@@ -98,8 +98,11 @@ Brief eveningBrief(BriefInput i) {
 
   final byCat = <String, int>{};
   var spentToday = 0;
+  // Все проводки по расходным счетам за день, какой бы ни была операция:
+  // проценты по кредиту — тоже расход; отмена и отменённая запись гасят
+  // друг друга, как в месячном отчёте ядра (D98).
   for (final tx in i.ledger.transactions) {
-    if (tx.date != today || tx.type != EventType.expense || i.ledger.isReversed(tx.id)) continue;
+    if (tx.date != today) continue;
     for (final p in tx.postings) {
       if (i.ledger.account(p.accountId).kind == LedgerKind.expense) {
         spentToday += p.amount;
@@ -107,6 +110,8 @@ Brief eveningBrief(BriefInput i) {
       }
     }
   }
+  // Платежи по кредитам и долгам за день — тоже «потрачено» (D98).
+  spentToday += i.ledger.debtPaymentsBetween(today, tomorrow);
   final top = byCat.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   final report = i.ledger.report(monthStart, monthEnd);
 
@@ -117,7 +122,10 @@ Brief eveningBrief(BriefInput i) {
   for (final e in top.take(3)) {
     lines.add('• ${i.categoryName(e.key)}: ${_kzt(e.value)}');
   }
-  lines.add(kk ? 'Ай басынан: кіріс ${_kzt(report.income)}, шығыс ${_kzt(report.expense)}.' : 'С начала месяца: доходы ${_kzt(report.income)}, расходы ${_kzt(report.expense)}.');
+  lines.add(kk ? 'Ай басынан: кіріс ${_kzt(report.income)}, шығыс ${_kzt(report.total)}.' : 'С начала месяца: доходы ${_kzt(report.income)}, расходы ${_kzt(report.total)}.');
+  if (report.debtPayments > 0) {
+    lines.add(kk ? 'Оның ішінде несиелер мен қарыздар: ${_kzt(report.debtPayments)}.' : 'В том числе кредиты и долги: ${_kzt(report.debtPayments)}.');
+  }
 
   final spentByCat = i.ledger.expenseByCategory(monthStart, monthEnd);
   final elapsed = today.day;

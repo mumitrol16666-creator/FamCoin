@@ -43,8 +43,9 @@ class BudgetScreen extends StatelessWidget {
                 child: Column(children: [
                   Row(children: [
                     Expanded(child: _kv(context, l.reportIncome, report.income, color: fam.income)),
-                    Expanded(child: _kv(context, l.reportExpense, report.expense, color: fam.expense)),
+                    Expanded(child: _kv(context, l.reportExpense, report.total, color: fam.expense)),
                   ]),
+                  if (report.debtPayments > 0) Text(l.reportIncludesDebts(moneyInText(report.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
                   const Divider(height: 20),
                   _row(context, l.payouts, state.monthDebtPayouts, color: fam.debt),
                   _row(context, l.reportResult, report.result, sign: true),
@@ -250,6 +251,18 @@ class _GoalCard extends StatelessWidget {
             const SizedBox(width: 8),
             if (st.saved > 0) Expanded(child: OutlinedButton(onPressed: () => showReserveSheet(context, goal, release: true), child: Text(l.reserveRelease))),
           ]),
+        // «Реализовать» (D98): накопленное становится расходом, цель закрывается.
+        if (goal.account != null && st.saved > 0) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => showRealizeGoalSheet(context, goal),
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: Text(l.goalRealize),
+            ),
+          ),
+        ],
       ]),
     );
   }

@@ -803,9 +803,16 @@ class AppState extends ChangeNotifier {
 
   /// Расход по категориям месяца: id категории → сумма, по убыванию.
   List<MapEntry<String, int>> categoriesFor(DateTime monthStart) {
-    final raw = ledger.expenseByCategory(monthStart, DateTime(monthStart.year, monthStart.month + 1, 1));
-    final list = [for (final e in raw.entries) if (e.value != 0) MapEntry(e.key.substring(8), e.value)]
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final end = DateTime(monthStart.year, monthStart.month + 1, 1);
+    final raw = ledger.expenseByCategory(monthStart, end);
+    // Платежи по долгам — строкой рядом с категориями (D98): так «куда ушло
+    // больше всего» честно показывает кредит, если он больше всего.
+    final debts = ledger.debtPaymentsBetween(monthStart, end);
+    final list = [
+      for (final e in raw.entries)
+        if (e.value != 0) MapEntry(e.key.substring(8), e.value),
+      if (debts > 0) MapEntry(debtsCategory, debts),
+    ]..sort((a, b) => b.value.compareTo(a.value));
     return list;
   }
 
@@ -893,6 +900,10 @@ class AppState extends ChangeNotifier {
   /// Операции месяца, затронувшие категорию расхода.
   List<Transaction> categoryTransactions(String category, DateTime monthStart) {
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
+    if (category == debtsCategory) {
+      final ids = {for (final t in ledger.debtPaymentsIn(monthStart, end)) t.id};
+      return userTransactions.where((t) => ids.contains(t.id)).toList();
+    }
     final acc = expenseAccount(category);
     return userTransactions
         .where((t) => !t.date.isBefore(monthStart) && t.date.isBefore(end) && t.postings.any((p) => p.accountId == acc))
@@ -1089,9 +1100,11 @@ class AppState extends ChangeNotifier {
       month: start,
       current: current,
       income: r.income,
-      expense: r.expense,
+      // «Расходы» сверки — всё, что ушло, включая кредиты и долги (D98).
+      expense: r.total,
+      debtPayments: r.debtPayments,
       prevIncome: pr.income,
-      prevExpense: pr.expense,
+      prevExpense: pr.total,
       top: categoriesFor(start).take(3).toList(),
       adjustments: adjustmentsFor(start),
       paymentsPaid: paid,
@@ -1444,6 +1457,22 @@ class AppState extends ChangeNotifier {
 
   /// Закрыть цель: деньги из копилки возвращаются на счёт, копилка в архив.
   Future<void> closeGoal(GoalInfo g, {required String returnTo}) => sendBatch(closeGoalCommands(g, returnTo: returnTo));
+
+  /// «Реализовать цель» (D98): накопленное возвращается на счёт [account], с
+  /// него той же командой проводится расход [amount] в категорию [category]
+  /// (вне дневного лимита, как запланированная покупка), цель закрывается.
+  /// Сумма может быть и больше накопленного — разницу доплатит счёт.
+  Future<void> realizeGoal(GoalInfo g, {required int amount, required String category, required String account}) => sendBatch([
+        ...closeGoalCommands(g, returnTo: account),
+        {
+          'type': 'expense',
+          'id': newId(),
+          'date': _date(today),
+          'account': account,
+          'splits': {category: amount.toString()},
+          'meta': {'who': 'shared', 'note': g.name, 'plannedPurchase': true, 'goal': g.id},
+        },
+      ]);
 
   List<Map<String, dynamic>> closeGoalCommands(GoalInfo g, {required String returnTo}) {
     final acc = g.account;

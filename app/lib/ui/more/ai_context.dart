@@ -132,7 +132,7 @@ Map<String, Object?> _types(AppState s, DateTime month) {
 /// Был ли учёт в месяце [month]: без операций «0 ₸» означал бы «нет данных».
 bool _hasData(AppState s, DateTime month) {
   final r = s.reportFor(month);
-  return r.income != 0 || r.expense != 0;
+  return r.income != 0 || r.total != 0;
 }
 
 /// Снимок для чата: текущий месяц и состояние на сегодня.
@@ -173,7 +173,10 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     'period': {'month': _month(month), 'monthText': _monthText(month, l), 'todayDay': s.today.day, 'daysInMonth': s.daysInMonth},
     'thisMonth': {
       'income': _t(r.income),
-      'expense': _t(r.expense),
+      // Расходы — всё, что ушло, включая кредиты и долги (D98).
+      'expense': _t(r.total),
+      'ofWhichDebtPayments': _t(r.debtPayments),
+      'expenseNote': 'expense включает платежи по кредитам и долгам (ofWhichDebtPayments); в expenseByCategory они строкой «Кредиты и долги»',
       'incomeMinusExpense': _t(r.result),
       'cashFlow': _t(r.cashFlow),
       // Месяц идёт: суммы — «на сегодня», сравнивать их с целым прошлым месяцем нельзя.
@@ -184,7 +187,8 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
         ? {
             'month': _monthText(prevMonth, l),
             'income': _t(pr.income),
-            'expense': _t(pr.expense),
+            'expense': _t(pr.total),
+            'ofWhichDebtPayments': _t(pr.debtPayments),
             // Учёт начат посреди того месяца — его суммы неполные.
             'incomplete': trackedFrom != null && trackedFrom.isAfter(prevMonth),
           }
@@ -299,7 +303,7 @@ Map<String, Object?> aiReviewContext(AppState s, AppLocalizations l, DateTime mo
   final hasPrev = _hasData(s, prevMonth);
   return {
     'period': {'month': _month(month), 'monthText': _monthText(month, l), 'daysInMonth': sum.days},
-    'month': {'income': _t(sum.income), 'expense': _t(sum.expense), 'incomeMinusExpense': _t(sum.income - sum.expense)},
+    'month': {'income': _t(sum.income), 'expense': _t(sum.expense), 'ofWhichDebtPayments': _t(sum.debtPayments), 'incomeMinusExpense': _t(sum.income - sum.expense)},
     'previousMonth': hasPrev ? {'month': _monthText(prevMonth, l), 'income': _t(sum.prevIncome), 'expense': _t(sum.prevExpense)} : null,
     'expenseByCategory': _categories(s, l, sum.month, withPrevious: hasPrev),
     'expenseByType': _types(s, sum.month),

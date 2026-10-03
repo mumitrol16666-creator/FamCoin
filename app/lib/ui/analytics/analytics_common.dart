@@ -32,8 +32,8 @@ class MonthNav extends StatelessWidget {
 /// свободные деньги в сравнении с прошлым месяцем, одной строкой.
 String monthCompareText(AppLocalizations l, {required PeriodReport report, required PeriodReport prev}) {
   final parts = <String>[];
-  if (prev.expense > 0) {
-    final pct = ((report.expense - prev.expense) / prev.expense.abs() * 100).round();
+  if (prev.total > 0) {
+    final pct = ((report.total - prev.total) / prev.total.abs() * 100).round();
     if (pct != 0) parts.add(l.expenseVsPrev(pct > 0 ? '↑' : '↓', pct.abs()));
   }
   if (prev.income > 0) {

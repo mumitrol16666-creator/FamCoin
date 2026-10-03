@@ -45,7 +45,7 @@ class HistoryTab extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(children: [
                       Expanded(child: MoneyText(report.income, sign: true, color: fam.income, style: const TextStyle(fontSize: 13))),
-                      Expanded(child: MoneyText(-report.expense, sign: true, color: fam.expense, style: const TextStyle(fontSize: 13))),
+                      Expanded(child: MoneyText(-report.total, sign: true, color: fam.expense, style: const TextStyle(fontSize: 13))),
                     ]),
                     if (k > 0) const Divider(height: 16),
                   ]),

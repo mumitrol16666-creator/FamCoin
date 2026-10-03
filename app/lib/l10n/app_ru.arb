@@ -285,7 +285,7 @@
   "kindLoan": "Кредит",
   "limitAmount": "Лимит в месяц",
   "loadFailed": "Не удалось загрузить данные. Проверьте интернет.",
-  "markPaidOnly": "Уже оплачено — только отметить",
+  "markPaidOnly": "Оплачено до начала учёта — только отметить",
   "me": "Я",
   "memberName": "Имя",
   "money": "Деньги",
@@ -1380,5 +1380,16 @@
   "adviceDataGap": "{n, plural, one{Последняя запись была {n} день назад.} few{Последняя запись была {n} дня назад.} other{Последняя запись была {n} дней назад.}} Пропустили — не страшно, просто продолжайте с сегодняшнего дня.",
   "@adviceDataGap": {"placeholders": {"n": {"type": "int"}}},
   "adviceDataLarge": "В этом месяце уже {n, plural, one{{n} крупная незапланированная трата} few{{n} крупные незапланированные траты} other{{n} крупных незапланированных трат}} на {sum}. Крупное удобнее планировать заранее — как разовую покупку в «Бюджете».",
-  "@adviceDataLarge": {"placeholders": {"n": {"type": "int"}, "sum": {"type": "String"}}}
+  "@adviceDataLarge": {"placeholders": {"n": {"type": "int"}, "sum": {"type": "String"}}},
+  "catDebts": "Кредиты и долги",
+  "reportIncludesDebts": "в т.ч. кредиты и долги {amount}",
+  "@reportIncludesDebts": {"placeholders": {"amount": {"type": "String"}}},
+  "goalRealize": "Реализовать цель",
+  "goalRealizeTitle": "Реализовать: {name}",
+  "@goalRealizeTitle": {"placeholders": {"name": {"type": "String"}}},
+  "goalRealizeNote": "Накопленное вернётся на выбранный счёт и спишется с него расходом в категорию ниже — вне дневного лимита. Цель закроется.",
+  "goalRealizeSaved": "В копилке {amount}",
+  "@goalRealizeSaved": {"placeholders": {"amount": {"type": "String"}}},
+  "payAlreadyTitle": "Уже оплачено: {name}",
+  "@payAlreadyTitle": {"placeholders": {"name": {"type": "String"}}}
 }

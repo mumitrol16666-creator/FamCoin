@@ -86,8 +86,14 @@ List<CategoryDef> get expenseCategories => [
     ];
 List<CategoryDef> get incomeCategories => [...categories.where((c) => c.isIncome), ...customCategories.values.where((c) => c.isIncome)];
 
-CategoryDef categoryById(String id) =>
-    categories.where((c) => c.id == id).firstOrNull ?? customCategories[id] ?? categories.firstWhere((c) => c.id == 'other');
+/// Строка отчётов «Кредиты и долги» (D98): платежи по долгам показываются
+/// рядом с категориями расходов, но категорией журнала не являются — в
+/// выборе категории для записи её нет.
+const debtsCategory = 'debts';
+
+CategoryDef categoryById(String id) => id == debtsCategory
+    ? const CategoryDef(debtsCategory, Icons.account_balance_outlined)
+    : categories.where((c) => c.id == id).firstOrNull ?? customCategories[id] ?? categories.firstWhere((c) => c.id == 'other');
 
 const accountTypes = ['card', 'cash', 'deposit'];
 
@@ -347,9 +353,13 @@ class MonthSummary {
     required this.paymentsTotal,
     required this.days,
     required this.avgDaily,
+    this.debtPayments = 0,
   });
 
   final DateTime month;
+
+  /// Сколько из [expense] — платежи по кредитам и долгам (D98).
+  final int debtPayments;
 
   /// Месяц ещё идёт — итоги промежуточные.
   final bool current;
