@@ -1,7 +1,7 @@
 name: famcoin
 description: FamCoin — семейный финансовый трекер для Казахстана. RU / ҚАЗ.
 publish_to: none
-version: 0.1.1+2
+version: 0.1.2+3
 
 environment:
   sdk: ^3.8.0
