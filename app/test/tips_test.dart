@@ -3,11 +3,13 @@
 library;
 
 import 'package:famcoin/l10n/app_localizations.dart';
+import 'package:famcoin/l10n/app_localizations_kk.dart';
 import 'package:famcoin/l10n/app_localizations_ru.dart';
 import 'package:famcoin/state/app_scope.dart';
 import 'package:famcoin/state/models.dart';
 import 'package:famcoin/ui/home/tips.dart';
 import 'package:famcoin/ui/shell.dart';
+import 'package:famcoin/ui/widgets/common.dart';
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,7 +30,8 @@ Future<void> settle(WidgetTester tester) async {
 }
 
 String shownTip(WidgetTester tester) {
-  final card = find.ancestor(of: find.text(ru.adviceTitle), matching: find.byType(Card)).first;
+  final title = find.byWidgetPredicate((w) => w is Text && (w.data == ru.adviceTitle || w.data == ru.adviceDataTitle));
+  final card = find.ancestor(of: title, matching: find.byType(Card)).first;
   final texts = tester.widgetList<Text>(find.descendant(of: card, matching: find.byType(Text))).map((t) => t.data).whereType<String>().toList();
   return texts[1];
 }
@@ -51,12 +54,75 @@ void main() {
       expect(later.map((t) => t.id), isNot(contains('appLimit')));
       expect(later.map((t) => t.id), isNot(contains('appQuick')));
       expect(later.map((t) => t.id), contains('appGoal'));
-      // Общие советы остаются всегда: пул не бывает пустым.
+      // Общие советы остаются всегда: пул не бывает пустым. Берутся из ядра —
+      // те же, что в утренней сводке бота, — на языке интерфейса.
       expect(later.where((t) => t.id.startsWith('money')).length, 24);
+      expect(later.where((t) => t.id.startsWith('money')).map((t) => t.text), moneyTips.map((t) => t.ru));
+      expect(tipsFor(s, AppLocalizationsKk()).where((t) => t.id.startsWith('money')).map((t) => t.text), moneyTips.map((t) => t.kk));
+      expect(dataTipsFor(s, ru), isEmpty, reason: 'у новичка поводов для советов по данным нет');
 
       // Ротация зациклена.
       expect(tipAt(later, later.length)!.id, later.first.id);
       expect(tipAt(later, 1)!.id, later[1].id);
+    });
+  });
+
+  group('советы по данным', () {
+    testWidgets('перерыв в записях: совет вне очереди, «Ещё совет» убирает его насовсем, очередь не сдвигается', (tester) async {
+      final f = await pumpHome(tester); // сегодня 28.09
+      final s = f.state;
+      await s.addExpense(amount: kzt(1500), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 24));
+      await settle(tester);
+      expect(dataTipsFor(s, ru).map((t) => t.id), ['dataGap:2026-09-24']);
+      expect(shownTip(tester), ru.adviceDataGap(4));
+      expect(find.text(ru.adviceDataTitle), findsOneWidget);
+      expect(find.byIcon(Icons.lightbulb), findsOneWidget);
+      expect(find.text('${ru.adviceActAdd} ›'), findsOneWidget);
+
+      await tester.ensureVisible(find.text(ru.adviceNext));
+      await tester.pump();
+      await tester.tap(find.text(ru.adviceNext));
+      await settle(tester);
+      // Обычная очередь — с первого совета: совет по данным её не двигал.
+      expect(shownTip(tester), tipsFor(s, ru)[0].text);
+      expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget);
+      expect(dataTipsFor(s, ru), isNotEmpty, reason: 'повод остался, но совет уже показан');
+      final settings = AppScope.of(tester.element(find.byType(Shell))).settings;
+      expect(settings.seenTips, {'dataGap:2026-09-24'});
+      await tester.pump(const Duration(seconds: 1)); // короткие таймеры затухания — дойти до конца
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('категория без лимита обогнала весь прошлый месяц; лимит снимает совет', (tester) async {
+      final f = await pumpHome(tester);
+      final s = f.state;
+      await s.addExpense(amount: kzt(2000), category: 'cafe', account: 'cash', date: DateTime(2026, 8, 5));
+      await s.addExpense(amount: kzt(5000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 10));
+      await s.addExpense(amount: kzt(700), category: 'food', account: 'cash', date: s.today); // перерыва нет
+      await settle(tester);
+      expect(dataTipsFor(s, ru).map((t) => t.id), ['dataOver:cafe:2026-09']);
+      expect(shownTip(tester), ru.adviceDataOver(ru.catCafe, moneyInText(kzt(5000)), 'август', moneyInText(kzt(2000))));
+      expect(find.text('${ru.adviceActCatLimit} ›'), findsOneWidget);
+
+      await s.upsert('limit', 'l1', {'category': 'cafe', 'amount': '${kzt(10000)}'});
+      await settle(tester);
+      expect(dataTipsFor(s, ru), isEmpty);
+      expect(find.text(ru.adviceDataTitle), findsNothing);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('две крупные незапланированные траты за месяц — совет планировать', (tester) async {
+      final f = await pumpHome(tester);
+      final s = f.state;
+      await s.addExpense(amount: kzt(25000), category: 'clothes', account: 'cash', date: s.today);
+      await s.addExpense(amount: kzt(30000), category: 'household', account: 'cash', date: s.today);
+      await settle(tester);
+      expect(dataTipsFor(s, ru).map((t) => t.id), ['dataLarge:2026-09']);
+      expect(shownTip(tester), ru.adviceDataLarge(2, moneyInText(kzt(55000))));
+      expect(find.text('${ru.adviceActBudget} ›'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox());
     });
   });
 

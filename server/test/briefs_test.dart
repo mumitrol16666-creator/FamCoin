@@ -30,6 +30,18 @@ void main() {
     expect(morningBrief(_input(DateTime(2027, 4, 30), [tyres])).body, isNot(contains('Колёса')));
   });
 
+  test('утренняя сводка заканчивается советом дня (D97): на языке владельца, назавтра другой', () {
+    final today = DateTime(2026, 10, 3);
+    final ru = morningBrief(_input(today, const [])).body.split('\n').last;
+    expect(ru, '💡 Совет: ${moneyTipOfDay(today).ru}');
+    expect(morningBrief(_input(today.add(const Duration(days: 1)), const [])).body.split('\n').last, isNot(ru));
+
+    final kkInput = BriefInput(ledger: Ledger(), today: today, profile: const {}, planned: const [], limits: const [], locale: 'kk');
+    expect(morningBrief(kkInput).body.split('\n').last, '💡 Кеңес: ${moneyTipOfDay(today).kk}');
+    // Вечерний отчёт без совета — один в день достаточно.
+    expect(eveningBrief(_input(today, const [])).body, isNot(contains('💡')));
+  });
+
   test('вечерний отчёт называет категории словами, а не кодами', () {
     final l = Ledger();
     applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});

@@ -98,8 +98,8 @@ class HomeScreen extends StatelessWidget {
                 const QuickActionsRow(),
 
                 for (final a in state.accountsInMinus) _MinusCard(a),
-                // Совет дня (D96): после предупреждений, до разделов с цифрами.
-                const _TipCard(),
+                // Совет дня (D97): после предупреждений, до разделов с цифрами.
+                _TipCard(onAdd: onAdd, onOpenBudget: onOpenBudget),
                 SectionHeader(l.accounts, action: '${l.all} ›', onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountsScreen()))),
                 SizedBox(
                   // Высота растёт вместе с размером шрифта: при 200 % две
@@ -516,11 +516,15 @@ class _PushPromptCardState extends State<_PushPromptCard> {
   }
 }
 
-/// Совет дня (D96): лампочка, один короткий совет, «Ещё совет». Подсказки
-/// про приложение ведут в нужное место и исчезают, когда сделано; общие —
-/// ориентиры финграмотности. Один совет в сутки, выключается в настройках.
+/// Совет дня (D97): лампочка, один короткий совет, «Ещё совет». Совет по
+/// цифрам владельца (перебор, перерыв, крупные траты) идёт вне очереди и
+/// показывается один раз; подсказки про приложение ведут в нужное место и
+/// исчезают, когда сделано; общие — ориентиры финграмотности из ядра.
+/// Один совет в сутки, выключается в настройках.
 class _TipCard extends StatelessWidget {
-  const _TipCard();
+  const _TipCard({required this.onAdd, required this.onOpenBudget});
+  final VoidCallback onAdd;
+  final VoidCallback onOpenBudget;
 
   void _act(BuildContext context, AppState state, TipAction action) {
     void push(Widget screen) => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => screen));
@@ -539,6 +543,10 @@ class _TipCard extends StatelessWidget {
         showVoiceSheet(context);
       case TipAction.telegram:
         push(const NotificationsScreen());
+      case TipAction.add:
+        onAdd();
+      case TipAction.openBudget:
+        onOpenBudget();
     }
   }
 
@@ -556,14 +564,17 @@ class _TipCard extends StatelessWidget {
       listenable: Listenable.merge([settings, state]),
       builder: (context, _) {
         if (!settings.tipsEnabled) return const SizedBox.shrink();
-        final tip = tipAt(tipsFor(state, l), settings.tipCursor(state.today));
+        // Совет по данным — вне очереди, пока его не пролистнули.
+        final seen = settings.seenTips;
+        final urgent = dataTipsFor(state, l).where((t) => !seen.contains(t.id)).firstOrNull;
+        final tip = urgent ?? tipAt(tipsFor(state, l), settings.tipCursor(state.today));
         if (tip == null) return const SizedBox.shrink();
         return AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Icon(Icons.lightbulb_outline, size: 20, color: fam.accent),
+              Icon(urgent != null ? Icons.lightbulb : Icons.lightbulb_outline, size: 20, color: fam.accent),
               const SizedBox(width: 10),
-              Expanded(child: Text(l.adviceTitle, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fam.text2))),
+              Expanded(child: Text(urgent != null ? l.adviceDataTitle : l.adviceTitle, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fam.text2))),
             ]),
             const SizedBox(height: 6),
             // Текст меняется — лёгкое затухание, чтобы смена была заметна.
@@ -584,7 +595,7 @@ class _TipCard extends StatelessWidget {
                     child: Text('${tip.actionLabel} ›', maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
                 TextButton(
-                  onPressed: settings.nextTip,
+                  onPressed: () => urgent != null ? settings.markTipSeen(urgent.id) : settings.nextTip(),
                   style: TextButton.styleFrom(foregroundColor: fam.text2),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     const Icon(Icons.refresh, size: 16),

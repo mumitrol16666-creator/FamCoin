@@ -105,6 +105,16 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Советы по данным (D97) показываются один раз за свой период: код совета
+  /// («перебор в кафе в октябре») запоминается после «Ещё совет». Список
+  /// ограничен сотней последних — старые периоды уже не вернутся.
+  Set<String> get seenTips => {...(_prefs.getStringList('tipSeen') ?? const [])};
+  Future<void> markTipSeen(String id) async {
+    final list = [...(_prefs.getStringList('tipSeen') ?? const <String>[]), id];
+    await _prefs.setStringList('tipSeen', list.length > 100 ? list.sublist(list.length - 100) : list);
+    notifyListeners();
+  }
+
   /// Код входа через Telegram, который ждёт подтверждения в боте (D77).
   /// Хранится на устройстве: пока человек в Telegram, Android может усыпить
   /// или выгрузить приложение, и ожидание в памяти теряется. `null` — кода

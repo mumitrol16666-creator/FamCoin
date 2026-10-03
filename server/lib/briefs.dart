@@ -83,6 +83,9 @@ Brief morningBrief(BriefInput i) {
   if (soon.isNotEmpty) {
     lines.add(kk ? 'Жақын 3 күнде: ${soon.map((e) => '${e.$1['name']} (${e.$2.day}.${e.$2.month.toString().padLeft(2, '0')})').join(', ')}.' : 'В ближайшие 3 дня: ${soon.map((e) => '${e.$1['name']} (${e.$2.day}.${e.$2.month.toString().padLeft(2, '0')})').join(', ')}.');
   }
+  // Совет дня (D97): тот же набор, что на главной приложения; один на всех,
+  // меняется каждый день.
+  lines.add('💡 ${kk ? 'Кеңес' : 'Совет'}: ${moneyTipOfDay(today).text(i.locale)}');
   return Brief(kk ? 'Қайырлы таң' : 'Доброе утро', lines.join('\n'));
 }
 
