@@ -7,7 +7,7 @@ import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../home/home_screen.dart';
 import '../widgets/common.dart';
-import 'budget_screen.dart';
+import '../analytics/analytics_screen.dart';
 import 'sheets.dart';
 
 /// Сверка месяца (D75): итоги месяца сразу, потом несколько вопросов —
@@ -156,7 +156,7 @@ class _MonthCloseScreenState extends State<MonthCloseScreen> {
                       child: Text(limit == null ? l.dailyLimitSet : l.explainChangeLimit),
                     ),
                     OutlinedButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetScreen())),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen(initialSection: AnalyticsSection.budget))),
                       child: Text(l.monthCheckLimits),
                     ),
                   ]),

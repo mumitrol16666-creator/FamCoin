@@ -141,6 +141,18 @@
           return navigator.serviceWorker.ready;
         });
       },
+      requestPermission: function () {
+        if (this._ios() && !this._standalone()) return Promise.resolve('needs-install');
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+          return Promise.resolve('unsupported');
+        }
+        if (Notification.permission !== 'default') return Promise.resolve(Notification.permission);
+        // Синхронно внутри нажатия: сетевой запрос до этого теряет user activation в Safari.
+        return Notification.requestPermission();
+      },
+      confirmEnabled: function () {
+        localStorage.removeItem('famcoin.push.pending');
+      },
       // unsupported | needs-install | denied | off | on
       status: function () {
         if (this._ios() && !this._standalone()) return Promise.resolve('needs-install');
@@ -149,14 +161,18 @@
         }
         if (Notification.permission === 'denied') return Promise.resolve('denied');
         return this._reg().then(function (reg) { return reg.pushManager.getSubscription(); })
-          .then(function (sub) { return sub && Notification.permission === 'granted' ? 'on' : 'off'; });
+          .then(function (sub) {
+            return sub && Notification.permission === 'granted' && !localStorage.getItem('famcoin.push.pending') ? 'on' : 'off';
+          });
       },
       // Возвращает JSON подписки: {endpoint, p256dh, auth}; '' — разрешение не дано.
       enable: function (key) {
         var self = this;
-        return Notification.requestPermission().then(function (perm) {
-          if (perm !== 'granted') return '';
-          return self._reg().then(function (reg) {
+        if (!('Notification' in window) || Notification.permission !== 'granted') return Promise.resolve('');
+        // Локальная подписка ещё не означает, что сервер её сохранил.
+        // После ошибки или перезагрузки оставляем возможность повторить.
+        localStorage.setItem('famcoin.push.pending', '1');
+        return self._reg().then(function (reg) {
             return reg.pushManager.getSubscription().then(function (old) {
               if (old) return old;
               var pad = '='.repeat((4 - key.length % 4) % 4);
@@ -165,7 +181,6 @@
               for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
               return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
             });
-          });
         }).then(function (sub) {
           if (!sub) return '';
           var j = sub.toJSON();

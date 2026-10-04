@@ -5,7 +5,7 @@ import '../state/app_scope.dart';
 import '../state/reload.dart';
 import '../state/update_check.dart';
 import '../theme/app_theme.dart';
-import 'budget/budget_screen.dart';
+import 'analytics/analytics_screen.dart';
 import 'home/home_screen.dart';
 import 'more/more_screen.dart';
 import 'ops/add_transaction_sheet.dart';
@@ -15,7 +15,7 @@ import 'widgets/common.dart';
 import 'widgets/season_background.dart';
 import 'budget/month_close_screen.dart';
 
-/// Оболочка с нижней панелью: Главная · Операции · ＋ · Бюджет · Ещё.
+/// Оболочка с нижней панелью: Главная · Операции · ＋ · Аналитика · Ещё.
 /// «＋» открывает форму, не переключает вкладку (раздел 3 карты).
 class Shell extends StatefulWidget {
   const Shell({super.key});
@@ -26,6 +26,12 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   int _tab = 0;
+  final _analyticsKey = GlobalKey<AnalyticsScreenState>();
+
+  void _openAnalytics(AnalyticsSection section) {
+    _analyticsKey.currentState?.openSection(section, currentMonth: true);
+    setState(() => _tab = 2);
+  }
 
   /// Одна попытка на запуск приложения: ссылка из уведомления открывается один раз.
   static bool _linkHandled = false;
@@ -77,9 +83,14 @@ class _ShellState extends State<Shell> {
     final theme = Theme.of(context);
     final state = AppScope.of(context).state;
     final tabs = <Widget>[
-      HomeScreen(onOpenJournal: () => setState(() => _tab = 1), onOpenBudget: () => setState(() => _tab = 2), onAdd: _openAdd),
+      HomeScreen(
+        onOpenJournal: () => setState(() => _tab = 1),
+        onOpenBudget: () => _openAnalytics(AnalyticsSection.budget),
+        onOpenAnalytics: () => _openAnalytics(AnalyticsSection.overview),
+        onAdd: _openAdd,
+      ),
       const JournalScreen(),
-      const BudgetScreen(),
+      AnalyticsScreen(key: _analyticsKey),
       const MoreScreen(),
     ];
     return Scaffold(
@@ -164,7 +175,7 @@ class _ShellState extends State<Shell> {
                   child: Text(l.add, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                 ),
               ),
-              item(2, Icons.pie_chart_outline, l.navBudget),
+              item(2, Icons.bar_chart_outlined, l.analytics),
               item(3, Icons.more_horiz, l.navMore),
             ]),
           ),

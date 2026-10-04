@@ -453,7 +453,7 @@ class PlanChip extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(pro ? Icons.workspace_premium : Icons.workspace_premium_outlined, size: 14, color: pro ? fam.onAccent : fam.text2),
             const SizedBox(width: 4),
-            Text(pro ? l.proPlan : l.freeShort, style: TextStyle(color: pro ? fam.onAccent : fam.text2, fontSize: 12, fontWeight: FontWeight.w700)),
+            Flexible(child: Text(pro ? l.proPlan : l.freeShort, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: pro ? fam.onAccent : fam.text2, fontSize: 12, fontWeight: FontWeight.w700))),
           ]),
         ),
       ),

@@ -46,7 +46,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (push == 'on' && (settings['pushDevices'] ?? 0) == 0) {
         try {
           final sub = await pushEnable(await state.api.pushKey(state.token));
-          if (sub != null) await state.api.pushSubscribe(state.token, sub);
+          if (sub != null) {
+            await state.api.pushSubscribe(state.token, sub);
+            pushConfirmEnabled();
+          }
         } catch (_) {}
       }
       if (items.any((i) => i['read'] != true)) await state.api.markNotificationsRead(state.token);
@@ -62,11 +65,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) setState(() => _settings = s);
     });
     if (!ok && mounted) setState(() {});
-  }
-
-  Future<void> _enablePush() async {
-    await enablePushNotifications(context, AppScope.of(context).state);
-    if (mounted) _load();
   }
 
   Future<void> _disablePush() async {
@@ -100,7 +98,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         Text(hint, style: TextStyle(fontSize: 12, color: fam.text2)),
         if (_push == 'off') ...[
           const SizedBox(height: 8),
-          FilledButton.tonal(onPressed: _enablePush, child: Text(l.pushEnable)),
+          PushEnableButton(onResult: (result) {
+            if (result == PushEnableResult.enabled || result == PushEnableResult.denied) _load();
+          }),
         ] else if (_push == 'on') ...[
           const SizedBox(height: 8),
           OutlinedButton(onPressed: _disablePush, child: Text(l.pushDisable)),

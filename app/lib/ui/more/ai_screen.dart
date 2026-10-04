@@ -11,6 +11,24 @@ import '../widgets/common.dart';
 import 'ai_context.dart';
 import 'tariff_screen.dart';
 
+/// Один и тот же чат: полный экран на телефоне, боковая панель на компьютере.
+Future<void> showAiAssistant(BuildContext context) async {
+  if (MediaQuery.sizeOf(context).width < 900) {
+    await Navigator.push<void>(context, MaterialPageRoute(builder: (_) => const AiScreen()));
+    return;
+  }
+  await showDialog<void>(
+    context: context,
+    builder: (_) => const Dialog(
+      alignment: Alignment.centerRight,
+      insetPadding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(width: 480, height: double.infinity, child: AiScreen(panel: true)),
+    ),
+  );
+}
+
 /// Суммы в ответе не должны рваться на перенос строки: «15 500 ₸» — одно целое.
 String _keepAmounts(String text) => text.replaceAllMapped(RegExp(r'(\d) (?=\d{3}(?!\d)|₸)'), (m) => '${m[1]}\u00A0');
 
@@ -32,7 +50,8 @@ class _Message {
 /// S27 — ИИ-консультант (D82): вопросы по уже посчитанным показателям.
 /// Консультант только объясняет; записать или изменить что-либо он не может.
 class AiScreen extends StatefulWidget {
-  const AiScreen({super.key});
+  const AiScreen({super.key, this.panel = false});
+  final bool panel;
 
   @override
   State<AiScreen> createState() => _AiScreenState();
@@ -174,8 +193,13 @@ class _AiScreenState extends State<AiScreen> {
 
     if (!state.pro) {
       return Scaffold(
-        appBar: AppBar(title: Text(l.ai)),
-        body: Padding(
+        backgroundColor: context.scheme.surface,
+        appBar: AppBar(
+          backgroundColor: context.scheme.surface,
+          leading: widget.panel ? CloseButton(onPressed: () => Navigator.pop(context)) : null,
+          title: Text(l.ai),
+        ),
+        body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             InfoBanner(l.aiProOnly, icon: Icons.auto_awesome_outlined),
@@ -190,7 +214,10 @@ class _AiScreenState extends State<AiScreen> {
 
     final out = _left == 0;
     return Scaffold(
+      backgroundColor: context.scheme.surface,
       appBar: AppBar(
+        backgroundColor: context.scheme.surface,
+        leading: widget.panel ? CloseButton(onPressed: () => Navigator.pop(context)) : null,
         title: Text(l.ai),
         actions: [
           PopupMenuButton<VoidCallback>(

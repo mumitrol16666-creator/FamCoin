@@ -1,27 +1,31 @@
 import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
+import '../budget/budget_screen.dart';
 import '../widgets/common.dart';
-import 'budget_tab.dart';
 import 'capital_tab.dart';
 import 'expenses_tab.dart';
 import 'history_tab.dart';
 import 'overview_tab.dart';
 
-/// S23 — аналитика (редизайн 29.09.2026, D66): пять вкладок вместо одной
-/// длинной ленты. Аналитика периода (Обзор/Расходы/Бюджет) и капитал на
-/// текущий момент (Капитал/История) больше не смешиваются на одном экране —
-/// это разные вопросы: «что происходит в этом месяце» и «что у меня есть
-/// сейчас», у них разные единицы отсчёта и их нельзя складывать визуально.
+enum AnalyticsSection { overview, expenses, budget, capital, history }
+
+/// Единый раздел: отчёты о прошлом и отдельная вкладка планирования.
 class AnalyticsScreen extends StatefulWidget {
-  const AnalyticsScreen({super.key});
+  const AnalyticsScreen({super.key, this.initialSection = AnalyticsSection.overview});
+  final AnalyticsSection initialSection;
 
   @override
-  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+  State<AnalyticsScreen> createState() => AnalyticsScreenState();
 }
 
-class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProviderStateMixin {
-  late final _tab = TabController(length: 5, vsync: this);
+class AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProviderStateMixin {
+  late final _tab = TabController(length: AnalyticsSection.values.length, initialIndex: widget.initialSection.index, vsync: this);
+
+  void openSection(AnalyticsSection section, {bool currentMonth = false}) {
+    if (currentMonth) _onOffset(0);
+    _tab.animateTo(section.index);
+  }
 
   /// Общий для «Обзора» и «Расходов»: это один и тот же месяц, разъезжаться
   /// при переключении вкладок он не должен.
@@ -34,7 +38,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
     super.dispose();
   }
 
-  void _openTab(int i) => setState(() => _tab.index = i);
+  void _openMonth(int offset) {
+    _onOffset(offset);
+    _tab.animateTo(0);
+  }
 
   /// Общий обработчик смены месяца для «Обзора» и «Расходов» (F05): выбранный
   /// день сбрасывается всегда, а не только при смене месяца из «Обзора» —
@@ -55,10 +62,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           title: Text(l.analytics),
           bottom: TabBar(
             controller: _tab,
-            // Фиксированные вкладки: все пять видны сразу, без прокрутки —
-            // «Капитал» и «История» не должны прятаться за краем экрана.
-            labelPadding: const EdgeInsets.symmetric(horizontal: 2),
-            tabs: [Tab(text: l.tabOverview), Tab(text: l.tabExpenses), Tab(text: l.tabBudget), Tab(text: l.tabCapital), Tab(text: l.tabHistory)],
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+            tabs: [Tab(text: l.tabOverview), Tab(text: l.tabExpenses), Tab(text: l.navBudget), Tab(text: l.tabCapital), Tab(text: l.tabHistory)],
           ),
         ),
         body: TabBarView(controller: _tab, children: [
@@ -67,12 +74,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
             onOffset: _onOffset,
             selectedDay: _selectedDay,
             onSelectDay: (d) => setState(() => _selectedDay = d),
-            onOpenTab: _openTab,
           ),
           ExpensesTab(offset: _offset, onOffset: _onOffset),
-          const BudgetTab(),
+          BudgetScreen(embedded: true, onOpenReport: () => _openMonth(0)),
           const CapitalTab(),
-          const HistoryTab(),
+          HistoryTab(onOpenMonth: _openMonth),
         ]),
       ),
     );

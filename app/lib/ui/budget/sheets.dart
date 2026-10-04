@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../more/categories_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../widgets/common.dart';
+import 'goal_card.dart';
 
 /// Кнопка отправки формы: блокируется на время запроса, чтобы повторное
 /// нажатие не создало вторую операцию.
@@ -274,7 +275,7 @@ Future<void> showRealizeGoalSheet(BuildContext context, GoalInfo goal) {
         const SizedBox(height: 6),
         CategoryPicker(options: ensureIncluded(state.visibleExpenseCategories, category), value: category, onChanged: (c) => set(() => category = c)),
         const SizedBox(height: 12),
-        AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
+        AccountPicker(accounts: state.activeAccounts, value: account, label: l.goalRealizeAccount, onChanged: (v) => set(() => account = v)),
         ListenableBuilder(listenable: amount, builder: (_, _) => MinusWarning(accountId: account, amount: parseAmount(amount.text), returned: saved)),
         const SizedBox(height: 20),
         SubmitButton(
@@ -424,6 +425,24 @@ Future<void> showPurchaseSheet(BuildContext context, PlannedInfo p) {
             }
           },
           child: Text(goal != null ? l.purchaseTopUp : l.purchaseSave),
+        ),
+        if (goal != null) TextButton.icon(
+          icon: const Icon(Icons.savings_outlined),
+          label: Text(l.purchaseManageGoal),
+          onPressed: () {
+            Navigator.pop(ctx);
+            showFormSheet<void>(
+              context,
+              title: l.purchaseManageGoal,
+              builder: (_) => ListenableBuilder(
+                listenable: state,
+                builder: (_, __) {
+                  final current = state.goals.where((g) => g.id == goal.id).firstOrNull;
+                  return current == null ? const SizedBox.shrink() : GoalCard(goal: current);
+                },
+              ),
+            );
+          },
         ),
         TextButton(
           onPressed: () async {

@@ -4,12 +4,11 @@ import 'package:intl/intl.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
-import 'trend_chart.dart';
 
-/// История (D66): доход/расход и капитал по последним месяцам — увидеть
-/// направление, а не только текущий месяц.
+/// Сравнение фактических результатов месяцев с переходом к деталям.
 class HistoryTab extends StatelessWidget {
-  const HistoryTab({super.key, this.months = 6});
+  const HistoryTab({super.key, required this.onOpenMonth, this.months = 6});
+  final ValueChanged<int> onOpenMonth;
   final int months;
 
   @override
@@ -18,37 +17,36 @@ class HistoryTab extends StatelessWidget {
     final fam = context.fam;
     final state = AppScope.of(context).state;
     final locale = Localizations.localeOf(context).toString();
-    final history = state.netWorthHistory(months);
-    final labels = List<String>.generate(history.length, (i) => i == history.length - 1 ? l.now : '−${history.length - 1 - i}${l.monthsShort}');
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       children: [
-        SectionHeader(l.capitalTrend),
-        AppCard(child: TrendChart(values: [for (final n in history) n.capital], labels: labels)),
-
         SectionHeader(l.monthsCompare),
         AppCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Column(children: [
-            for (var k = months - 1; k >= 0; k--)
+            for (var k = 0; k < months; k++)
               Builder(builder: (context) {
                 final month = state.monthOf(-k);
                 final report = state.reportFor(month);
-                return Padding(
+                return InkWell(
+                  onTap: () => onOpenMonth(-k),
+                  child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      Expanded(child: Text(toBeginningOfSentenceCase(DateFormat.LLLL(locale).format(month)), style: const TextStyle(fontWeight: FontWeight.w600))),
+                      Expanded(child: Text(toBeginningOfSentenceCase(DateFormat.yMMMM(locale).format(month)), style: const TextStyle(fontWeight: FontWeight.w600))),
                       if (report.income > 0) Text('${(report.result * 100 / report.income).round()}%', style: TextStyle(color: fam.text2, fontSize: 12)),
+                      const Icon(Icons.chevron_right, size: 18),
                     ]),
                     const SizedBox(height: 4),
                     Row(children: [
                       Expanded(child: MoneyText(report.income, sign: true, color: fam.income, style: const TextStyle(fontSize: 13))),
                       Expanded(child: MoneyText(-report.total, sign: true, color: fam.expense, style: const TextStyle(fontSize: 13))),
                     ]),
-                    if (k > 0) const Divider(height: 16),
+                    if (k < months - 1) const Divider(height: 16),
                   ]),
+                  ),
                 );
               }),
           ]),

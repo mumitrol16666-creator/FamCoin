@@ -31,6 +31,8 @@ jobs:
         run: cd server && dart pub get && dart analyze && dart test
       - name: Приложение
         run: cd app && flutter pub get && flutter analyze lib test && flutter test
+      - name: Web Push — разрешение и восстановление подписки
+        run: node --test app/test_web/push_test.cjs
 
   integration:
     runs-on: ubuntu-latest

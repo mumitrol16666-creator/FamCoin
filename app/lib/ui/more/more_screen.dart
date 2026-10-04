@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
-import '../analytics/analytics_screen.dart';
 import '../budget/calendar_screen.dart';
-import '../ops/voice_sheet.dart';
 import 'accounts_screen.dart';
-import 'ai_screen.dart';
 import 'categories_screen.dart';
 import 'family_screen.dart';
 import 'notifications_screen.dart';
@@ -30,13 +27,10 @@ class MoreScreen extends StatelessWidget {
 
     final items = <(IconData, String, _Badge, VoidCallback)>[
       (Icons.account_balance_wallet_outlined, l.accounts, _Badge.none, () => open(const AccountsScreen())),
-      (Icons.bar_chart_outlined, l.analytics, _Badge.none, () => open(const AnalyticsScreen())),
       (Icons.fact_check_outlined, l.monthCloseTitle, _Badge.none, () => open(const MonthCloseListScreen())),
       (Icons.calendar_month_outlined, l.calendar, _Badge.none, () => open(const CalendarScreen())),
       (Icons.family_restroom_outlined, l.family, _Badge.none, () => open(const FamilyScreen())),
       (Icons.label_outline, l.categories, _Badge.none, () => open(const CategoriesScreen())),
-      (Icons.mic_none, l.voice, _Badge.none, () => showVoiceSheet(context)),
-      (Icons.auto_awesome_outlined, l.ai, _Badge.none, () => open(const AiScreen())),
       (Icons.notifications_none, l.notifications, _Badge.none, () => open(const NotificationsScreen())),
       (Icons.workspace_premium_outlined, l.tariff, _Badge.none, () => open(const TariffScreen())),
       (Icons.shield_outlined, l.security, _Badge.none, () => open(const SecurityScreen())),

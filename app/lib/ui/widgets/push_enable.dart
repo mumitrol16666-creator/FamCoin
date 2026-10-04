@@ -6,15 +6,81 @@ import '../../state/push.dart';
 import '../../theme/app_theme.dart';
 import 'common.dart';
 
-/// Включить push на этом устройстве: разрешение запрашивается сразу по
-/// нажатию (иначе iOS его не покажет), подписка уходит на сервер.
-/// `true` — запрос прошёл (разрешение могло быть и отклонено — это видно по
-/// `pushStatus()` после), `false` — ошибка сети или сервера, уже показана.
-Future<bool> enablePushNotifications(BuildContext context, AppState state) => runAction(context, () async {
-      final key = await state.api.pushKey(state.token);
-      final sub = await pushEnable(key);
-      if (sub != null) await state.api.pushSubscribe(state.token, sub);
-    });
+enum PushEnableResult { enabled, denied, dismissed, unavailable, failed }
+
+/// Успех — разрешение, подписка браузера и подтверждение сервера.
+Future<PushEnableResult> enablePushNotifications(BuildContext context, AppState state) async {
+  final settings = AppScope.of(context).settings;
+  try {
+    // Никакой сети до системного запроса разрешения: сохраняем жест пользователя.
+    final permission = await pushRequestPermission();
+    if (permission == 'denied') return PushEnableResult.denied;
+    if (permission == 'default') return PushEnableResult.dismissed;
+    if (permission != 'granted') return PushEnableResult.unavailable;
+    final key = await state.api.pushKey(state.token);
+    final sub = await pushEnable(key);
+    if (sub == null) return PushEnableResult.dismissed;
+    await state.api.pushSubscribe(state.token, sub);
+    pushConfirmEnabled();
+    await settings.dismissPushPrompt();
+    return PushEnableResult.enabled;
+  } catch (_) {
+    return PushEnableResult.failed;
+  }
+}
+
+/// Один сценарий для главной, анкеты и настроек: процесс, результат, повтор.
+class PushEnableButton extends StatefulWidget {
+  const PushEnableButton({super.key, this.onResult, this.compact = false});
+  final ValueChanged<PushEnableResult>? onResult;
+  final bool compact;
+
+  @override
+  State<PushEnableButton> createState() => _PushEnableButtonState();
+}
+
+class _PushEnableButtonState extends State<PushEnableButton> {
+  bool _busy = false;
+  PushEnableResult? _result;
+
+  Future<void> _enable() async {
+    if (_busy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final successMessage = context.l10n.pushEnabledSuccess;
+    setState(() { _busy = true; _result = null; });
+    final result = await enablePushNotifications(context, AppScope.of(context).state);
+    // Главная уже может убрать карточку по изменению settings.
+    if (result == PushEnableResult.enabled && messenger.mounted) {
+      messenger.showSnackBar(SnackBar(content: Text(successMessage)));
+    }
+    if (!mounted) return;
+    setState(() { _busy = false; _result = result; });
+    widget.onResult?.call(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final message = switch (_result) {
+      PushEnableResult.denied => l.pushDenied,
+      PushEnableResult.dismissed => l.pushPermissionNotGranted,
+      PushEnableResult.unavailable => l.pushUnsupportedShort,
+      PushEnableResult.failed => l.pushEnableFailed,
+      _ => null,
+    };
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      FilledButton.tonal(
+        style: widget.compact ? FilledButton.styleFrom(minimumSize: const Size(0, 44)) : null,
+        onPressed: _busy ? null : _enable,
+        child: Text(_busy ? l.pushEnabling : l.pushEnable),
+      ),
+      if (message != null) Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(message, style: TextStyle(fontSize: 13, color: context.fam.text2)),
+      ),
+    ]);
+  }
+}
 
 /// Состояние push на устройстве и кнопка «Включить» (D76). Используется в
 /// анкете первого входа; сам узнаёт статус и обновляет его после нажатия.
@@ -44,12 +110,6 @@ class _PushEnableSectionState extends State<PushEnableSection> {
     widget.onChanged?.call(s);
   }
 
-  Future<void> _enable() async {
-    final state = AppScope.of(context).state;
-    await enablePushNotifications(context, state);
-    if (mounted) await _refresh();
-  }
-
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
@@ -65,7 +125,7 @@ class _PushEnableSectionState extends State<PushEnableSection> {
       'off' => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(l.obPushOff, style: TextStyle(fontSize: 13, color: fam.text2)),
           const SizedBox(height: 8),
-          FilledButton.tonal(onPressed: _enable, child: Text(l.pushEnable)),
+          PushEnableButton(onResult: (_) => _refresh()),
         ]),
       'needs-install' => InfoBanner(l.pushNeedsInstall),
       'denied' => Text(l.pushDenied, style: TextStyle(fontSize: 13, color: fam.text2)),

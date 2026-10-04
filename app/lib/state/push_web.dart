@@ -10,6 +10,12 @@ external JSPromise<JSString> _status();
 @JS('famcoinPush.enable')
 external JSPromise<JSString> _enable(JSString key);
 
+@JS('famcoinPush.requestPermission')
+external JSPromise<JSString> _requestPermission();
+
+@JS('famcoinPush.confirmEnabled')
+external void _confirmEnabled();
+
 @JS('famcoinPush.disable')
 external JSPromise<JSString> _disable();
 
@@ -22,9 +28,13 @@ Future<String> pushStatus() async {
   }
 }
 
-/// Запрашивает разрешение и подписывает устройство; `null` — разрешение не дано.
+Future<String> pushRequestPermission() async => (await _requestPermission().toDart).toDart;
+
+void pushConfirmEnabled() => _confirmEnabled();
+
+/// Подписывает после разрешения; `null` — разрешение не дано.
 Future<Map<String, dynamic>?> pushEnable(String vapidKey) async {
-  final json = (await _enable(vapidKey.toJS).toDart).toDart;
+  final json = (await _enable(vapidKey.toJS).toDart.timeout(const Duration(seconds: 30))).toDart;
   return json.isEmpty ? null : jsonDecode(json) as Map<String, dynamic>;
 }
 

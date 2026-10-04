@@ -6,12 +6,12 @@ import '../../state/app_scope.dart';
 import '../../state/app_state.dart';
 import '../../state/models.dart';
 import '../../theme/app_theme.dart';
-import '../analytics/analytics_screen.dart';
 import '../budget/calendar_screen.dart';
 import '../budget/limits_section.dart';
 import '../budget/month_close_screen.dart';
 import '../budget/sheets.dart';
 import '../more/accounts_screen.dart';
+import '../more/ai_screen.dart';
 import '../more/notifications_screen.dart';
 import '../more/settings_screen.dart';
 import '../more/tariff_screen.dart';
@@ -26,9 +26,10 @@ import 'tips.dart';
 /// S07 — главная: ориентир → счета → обязательства → лимиты с риском →
 /// отчёт за месяц → последние операции.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, required this.onOpenJournal, required this.onOpenBudget, required this.onAdd});
+  const HomeScreen({super.key, required this.onOpenJournal, required this.onOpenBudget, required this.onOpenAnalytics, required this.onAdd});
   final VoidCallback onOpenJournal;
   final VoidCallback onOpenBudget;
+  final VoidCallback onOpenAnalytics;
   final VoidCallback onAdd;
 
   @override
@@ -51,10 +52,29 @@ class HomeScreen extends StatelessWidget {
         final recent = state.userTransactions.take(5).toList();
 
         return Scaffold(
+          floatingActionButton: Padding(
+            // Выше центрального «＋» оболочки, в том числе на узком экране.
+            padding: const EdgeInsets.only(bottom: 32),
+            child: FloatingActionButton.extended(
+              // Кнопка остаётся на главной; переносить её в overlay маршрута
+              // не нужно, особенно при смене размера окна за открытым экраном.
+              heroTag: null,
+              tooltip: l.ai,
+              onPressed: () => showAiAssistant(context),
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(l.aiShort),
+                if (!state.pro) ...[const SizedBox(width: 8), const ProBadge()],
+              ]),
+            ),
+          ),
           appBar: AppBar(
             title: Text(l.navHome),
             actions: [
-              PlanChip(pro: state.pro, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TariffScreen()))),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 120),
+                child: PlanChip(pro: state.pro, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TariffScreen()))),
+              ),
               const SizedBox(width: 4),
               IconButton(tooltip: l.voice, onPressed: () => showVoiceSheet(context), icon: const Icon(Icons.mic_none)),
               IconButton(
@@ -73,7 +93,7 @@ class HomeScreen extends StatelessWidget {
           body: RefreshIndicator(
             onRefresh: state.load,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 128),
               // Секции появляются каскадом при первом показе.
               children: [for (final (i, w) in <Widget>[
                 // Первые дни месяца: предлагаем сверить прошлый (D75).
@@ -167,7 +187,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
 
-                SectionHeader(l.monthReport, action: '${l.openReport} ›', onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
+                SectionHeader(l.monthReport, action: '${l.openReport} ›', onAction: onOpenAnalytics),
                 AppCard(
                   child: Column(children: [
                     Row(children: [
@@ -492,7 +512,12 @@ class _PushPromptCardState extends State<_PushPromptCard> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: AppScope.of(context).settings,
+    builder: (context, _) => _buildCard(context),
+  );
+
+  Widget _buildCard(BuildContext context) {
     final scope = AppScope.of(context);
     final status = _status;
     if (status == null || scope.settings.pushPromptDismissed || (status != 'off' && status != 'needs-install')) {
@@ -518,13 +543,7 @@ class _PushPromptCardState extends State<_PushPromptCard> {
         Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
           TextButton(onPressed: scope.settings.dismissPushPrompt, child: Text(install ? l.gotIt : l.later)),
           if (!install)
-            FilledButton.tonal(
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
-              onPressed: () async {
-                if (await enablePushNotifications(context, scope.state)) await scope.settings.dismissPushPrompt();
-              },
-              child: Text(l.pushEnable),
-            ),
+            const PushEnableButton(compact: true),
         ]),
       ]),
     );

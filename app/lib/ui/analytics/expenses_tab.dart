@@ -1,12 +1,11 @@
-import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
-import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'analytics_common.dart';
 import 'category_screen.dart';
+import 'category_chart.dart';
 
 /// Расходы (D66): категории с сравнением к прошлому месяцу, три типа трат
 /// вместо десятков категорий, разбивка по членам семьи.
@@ -22,73 +21,43 @@ class ExpensesTab extends StatelessWidget {
     final state = AppScope.of(context).state;
 
     final month = state.monthOf(offset);
-    final prevMonth = state.monthOf(offset - 1);
     final cats = state.categoriesFor(month);
-    final prevCats = {for (final e in state.categoriesFor(prevMonth)) e.key: e.value};
-    final totalCats = cats.fold<int>(0, (s, e) => s + (e.value > 0 ? e.value : 0));
     final byWho = state.expenseByWho(month);
     final split = state.expenseTypeSplit(month);
+    final typeAmounts = [split.mandatory, split.regular, split.discretionary];
+    final positiveTypes = typeAmounts.where((v) => v > 0).fold(0, (sum, v) => sum + v);
+    final hasNegativeType = typeAmounts.any((v) => v < 0);
     final unexpected = state.unexpectedFor(month);
-
-    String delta(int now, int before) {
-      if (before == 0) return '';
-      final pct = ((now - before) / before.abs() * 100).round();
-      return pct == 0 ? ' · 0%' : ' · ${pct > 0 ? '▲' : '▼'} ${pct.abs()}%';
-    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       children: [
         MonthNav(month: month, offset: offset, onOffset: onOffset),
 
-        if (split.total > 0) ...[
-          SectionHeader(l.byThreeTypes),
-          AppCard(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              MoneyText(split.total, style: const TextStyle(fontSize: 20)),
-              const SizedBox(height: 10),
-              _typeRow(context, l.typeMandatory, split.mandatory, split.total, fam.expense),
-              _typeRow(context, l.typeRegular, split.regular, split.total, fam.warn),
-              _typeRow(context, l.typeDiscretionary, split.discretionary, split.total, context.scheme.primary),
-            ]),
-          ),
-        ],
-
         SectionHeader(l.byCategories),
         if (cats.isEmpty)
           EmptyHint(l.noExpensesMonth)
         else
+          CategoryChart(
+            categories: cats,
+            previousCategories: state.categoriesFor(state.monthOf(offset - 1)),
+            onOpenCategory: (id) => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryScreen(category: id, month: month))),
+          ),
+
+        if (split.total > 0) ...[
+          SectionHeader(l.byThreeTypes),
           AppCard(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(children: [
-              for (final e in cats)
-                InkWell(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryScreen(category: e.key, month: month))),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Icon(categoryById(e.key).icon, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(categoryName(l, e.key))),
-                        MoneyText(e.value, style: const TextStyle(fontSize: 13)),
-                        SizedBox(
-                          width: 44,
-                          child: Text(categorySharePercent(e.value, totalCats), textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: fam.text2)),
-                        ),
-                      ]),
-                      const SizedBox(height: 4),
-                      UsageBar(value: e.value, max: totalCats, color: context.scheme.primary),
-                      if (prevCats[e.key] != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text('${l.vsLastMonth}: ${formatMoney(prevCats[e.key]!)}${delta(e.value, prevCats[e.key]!)}', style: TextStyle(fontSize: 11, color: fam.text2)),
-                        ),
-                    ]),
-                  ),
-                ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (hasNegativeType) Text(l.chartNetTotal, style: TextStyle(fontSize: 12, color: fam.text2)),
+              MoneyText(split.total, style: const TextStyle(fontSize: 20)),
+              const SizedBox(height: 10),
+              _typeRow(context, l.typeMandatory, split.mandatory, positiveTypes, fam.expense),
+              _typeRow(context, l.typeRegular, split.regular, positiveTypes, fam.warn),
+              _typeRow(context, l.typeDiscretionary, split.discretionary, positiveTypes, context.scheme.primary),
+              if (hasNegativeType) Padding(padding: const EdgeInsets.only(top: 8), child: Text(l.chartPositiveSharesNote, style: TextStyle(fontSize: 12, color: fam.text2))),
             ]),
           ),
+        ],
 
         // Непредвиденные траты месяца (D101): сколько ушло на внезапное —
         // ориентир для резерва.
@@ -129,14 +98,14 @@ class ExpensesTab extends StatelessWidget {
 
   Widget _typeRow(BuildContext context, String label, int value, int total, Color color) {
     final fam = context.fam;
-    final pct = total == 0 ? 0 : (value * 100 / total).round();
+    final pct = categorySharePercent(value, total);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
         Container(width: 10, height: 10, margin: const EdgeInsets.only(right: 8), decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         Expanded(child: Text(label)),
         MoneyText(value, style: const TextStyle(fontSize: 13)),
-        SizedBox(width: 44, child: Text('$pct%', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: fam.text2))),
+        SizedBox(width: 44, child: Text(pct, textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: fam.text2))),
       ]),
     );
   }

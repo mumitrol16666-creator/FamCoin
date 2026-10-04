@@ -48,6 +48,9 @@ class FakeServer {
   List<String> aiUnverified = const [];
   int aiUsed = 0;
   int aiLimit = 100;
+  int pushKeyCalls = 0;
+  int pushSubscribeCalls = 0;
+  bool pushSubscribeFails = false;
 
   http.Response _ai(http.Request req) {
     Map<String, Object> quota() => {'used': aiUsed, 'limit': aiLimit, 'left': aiLimit - aiUsed};
@@ -85,7 +88,14 @@ class FakeServer {
       if (req.method == 'POST') notif.addAll((jsonDecode(req.body) as Map).cast<String, dynamic>());
       return http.Response(jsonEncode({'morning': notif['morning'] ?? true, 'evening': notif['evening'] ?? true, 'month': notif['month'] ?? true, 'telegramLinked': false, 'telegramAvailable': false, 'pushDevices': 0}), 200);
     }
-    if (req.url.path == '/push/key') return http.Response(jsonEncode({'key': 'test-key'}), 200);
+    if (req.url.path == '/push/key') {
+      pushKeyCalls++;
+      return http.Response(jsonEncode({'key': 'test-key'}), 200);
+    }
+    if (req.url.path == '/push/subscribe') {
+      pushSubscribeCalls++;
+      return http.Response(jsonEncode(pushSubscribeFails ? {'error': 'unavailable'} : {'ok': true}), pushSubscribeFails ? 503 : 200);
+    }
     if (req.url.path == '/auth/telegram/start') {
       return http.Response(jsonEncode({'code': 'logincode1234', 'url': 'https://t.me/famcoin_test_bot?start=login_logincode1234'}), 200);
     }

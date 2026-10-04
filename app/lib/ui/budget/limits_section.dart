@@ -6,6 +6,7 @@ import '../../state/app_scope.dart';
 import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../analytics/category_screen.dart';
+import '../analytics/chart_colors.dart';
 import '../widgets/common.dart';
 import 'sheets.dart';
 
@@ -37,6 +38,15 @@ class LimitsSection extends StatelessWidget {
                 Text(l.limitsScope, style: TextStyle(fontSize: 12, color: context.fam.text2)),
                 const SizedBox(height: 8),
                 _Amount(label: l.limitsTotal, amount: planned, size: 24),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: planned > 0 ? (spent / planned).clamp(0.0, 1.0) : spent > 0 ? 1 : 0,
+                  minHeight: 9,
+                  borderRadius: BorderRadius.circular(8),
+                  color: spent > planned ? context.fam.expense : context.fam.income,
+                  backgroundColor: context.scheme.surfaceContainerHighest,
+                  semanticsLabel: '${l.planVsFact}. ${moneyInText(spent)} ${l.ofLimit} ${moneyInText(planned)}',
+                ),
                 const SizedBox(height: 12),
                 _AdaptivePair(
                   leading: _Amount(label: l.limitSpent, amount: spent),
@@ -229,7 +239,7 @@ class _LimitRow extends StatelessWidget {
     final fam = context.fam;
     final name = categoryName(l, def.category);
     final over = status.remaining < 0;
-    final color = over ? fam.expense : status.warn80 ? fam.warn : context.scheme.primary;
+    final color = over ? fam.expense : status.warn80 ? fam.warn : fam.income;
     final ratio = status.limit <= 0 ? (status.spent > 0 ? 1.0 : 0.0) : (status.spent / status.limit).clamp(0.0, 1.0);
     final percentText = status.usedPercent == null ? '—' : '${status.usedPercent!.round()}%';
     final spentText = '${moneyInText(status.spent)} ${l.ofLimit} ${moneyInText(status.limit)}';
@@ -250,7 +260,7 @@ class _LimitRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
-              Icon(categoryById(def.category).icon, size: 20, color: fam.text2),
+              Icon(categoryById(def.category).icon, size: 20, color: categoryChartColor(context, def.category)),
               const SizedBox(width: 10),
               Expanded(child: Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
               const SizedBox(width: 8),
@@ -259,7 +269,7 @@ class _LimitRow extends StatelessWidget {
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(value: ratio, minHeight: 4, color: color, backgroundColor: context.scheme.surfaceContainerHighest),
+              child: LinearProgressIndicator(value: ratio, minHeight: 9, color: color, backgroundColor: context.scheme.surfaceContainerHighest),
             ),
             const SizedBox(height: 6),
             Text.rich(
@@ -271,6 +281,10 @@ class _LimitRow extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(remainingText, style: TextStyle(fontSize: 12, color: over ? fam.expense : fam.text2)),
+            if (over) Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('${l.limitOver}: ${moneyInText(-status.remaining)}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fam.expense)),
+            ),
           ]),
         ),
       ),

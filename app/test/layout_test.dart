@@ -1,7 +1,7 @@
 /// Отрисовка на узких экранах и поведение формы (аудит 28.09.2026, F08–F10):
 /// без переполнений на 320 px с текстом 200 %, форма операции на 360×732 —
 /// подписи в одну строку, «Сохранить» видна без прокрутки, заполненная форма
-/// не закрывается без подтверждения; «Ещё» без «Чека», ИИ помечен «скоро»;
+/// не закрывается без подтверждения; «Ещё» без дублей ввода и консультанта;
 /// дни графика подписаны для экранного диктора.
 library;
 
@@ -28,7 +28,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'audit_regression_test.dart' show FakeServer;
 
-Future<FakeServer> pumpApp(WidgetTester tester, {required Widget home, required Size size, double textScale = 1, Map<String, Object> prefs = const {}}) async {
+Future<FakeServer> pumpApp(WidgetTester tester, {required Widget home, required Size size, double textScale = 1, Map<String, Object> prefs = const {}, Locale locale = const Locale('ru'), Brightness brightness = Brightness.light}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -43,10 +43,10 @@ Future<FakeServer> pumpApp(WidgetTester tester, {required Widget home, required 
     settings: settings,
     stateOrNull: f.state,
     child: MaterialApp(
-      locale: const Locale('ru'),
+      locale: locale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      theme: buildTheme(Brightness.light),
+      theme: buildTheme(brightness),
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
         child: child!,
@@ -110,6 +110,7 @@ void main() {
     await tester.tap(find.text('Копить в копилку'));
     await tester.pumpAndSettle();
     expect(f.state.goals.single.name, 'Колёса');
+    expect(find.text('Колёса'), findsOneWidget, reason: 'копилка покупки не повторяется в самостоятельных целях');
     expect(find.textContaining('отложено 0'), findsOneWidget);
     expect(find.textContaining('ещё ≈'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -117,6 +118,14 @@ void main() {
     await tester.tap(find.text('Колёса').first);
     await tester.pumpAndSettle();
     expect(find.text('Пополнить копилку'), findsOneWidget);
+    await tester.tap(find.text('Управлять копилкой'));
+    await tester.pumpAndSettle();
+    expect(find.text('Отложить в копилку'), findsOneWidget);
+    expect(find.byType(PopupMenuButton<String>), findsOneWidget, reason: 'изменение и удаление копилки остаются доступны');
+    Navigator.pop(tester.element(find.byType(BottomSheet)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Колёса'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Купил'));
     await tester.pumpAndSettle();
     expect(find.text('Оплатить'), findsWidgets, reason: 'форма «купил» открывается');
@@ -320,7 +329,7 @@ void main() {
     await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Уведомления на телефон'), findsOneWidget);
+    expect(find.text('Уведомления на устройстве'), findsOneWidget);
     expect(find.text('Позже'), findsOneWidget);
     expect(find.text('Включить уведомления'), findsOneWidget, reason: 'кнопка включения рядом с «Позже» (на Mac её не было: кнопка с минимальной шириной «во всю строку» внутри Row)');
     expect(tester.takeException(), isNull);
@@ -544,14 +553,12 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('«Ещё»: без пункта «Чек»; консультант без Pro объясняет, что входит в Pro', (tester) async {
+  testWidgets('«Ещё»: без дублирующих входов в голос, консультант и чек', (tester) async {
     await pumpApp(tester, home: const MoreScreen(), size: const Size(360, 732));
     expect(find.text('Чек'), findsNothing);
     expect(find.text('скоро'), findsNothing);
-    await tester.tap(find.text('ИИ-консультант'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Консультант входит в Pro'), findsOneWidget);
-    expect(find.text('Ваш вопрос'), findsNothing);
+    expect(find.text('Голос'), findsNothing);
+    expect(find.text('ИИ-консультант'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
