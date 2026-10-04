@@ -167,6 +167,26 @@ class FakeServer {
 }
 
 void main() {
+  test('старый долг (D102): без движения по счёту, свежий — деньги на счёт и строка «взято в долг», не доход', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    final before = s.ledger.balance('cash');
+    await s.addOldPersonDebt(kind: 'borrow', amount: kzt(20000), person: 'Яков', date: s.today);
+    await s.addOldPersonDebt(kind: 'lendOut', amount: kzt(7000), person: 'Олег', date: s.today);
+    expect(s.ledger.balance('cash'), before, reason: 'старый долг счёт не трогает');
+    expect(s.ledger.balance('liability:Яков'), kzt(20000));
+    expect(s.ledger.balance('receivable:Олег'), kzt(7000));
+    expect(s.reportFor(s.monthStart).borrowed, 0, reason: 'денег не приходило');
+
+    await s.addPersonDebt(kind: 'borrow', amount: kzt(50000), person: 'Вадим', account: 'cash', date: s.today);
+    expect(s.ledger.balance('cash'), before + kzt(50000));
+    final r = s.reportFor(s.monthStart);
+    expect(r.borrowed, kzt(50000));
+    expect(r.income, 0, reason: 'взятое в долг — не доход');
+    expect(s.monthSummary(s.monthStart).borrowed, kzt(50000));
+  });
+
   test('F02: правка покупки сохраняет уже сделанный возврат, повторный возврат отклоняется', () async {
     final f = FakeServer();
     await f.init();

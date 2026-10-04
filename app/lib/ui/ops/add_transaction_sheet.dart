@@ -127,6 +127,11 @@ class _TransactionFieldsState extends State<TransactionFields> {
 
   /// lendOut, borrow, repaymentReceived, repaymentMade.
   String _debtKind = 'lendOut';
+
+  /// Старый долг (D102): денег на счёте уже нет — записывается только остаток
+  /// долга, счёт не нужен.
+  bool _oldDebt = false;
+  bool get _isNewDebt => _kind == FieldsKind.debt && (_debtKind == 'lendOut' || _debtKind == 'borrow');
   DateTime? _dateOverride;
   TimeOfDay _time = TimeOfDay.now();
   bool _busy = false;
@@ -228,7 +233,9 @@ class _TransactionFieldsState extends State<TransactionFields> {
       setState(() => _error = l.enterAmount);
       return;
     }
-    final account = _account!;
+    final oldDebt = _isNewDebt && _oldDebt;
+    if (_account == null && !oldDebt) return;
+    final account = _account ?? '';
     final note = _note.text.trim();
     final time = timeToField(_time);
     // Крупная покупка (D74): дневной лимит — на мелочи, поэтому спрашиваем,
@@ -254,7 +261,11 @@ class _TransactionFieldsState extends State<TransactionFields> {
         case FieldsKind.transfer:
           await state.addTransfer(amount: amount, from: account, to: _to!, date: _date, time: time, id: _txId, commandId: _commandId);
         case FieldsKind.debt:
-          await state.addPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), account: account, date: _date, time: time, id: _txId, commandId: _commandId);
+          if (oldDebt) {
+            await state.addOldPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), date: _date, id: _txId, commandId: _commandId);
+          } else {
+            await state.addPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), account: account, date: _date, time: time, id: _txId, commandId: _commandId);
+          }
       }
     } catch (e) {
       if (!mounted) return;
@@ -270,14 +281,20 @@ class _TransactionFieldsState extends State<TransactionFields> {
     nav.pop();
     // После дохода — предложение отложить часть на цели (D96). Лист сам
     // говорит, что доход записан, поэтому «Операция записана» не дублируем.
+    // Непредвиденную трату можно покрыть из копилки (D101).
+    if (_kind == FieldsKind.expense && _purchase.unexpected_) {
+      messenger.showSnackBar(SnackBar(content: Text(l.saved)));
+      await offerCoverFromGoal(nav.context, state, amount: amount, account: account);
+      return;
+    }
     if (_kind == FieldsKind.income && await offerIncomeToGoals(nav.context, amount: amount, account: account, source: _source, date: _date)) return;
     messenger.showSnackBar(SnackBar(content: Text(l.saved)));
-    // Непредвиденную трату можно покрыть из копилки (D101).
-    if (_kind == FieldsKind.expense && _purchase.unexpected_) await offerCoverFromGoal(nav.context, state, amount: amount, account: account);
   }
 
   bool get _valid {
-    if (parseAmount(_amount.text) == null || _account == null) return false;
+    if (parseAmount(_amount.text) == null) return false;
+    if (_isNewDebt && _oldDebt) return _person.text.trim().isNotEmpty; // старый долг — без счёта (D102)
+    if (_account == null) return false;
     if (_kind == FieldsKind.transfer) return _to != null && _to != _account;
     if (_kind == FieldsKind.debt) return _person.text.trim().isNotEmpty;
     return true;
@@ -329,7 +346,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
       ListenableBuilder(
         listenable: _amount,
         builder: (context, _) => MinusWarning(
-          accountId: _kind == FieldsKind.expense || _kind == FieldsKind.transfer || (_kind == FieldsKind.debt && (_debtKind == 'lendOut' || _debtKind == 'repaymentMade')) ? _account : null,
+          accountId: _kind == FieldsKind.expense || _kind == FieldsKind.transfer || (_kind == FieldsKind.debt && !_oldDebt && (_debtKind == 'lendOut' || _debtKind == 'repaymentMade')) ? _account : null,
           amount: parseAmount(_amount.text),
         ),
       ),
@@ -404,10 +421,30 @@ class _TransactionFieldsState extends State<TransactionFields> {
               ),
           ]),
         ],
-        const SizedBox(height: 14),
-        AccountPicker(accounts: accounts, value: _account, onChanged: (v) => setState(() { _account = v; _accountMissing = false; })),
-        const SizedBox(height: 12),
-        InfoBanner(_debtKind == 'lendOut' || _debtKind == 'borrow' ? l.debtNote : l.repaymentNote),
+        // Когда это было (D102): свежий долг двигает деньги по счёту, старый —
+        // только запоминается. Пояснения простыми словами: что станет со счётом
+        // и как потом записать возврат, чтобы не было «кассового разрыва».
+        if (_isNewDebt) ...[
+          label(l.debtWhenTitle),
+          for (final (old, title, note) in [
+            (false, _debtKind == 'borrow' ? l.debtNowBorrow : l.debtNowLend, _debtKind == 'borrow' ? l.debtNowBorrowNote : l.debtNowLendNote),
+            (true, l.debtOld, _debtKind == 'borrow' ? l.debtOldBorrowNote : l.debtOldLendNote),
+          ])
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(_oldDebt == old ? Icons.radio_button_checked : Icons.radio_button_off, color: _oldDebt == old ? context.scheme.primary : fam.text2),
+              title: Text(title),
+              subtitle: Text(note, style: TextStyle(fontSize: 12, color: fam.text2)),
+              onTap: () => setState(() => _oldDebt = old),
+            ),
+        ],
+        if (!(_isNewDebt && _oldDebt)) ...[
+          const SizedBox(height: 14),
+          AccountPicker(accounts: accounts, value: _account, onChanged: (v) => setState(() { _account = v; _accountMissing = false; })),
+          const SizedBox(height: 12),
+          InfoBanner(_debtKind == 'lendOut' ? l.debtNote : _debtKind == 'borrow' ? l.borrowNote : l.repaymentNote),
+        ],
       ] else ...[
         label(l.category),
         if (_kind == FieldsKind.expense)

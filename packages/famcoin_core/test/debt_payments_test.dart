@@ -28,6 +28,18 @@ void main() {
     // Отменённый платёж не считается; в другом месяце его тоже нет.
     applyLedgerCommand(l, {'type': 'reverse', 'txId': 'p1', 'id': 'rv'});
     expect(l.report(from, to).debtPayments, 0);
+  });
+
+  test('взятое в долг деньгами — отдельной строкой отчёта, не доход; старый долг без движения по счёту не считается (D102)', () {
+    final l = _base();
+    applyLedgerCommand(l, {'type': 'borrow', 'id': 'b1', 'date': '2026-09-03', 'account': 'kaspi', 'person': 'Вадим', 'amount': '${kzt(50000)}'});
+    applyLedgerCommand(l, {'type': 'openingDebt', 'id': 'd', 'date': '2026-09-04', 'debtId': 'Яков', 'amount': '${kzt(20000)}'});
+    applyLedgerCommand(l, {'type': 'borrow', 'id': 'b2', 'date': '2026-09-05', 'account': 'kaspi', 'person': 'Олег', 'amount': '${kzt(1000)}'});
+    applyLedgerCommand(l, {'type': 'reverse', 'txId': 'b2', 'id': 'x2'});
+    final r = l.report(from, to);
+    expect(r.borrowed, kzt(50000));
+    expect(r.income, 0, reason: 'долг — не доход');
+    expect(l.balance('kaspi'), kzt(350000), reason: 'старый долг остаток счёта не менял');
     expect(l.report(DateTime(2026, 10, 1), DateTime(2026, 11, 1)).debtPayments, 0);
   });
 

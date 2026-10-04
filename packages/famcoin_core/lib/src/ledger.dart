@@ -144,8 +144,14 @@ class PeriodReport {
     required this.expense,
     required this.cashFlow,
     this.debtPayments = 0,
+    this.borrowed = 0,
   });
   final int income;
+
+  /// Получено в долг за период деньгами на счёт: личные долги и кредиты
+  /// (D102). В [income] не входит — это не заработок, деньги придётся вернуть;
+  /// показывается рядом с «в т.ч. кредиты и долги», чтобы месяц читался честно.
+  final int borrowed;
 
   /// Расход по категориям — без платежей по долгам.
   final int expense;
@@ -538,9 +544,25 @@ class Ledger {
         expense:
             sumPostings((a) => a.kind == LedgerKind.expense, from: from, to: to),
         debtPayments: debtPaymentsBetween(from, to),
+        borrowed: borrowedBetween(from, to),
         cashFlow: sumPostings((a) => a.isMoney,
             from: from, to: to, skipOpening: true),
       );
+
+  /// Сколько получено в долг деньгами за период (D102): «взял в долг» у
+  /// человека и кредит деньгами. Старые долги, записанные без движения по
+  /// счёту (`openingDebt`), сюда не входят — денег тогда не приходило.
+  int borrowedBetween(DateTime from, DateTime to) {
+    var sum = 0;
+    for (final tx in _transactions) {
+      if ((tx.type != EventType.borrow && tx.type != EventType.creditReceived) || _reversed.contains(tx.id)) continue;
+      if (tx.date.isBefore(from) || !tx.date.isBefore(to)) continue;
+      for (final p in tx.postings) {
+        if (_accounts[p.accountId]!.kind == LedgerKind.liability) sum += p.amount;
+      }
+    }
+    return sum;
+  }
 
   /// Платежи по долгам за период, которые считаются расходом (D98): тело
   /// кредита и возврат личных долгов. Проценты не входят — они уже расход по

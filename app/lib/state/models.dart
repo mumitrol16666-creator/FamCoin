@@ -355,6 +355,7 @@ class MonthSummary {
     required this.avgDaily,
     this.debtPayments = 0,
     this.unexpected = 0,
+    this.borrowed = 0,
   });
 
   final DateTime month;
@@ -364,6 +365,9 @@ class MonthSummary {
 
   /// Сколько из [expense] владелец отметил непредвиденным (D101).
   final int unexpected;
+
+  /// Получено в долг деньгами за месяц (D102) — не доход.
+  final int borrowed;
 
   /// Месяц ещё идёт — итоги промежуточные.
   final bool current;

@@ -960,6 +960,17 @@ class AppState extends ChangeNotifier {
       send({'type': 'transfer', 'id': id ?? newId(), 'date': _date(date), 'from': from, 'to': to, 'amount': amount.toString(), if (time != null) 'meta': {'time': time}}, commandId: commandId);
 
   /// `kind`: lendOut, borrow, repaymentReceived, repaymentMade.
+  /// Старый личный долг (D102): денег на счёте уже нет (или они давно отданы),
+  /// поэтому записывается только остаток долга на человека, без движения по
+  /// счёту — так же, как долги в анкете первого запуска.
+  Future<void> addOldPersonDebt({required String kind, required int amount, required String person, required DateTime date, String? id, String? commandId}) => send({
+        'type': kind == 'borrow' ? 'openingDebt' : 'openingReceivable',
+        'id': id ?? newId(),
+        'date': _date(date),
+        if (kind == 'borrow') 'debtId': person else 'person': person,
+        'amount': amount.toString(),
+      }, commandId: commandId);
+
   Future<void> addPersonDebt({required String kind, required int amount, required String person, required String account, required DateTime date, String? time, String? id, String? commandId}) {
     final isRepayment = kind == 'repaymentReceived' || kind == 'repaymentMade';
     return send({
@@ -1128,6 +1139,7 @@ class AppState extends ChangeNotifier {
       top: categoriesFor(start).take(3).toList(),
       adjustments: adjustmentsFor(start),
       unexpected: unexpectedFor(start),
+      borrowed: r.borrowed,
       paymentsPaid: paid,
       paymentsTotal: total,
       days: days,

@@ -182,6 +182,9 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'expense': _t(r.total),
       // Сколько из них владелец отметил непредвиденными (D101).
       'unexpected': _t(s.unexpectedFor(month)),
+      // Получено в долг деньгами (D102): в income не входит.
+      'borrowed': _t(r.borrowed),
+      'borrowedNote': 'borrowed — взято в долг деньгами на счёт за месяц: не доход, в income не входит; возврат этих денег попадёт в expense строкой «Кредиты и долги»',
       'ofWhichDebtPayments': _t(r.debtPayments),
       'expenseNote': 'expense включает платежи по кредитам и долгам (ofWhichDebtPayments); в expenseByCategory они строкой «Кредиты и долги»',
       'incomeMinusExpense': _t(r.result),

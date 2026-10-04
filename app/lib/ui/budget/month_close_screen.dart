@@ -233,6 +233,11 @@ class _SummaryCard extends StatelessWidget {
             padding: const EdgeInsets.only(top: 4),
             child: Text(l.reportIncludesDebts(moneyInText(sum.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
           ),
+        if (sum.borrowed > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(l.reportBorrowed(moneyInText(sum.borrowed)), style: TextStyle(fontSize: 12, color: fam.text2)),
+          ),
         const Divider(height: 20),
         Row(children: [
           Expanded(child: Text(l.reportResult, style: TextStyle(color: fam.text2))),
