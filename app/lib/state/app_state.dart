@@ -1232,7 +1232,7 @@ class AppState extends ChangeNotifier {
     for (var k = 1; k <= months; k++) {
       final m = monthOf(-k);
       if (firstMonth != null && m.isBefore(firstMonth)) continue;
-      sum += reportFor(m).income;
+      sum += reportFor(m).earned; // взятое в долг не повторится — в средний доход не идёт (D105)
       counted++;
     }
     return counted == 0 ? 0 : sum ~/ counted;
@@ -1259,7 +1259,7 @@ class AppState extends ChangeNotifier {
     final elapsed = today.day;
     final avgDaily = elapsed <= 0 ? 0 : spentBetween(monthStart, today) ~/ elapsed;
     final daysLeft = monthEnd.difference(today).inDays - 1;
-    final expectedIncome = avgMonthlyIncome() - monthReport.income;
+    final expectedIncome = avgMonthlyIncome() - monthReport.earned;
     return forecastMonthEnd(
       current: ledger.freeLiquid(),
       remainingObligations: remaining,

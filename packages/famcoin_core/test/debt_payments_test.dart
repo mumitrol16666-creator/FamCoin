@@ -30,7 +30,7 @@ void main() {
     expect(l.report(from, to).debtPayments, 0);
   });
 
-  test('взятое в долг деньгами — отдельной строкой отчёта, не доход; старый долг без движения по счёту не считается (D102)', () {
+  test('взятое в долг деньгами — в доходах месяца с подписью «в т.ч. взято в долг», в заработанное не входит; старый долг без движения по счёту не считается (D102, D105)', () {
     final l = _base();
     applyLedgerCommand(l, {'type': 'borrow', 'id': 'b1', 'date': '2026-09-03', 'account': 'kaspi', 'person': 'Вадим', 'amount': '${kzt(50000)}'});
     applyLedgerCommand(l, {'type': 'openingDebt', 'id': 'd', 'date': '2026-09-04', 'debtId': 'Яков', 'amount': '${kzt(20000)}'});
@@ -38,7 +38,9 @@ void main() {
     applyLedgerCommand(l, {'type': 'reverse', 'txId': 'b2', 'id': 'x2'});
     final r = l.report(from, to);
     expect(r.borrowed, kzt(50000));
-    expect(r.income, 0, reason: 'долг — не доход');
+    expect(r.earned, 0, reason: 'заработанного нет');
+    expect(r.income, kzt(50000), reason: 'деньги пришли — в доходах месяца (D105)');
+    expect(r.result, kzt(50000));
     expect(l.balance('kaspi'), kzt(350000), reason: 'старый долг остаток счёта не менял');
     expect(l.report(DateTime(2026, 10, 1), DateTime(2026, 11, 1)).debtPayments, 0);
   });
@@ -53,13 +55,15 @@ void main() {
     expect(r.total, kzt(60000));
   });
 
-  test('возврат личного долга тоже «ушло», а деньги, взятые в долг, — не доход', () {
+  test('возврат личного долга тоже «ушло», а деньги, взятые в долг, — пришло: месяц сходится в ноль', () {
     final l = _base();
     applyLedgerCommand(l, {'type': 'borrow', 'id': 'b', 'date': '2026-09-03', 'account': 'kaspi', 'person': 'Асхат', 'amount': '${kzt(20000)}'});
     applyLedgerCommand(l, {'type': 'repaymentMade', 'id': 'r1', 'date': '2026-09-25', 'account': 'kaspi', 'person': 'Асхат', 'principal': '${kzt(20000)}'});
     final r = l.report(from, to);
-    expect(r.income, 0);
+    expect(r.earned, 0);
+    expect(r.income, kzt(20000), reason: 'взял 20 000 — доход месяца (D105)');
     expect(r.debtPayments, kzt(20000));
+    expect(r.result, 0, reason: 'взял и вернул — месяц в ноль, без «кассового разрыва»');
     expect(expenseTypeOf('debts'), ExpenseType.mandatory);
   });
 }

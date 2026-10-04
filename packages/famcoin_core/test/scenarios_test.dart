@@ -112,7 +112,8 @@ void main() {
       expect(nw.money, kzt(130000));
       expect(nw.liabilities, kzt(30000));
       expect(nw.capital, kzt(100000));
-      expect(l.report(periodFrom, periodTo).income, 0);
+      expect(l.report(periodFrom, periodTo).earned, 0, reason: 'заработанного нет');
+      expect(l.report(periodFrom, periodTo).income, kzt(30000), reason: 'взятое в долг — доход месяца (D105)');
     });
 
     test('T08 дать долг 30 000: деньги 70 000, требование 30 000, капитал 100 000', () {

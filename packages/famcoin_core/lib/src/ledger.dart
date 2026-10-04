@@ -140,18 +140,27 @@ class NetWorth {
 /// Три раздельных отчёта периода (раздел 9.2).
 class PeriodReport {
   const PeriodReport({
-    required this.income,
+    required this.earned,
     required this.expense,
     required this.cashFlow,
     this.debtPayments = 0,
     this.borrowed = 0,
   });
-  final int income;
+
+  /// Заработанное: доходы по категориям, без взятого в долг. Для прогнозов,
+  /// среднего дохода и доли платежей от дохода — того, что повторится.
+  final int earned;
 
   /// Получено в долг за период деньгами на счёт: личные долги и кредиты
-  /// (D102). В [income] не входит — это не заработок, деньги придётся вернуть;
-  /// показывается рядом с «в т.ч. кредиты и долги», чтобы месяц читался честно.
+  /// деньгами (D102). Рассрочка на вещь сюда не входит — денег не приходило.
   final int borrowed;
+
+  /// Всё, что пришло на счета: заработанное плюс взятое в долг (D105). Это то,
+  /// что человек называет «доходами за месяц»; зеркально [total]: раз возврат
+  /// долга — расход, то полученный долг — доход, иначе месяц уходит в минус
+  /// на ровном месте («кассовый разрыв»). В отчётах показывается как «Доходы»
+  /// с подписью «в т.ч. взято в долг».
+  int get income => earned + borrowed;
 
   /// Расход по категориям — без платежей по долгам.
   final int expense;
@@ -540,7 +549,7 @@ class Ledger {
   }
 
   PeriodReport report(DateTime from, DateTime to) => PeriodReport(
-        income: sumPostings((a) => a.kind == LedgerKind.income, from: from, to: to),
+        earned: sumPostings((a) => a.kind == LedgerKind.income, from: from, to: to),
         expense:
             sumPostings((a) => a.kind == LedgerKind.expense, from: from, to: to),
         debtPayments: debtPaymentsBetween(from, to),

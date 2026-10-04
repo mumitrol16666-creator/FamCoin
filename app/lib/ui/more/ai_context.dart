@@ -177,14 +177,15 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     },
     'period': {'month': _month(month), 'monthText': _monthText(month, l), 'todayDay': s.today.day, 'daysInMonth': s.daysInMonth},
     'thisMonth': {
+      // Доходы — всё, что пришло, включая взятое в долг (D105); earned — заработанное.
       'income': _t(r.income),
+      'earned': _t(r.earned),
       // Расходы — всё, что ушло, включая кредиты и долги (D98).
       'expense': _t(r.total),
       // Сколько из них владелец отметил непредвиденными (D101).
       'unexpected': _t(s.unexpectedFor(month)),
-      // Получено в долг деньгами (D102): в income не входит.
-      'borrowed': _t(r.borrowed),
-      'borrowedNote': 'borrowed — взято в долг деньгами на счёт за месяц: не доход, в income не входит; возврат этих денег попадёт в expense строкой «Кредиты и долги»',
+      'ofWhichBorrowed': _t(r.borrowed),
+      'incomeNote': 'income — всё, что пришло на счета за месяц: earned (заработанное) плюс ofWhichBorrowed (взято в долг деньгами). Возврат долгов — в expense строкой «Кредиты и долги». Для прогнозов и «хватит ли дохода» бери earned',
       'ofWhichDebtPayments': _t(r.debtPayments),
       'expenseNote': 'expense включает платежи по кредитам и долгам (ofWhichDebtPayments); в expenseByCategory они строкой «Кредиты и долги»',
       'incomeMinusExpense': _t(r.result),
@@ -197,6 +198,8 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
         ? {
             'month': _monthText(prevMonth, l),
             'income': _t(pr.income),
+            'earned': _t(pr.earned),
+            'ofWhichBorrowed': _t(pr.borrowed),
             'expense': _t(pr.total),
             'ofWhichDebtPayments': _t(pr.debtPayments),
             // Учёт начат посреди того месяца — его суммы неполные.

@@ -183,7 +183,8 @@ void main() {
     expect(s.ledger.balance('cash'), before + kzt(50000));
     final r = s.reportFor(s.monthStart);
     expect(r.borrowed, kzt(50000));
-    expect(r.income, 0, reason: 'взятое в долг — не доход');
+    expect(r.earned, 0);
+    expect(r.income, kzt(50000), reason: 'деньги пришли — доход месяца (D105)');
     expect(s.monthSummary(s.monthStart).borrowed, kzt(50000));
   });
 
