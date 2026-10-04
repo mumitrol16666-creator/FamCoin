@@ -5,7 +5,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 
 const [, , html, out, durArg, fpsArg, audio] = process.argv;
 if (!html || !out) { console.error('node render.mjs story.html out.mp4 [секунды] [fps] [audio]'); process.exit(1); }
@@ -62,6 +62,15 @@ if (process.env.STILLS) {
   process.exit(0);
 }
 
+// Звуковые подсказки сцены (<script id="sfx">) → WAV через sfx.py.
+const cuesRes = await cdp('Runtime.evaluate', { expression: `(document.getElementById('sfx') || {}).textContent || ''`, returnByValue: true });
+let sfxWav = null;
+if (cuesRes.result.value.trim()) {
+  writeFileSync(join(work, 'cues.json'), cuesRes.result.value);
+  sfxWav = join(work, 'sfx.wav');
+  execFileSync('python3', [join(dirname(fileURLToPath(import.meta.url)), 'sfx.py'), join(work, 'cues.json'), String(dur), sfxWav], { stdio: 'inherit' });
+}
+
 const dir = join(work, 'frames'); mkdirSync(dir);
 const t0 = Date.now();
 for (let f = 0; f < frames; f++) {
@@ -74,7 +83,15 @@ process.stdout.write(`\r100% — ${frames} кадров за ${((Date.now() - t0
 
 mkdirSync(dirname(resolve(out)), { recursive: true });
 const args = ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', join(dir, '%05d.jpg')];
-if (audio) args.push('-i', audio, '-c:a', 'aac', '-b:a', '192k', '-shortest');
+if (sfxWav) args.push('-i', sfxWav);
+if (audio) args.push('-i', audio);
+if (sfxWav && audio) {
+  // Голос главный: эффекты приглушаются, пока он звучит.
+  args.push('-filter_complex', '[2:a]aresample=48000,volume=1.0,asplit=2[v1][v2];[1:a][v1]sidechaincompress=threshold=0.03:ratio=8:attack=15:release=350[fx];[fx][v2]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]', '-map', '0:v', '-map', '[a]');
+} else if (sfxWav || audio) {
+  args.push('-map', '0:v', '-map', '1:a');
+}
+if (sfxWav || audio) args.push('-c:a', 'aac', '-b:a', '192k', '-t', String(dur));
 args.push('-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', resolve(out));
 execFileSync('ffmpeg', args, { stdio: 'inherit' });
 await cleanup();

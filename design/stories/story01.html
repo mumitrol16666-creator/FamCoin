@@ -61,9 +61,9 @@
   <div class="glow g1"></div><div class="glow g2"></div>
 
   <!-- 1. Зарплата пришла -->
-  <div class="line big" style="top:520px" data-words data-in="0.3" data-out="6">Зарплата пришла.</div>
+  <div class="line big" style="top:520px" data-words data-in="0.3" data-out="6">Зарплата пришла</div>
   <div class="counter money"><span data-keys="0:0,0.7:0,2.3:350000,3.4:350000,5.8:12400" data-sign="1">0</span><span class="tenge">₸</span></div>
-  <div class="line sub" style="top:960px" data-words data-in="3.1" data-out="6">Через две недели…</div>
+  <div class="line sub" style="top:960px" data-words data-in="3.1" data-out="6">Через две недели</div>
   <div class="chip" style="left:80px;top:1090px;--r0:-6deg;--r1:-12deg;animation-delay:3.6s">−1 590 ₸ · кофе</div>
   <div class="chip" style="right:80px;top:1170px;--r0:5deg;--r1:12deg;animation-delay:3.9s">−3 400 ₸ · такси</div>
   <div class="chip" style="left:80px;top:1270px;--r0:3deg;--r1:-8deg;animation-delay:4.2s">−8 900 ₸ · доставка</div>
@@ -72,11 +72,11 @@
   <div class="chip" style="right:80px;top:1530px;--r0:-5deg;--r1:-10deg;animation-delay:5.1s">−24 000 ₸ · «просто так»</div>
 
   <!-- 2. И куда всё ушло -->
-  <div class="line mid" style="top:820px" data-words data-in="6.3" data-out="8.5">…и куда всё ушло?</div>
+  <div class="line mid" style="top:820px" data-words data-in="6.3" data-out="8.5">И куда всё ушло?</div>
 
   <!-- 3. Дело не в сумме -->
-  <div class="line big" style="top:690px" data-words data-in="8.7" data-out="11.4">Дело не в сумме.</div>
-  <div class="line mid accent" style="top:930px" data-words data-in="9.7" data-out="11.4" data-stagger="0.11">Деньги утекают по мелочи.</div>
+  <div class="line big" style="top:690px" data-words data-in="8.7" data-out="11.4">Дело не в сумме</div>
+  <div class="line mid accent" style="top:930px" data-words data-in="9.7" data-out="11.4" data-stagger="0.11">Деньги утекают по мелочи</div>
 
   <!-- 4. Одна цифра -->
   <div class="cap" data-words data-in="12.3" data-out="17" data-stagger="0.08" data-accent="сегодня">Сколько можно потратить сегодня</div>
@@ -113,6 +113,33 @@
 
   <div class="vignette"></div><div class="grain"></div>
 </div></div>
+<script type="application/json" id="sfx">
+[
+  {"t": 0,     "type": "pad",     "gain": 0.3,  "dur": 20},
+  {"t": 0.15,  "type": "whoosh",  "gain": 0.35, "pan": -0.2},
+  {"t": 0.75,  "type": "ticks",   "gain": 0.35, "dur": 1.5, "count": 18},
+  {"t": 2.25,  "type": "coin",    "gain": 0.6},
+  {"t": 3.0,   "type": "whoosh",  "gain": 0.22, "pan": 0.2, "dur": 0.45},
+  {"t": 3.4,   "type": "drain",   "gain": 0.3},
+  {"t": 3.75,  "type": "thud",    "gain": 0.45, "pitch": 180, "pan": -0.4},
+  {"t": 4.05,  "type": "thud",    "gain": 0.45, "pitch": 160, "pan": 0.4},
+  {"t": 4.35,  "type": "thud",    "gain": 0.45, "pitch": 150, "pan": -0.4},
+  {"t": 4.65,  "type": "thud",    "gain": 0.45, "pitch": 140, "pan": 0.4},
+  {"t": 4.95,  "type": "thud",    "gain": 0.45, "pitch": 130, "pan": -0.4},
+  {"t": 5.25,  "type": "thud",    "gain": 0.5,  "pitch": 115, "pan": 0.4},
+  {"t": 6.15,  "type": "whoosh",  "gain": 0.32, "dur": 0.6},
+  {"t": 8.6,   "type": "impact",  "gain": 0.75},
+  {"t": 9.55,  "type": "whoosh",  "gain": 0.28, "pan": 0.15},
+  {"t": 10.6,  "type": "riser",   "gain": 0.4,  "dur": 1.1},
+  {"t": 11.65, "type": "whoosh",  "gain": 0.5,  "dur": 0.9, "lo": 120, "hi": 3500},
+  {"t": 12.6,  "type": "ticks",   "gain": 0.25, "dur": 1.25, "count": 14},
+  {"t": 14.92, "type": "tap",     "gain": 0.6},
+  {"t": 15.15, "type": "ticks",   "gain": 0.2,  "dur": 0.8,  "count": 8, "freq": 2100},
+  {"t": 15.3,  "type": "success", "gain": 0.45},
+  {"t": 16.95, "type": "whoosh",  "gain": 0.35, "dur": 0.7},
+  {"t": 17.3,  "type": "chime",   "gain": 0.55}
+]
+</script>
 <script src="engine.js"></script>
 </body>
 </html>
