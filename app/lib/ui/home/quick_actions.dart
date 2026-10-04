@@ -12,7 +12,9 @@ import '../ops/big_purchase.dart';
 
 /// Быстрые операции (D46): ряд плиток на главной. Тап — расход записан
 /// на основной счёт сегодняшним числом, с возможностью сразу отменить.
-/// Долгое нажатие — изменить или удалить плитку.
+/// Долгое нажатие (D106) — записать с другой суммой: лист с подставленной
+/// суммой плитки, «Записать» проводит трату один раз, сама плитка не меняется;
+/// в том же листе — «Настроить плитку».
 class QuickActionsRow extends StatelessWidget {
   const QuickActionsRow({super.key});
 
@@ -20,19 +22,20 @@ class QuickActionsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = context.l10n;
     final fam = context.fam;
-    final state = AppScope.of(context).state;
+    final scope = AppScope.of(context);
+    final state = scope.state;
     // Виджет const внутри главной — без своей подписки он не перестроится
     // после сохранения плитки.
     return ListenableBuilder(
-      listenable: state,
+      listenable: Listenable.merge([state, scope.settings]),
       builder: (context, _) {
         final items = state.quickActions..sort((a, b) => a.name.compareTo(b.name));
-        return _row(context, l, fam, state, items);
+        return _row(context, l, fam, state, items, showHoldHint: items.isNotEmpty && !scope.settings.quickHoldHintSeen);
       },
     );
   }
 
-  Widget _row(BuildContext context, AppLocalizations l, FamColors fam, AppState state, List<QuickAction> items) {
+  Widget _row(BuildContext context, AppLocalizations l, FamColors fam, AppState state, List<QuickAction> items, {required bool showHoldHint}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       SectionHeader(l.quickActions),
       SizedBox(
@@ -50,8 +53,8 @@ class QuickActionsRow extends StatelessWidget {
                   margin: const EdgeInsets.only(right: 10, bottom: 4),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
-                    onTap: () => _run(context, state, q),
-                    onLongPress: () => showQuickActionSheet(context, initial: q),
+                    onTap: () => _record(context, state, q, q.amount),
+                    onLongPress: () => _other(context, state, q),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -79,30 +82,45 @@ class QuickActionsRow extends StatelessWidget {
           ],
         ),
       ),
+      // Подсказка про долгое нажатие — до первого использования (D106).
+      if (showHoldHint)
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 4),
+          child: Text(l.quickHoldHint, style: TextStyle(fontSize: 12, color: fam.text2)),
+        ),
     ]);
   }
 
-  Future<void> _run(BuildContext context, AppState state, QuickAction q) async {
+  /// Долгое нажатие: та же плитка, но сумму вводит человек (D106).
+  Future<void> _other(BuildContext context, AppState state, QuickAction q) async {
+    final settings = AppScope.of(context).settings;
+    final amount = await showQuickAmountSheet(context, q);
+    await settings.markQuickHoldHintSeen();
+    if (amount == null || !context.mounted) return;
+    await _record(context, state, q, amount);
+  }
+
+  Future<void> _record(BuildContext context, AppState state, QuickAction q, int amount) async {
     final l = context.l10n;
     final messenger = ScaffoldMessenger.of(context);
     final accounts = state.activeAccounts;
     if (accounts.isEmpty) return addAccountFlow(context);
     final account = (accounts.where((a) => a.liquid).firstOrNull ?? accounts.first).id;
     // Крупная покупка (D74): спрашиваем, запланирована ли — тогда вне лимита.
-    final kind = await askPlannedPurchase(context, state, q.amount);
+    final kind = await askPlannedPurchase(context, state, amount);
     if (kind == null || !context.mounted) return;
     final ok = await runAction(
       context,
-      () => state.addExpense(amount: q.amount, category: q.category, account: account, date: state.today, note: q.name, time: timeToField(TimeOfDay.now()), plannedPurchase: kind.planned_, unexpected: kind.unexpected_),
+      () => state.addExpense(amount: amount, category: q.category, account: account, date: state.today, note: q.name, time: timeToField(TimeOfDay.now()), plannedPurchase: kind.planned_, unexpected: kind.unexpected_),
     );
     if (!ok) return;
-    if (kind.unexpected_ && context.mounted && await offerCoverFromGoal(context, state, amount: q.amount, account: account)) return;
+    if (kind.unexpected_ && context.mounted && await offerCoverFromGoal(context, state, amount: amount, account: account)) return;
     // Свежая запись — первая в журнале; «Отменить» проводит отмену, история остаётся.
     final tx = state.userTransactions.firstOrNull;
     // Плашка живёт несколько секунд и не остаётся навсегда даже при
     // включённых средствах доступности; «Отменить» срабатывает один раз.
     messenger.showSnackBar(SnackBar(
-      content: Text('${q.name} · ${formatMoney(q.amount)}'),
+      content: Text('${q.name} · ${formatMoney(amount)}'),
       duration: const Duration(seconds: 6),
       persist: false,
       action: tx == null
@@ -116,6 +134,41 @@ class QuickActionsRow extends StatelessWidget {
             ),
     ));
   }
+}
+
+/// Лист «записать с другой суммой» (D106): сумма плитки уже подставлена и
+/// выделена — стёр, ввёл свою, «Записать». Возвращает сумму или `null`.
+/// Внизу — «Настроить плитку» (подпись, сумма по умолчанию, категория, удаление).
+Future<int?> showQuickAmountSheet(BuildContext context, QuickAction q) {
+  final l = context.l10n;
+  final amount = TextEditingController(text: amountToField(q.amount));
+  amount.selection = TextSelection(baseOffset: 0, extentOffset: amount.text.length);
+  return showFormSheet<int>(
+    context,
+    title: q.name,
+    builder: (ctx) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('${categoryName(l, q.category)} · ${l.quickOtherAmountNote}', style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+      const SizedBox(height: 10),
+      AmountField(controller: amount, label: l.amount, autofocus: true),
+      const SizedBox(height: 16),
+      SubmitButton(
+        label: l.quickRecord,
+        onSubmit: () async {
+          final a = parseAmount(amount.text);
+          if (a == null) return false;
+          Navigator.pop(ctx, a);
+          return true;
+        },
+      ),
+      TextButton(
+        onPressed: () {
+          Navigator.pop(ctx);
+          showQuickActionSheet(context, initial: q);
+        },
+        child: Text(l.quickConfigure),
+      ),
+    ]),
+  );
 }
 
 /// Форма плитки: подпись, сумма, категория расхода.

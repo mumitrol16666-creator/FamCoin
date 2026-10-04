@@ -7,6 +7,7 @@ library;
 
 import 'package:famcoin/l10n/app_localizations.dart';
 import 'package:famcoin/state/app_scope.dart';
+import 'package:famcoin/state/models.dart';
 import 'package:famcoin/state/push.dart';
 import 'package:famcoin/state/secret_store.dart';
 import 'package:famcoin/state/settings.dart';
@@ -332,6 +333,30 @@ void main() {
     expect(find.text('Уведомления на устройстве'), findsOneWidget);
     expect(find.text('Позже'), findsOneWidget);
     expect(find.text('Включить уведомления'), findsOneWidget, reason: 'кнопка включения рядом с «Позже» (на Mac её не было: кнопка с минимальной шириной «во всю строку» внутри Row)');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('плитка: долгое нажатие записывает другую сумму, плитка не меняется (D106)', (tester) async {
+    final f = await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
+    final s = f.state;
+    await s.upsert('quick', 'q1', QuickAction('', 'Кофе', 'cafe', kzt(1590)).toJson());
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Удерживайте плитку, чтобы записать другую сумму'), findsOneWidget);
+    await tester.longPress(find.text('Кофе'));
+    await tester.pump(const Duration(seconds: 1)); // главная анимирует фон — pumpAndSettle не дождётся
+    final sheet = find.byType(BottomSheet);
+    expect(find.descendant(of: sheet, matching: find.text('Настроить плитку')), findsOneWidget);
+    await tester.enterText(find.descendant(of: sheet, matching: find.byType(TextField)), '2300');
+    await tester.tap(find.descendant(of: sheet, matching: find.text('Записать')));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    final tx = s.userTransactions.first;
+    expect(tx.type, EventType.expense);
+    expect(tx.postings.firstWhere((p) => p.accountId == 'expense:cafe').amount, kzt(2300));
+    expect(tx.meta['note'], 'Кофе');
+    expect(s.quickActions.single.amount, kzt(1590), reason: 'сумма плитки не изменилась');
+    expect(find.text('Удерживайте плитку, чтобы записать другую сумму'), findsNothing, reason: 'подсказка показана один раз');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

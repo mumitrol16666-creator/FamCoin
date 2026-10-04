@@ -71,6 +71,14 @@ class Settings extends ChangeNotifier {
 
   /// Карточка «включить уведомления на телефоне» на главной (D76) показана
   /// один раз на устройство: после «Позже» или включения больше не появляется.
+  /// Подсказка «удерживайте плитку» на главной показана и больше не нужна (D106).
+  bool get quickHoldHintSeen => _prefs.getBool('quickHoldHintSeen') ?? false;
+  Future<void> markQuickHoldHintSeen() async {
+    if (quickHoldHintSeen) return;
+    await _prefs.setBool('quickHoldHintSeen', true);
+    notifyListeners();
+  }
+
   bool get pushPromptDismissed => _prefs.getBool('pushPromptDismissed') ?? false;
   Future<void> dismissPushPrompt() async {
     await _prefs.setBool('pushPromptDismissed', true);
