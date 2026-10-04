@@ -19,10 +19,15 @@ ARG API_URL=http://localhost:8080
 # а не после закрытия всех вкладок (кеш отдаёт nginx через ETag).
 # --wasm: движок skwasm (WebAssembly) там, где браузер умеет (Safari 26,
 # Chrome), иначе загрузчик сам берёт main.dart.js с CanvasKit.
-RUN cd app && flutter build web --release --wasm --pwa-strategy=none --dart-define=API_URL=$API_URL
-# Версия в адресе загрузчика и main.dart.js/wasm: имена без хеша, и Safari
-# иначе держит старую копию в HTTP-кеше до истечения прежнего срока.
-RUN cd app/build/web && V=$(date +%s) \
+# Метка сборки (D103): зашивается в код (BUILD_ID) и кладётся рядом с сайтом в
+# build.json — приложение сравнивает их и предлагает перезагрузить страницу.
+# Та же метка — версия в адресе загрузчика и main.dart.js/wasm: имена без
+# хеша, и Safari иначе держит старую копию в HTTP-кеше до истечения срока.
+RUN cd app && V=$(date +%s) \
+  && flutter build web --release --wasm --pwa-strategy=none --dart-define=API_URL=$API_URL --dart-define=BUILD_ID=$V \
+  && APP_VERSION=$(grep -E '^version:' pubspec.yaml | awk '{print $2}') \
+  && printf '{"buildId":"%s","version":"%s"}\n' "$V" "$APP_VERSION" > build/web/build.json \
+  && cd build/web \
   && sed -i "s#flutter_bootstrap.js#flutter_bootstrap.js?v=$V#" index.html \
   && sed -i "s#\"mainJsPath\":\"main.dart.js\"#\"mainJsPath\":\"main.dart.js?v=$V\"#" flutter_bootstrap.js \
   && sed -i "s#\"mainWasmPath\":\"main.dart.wasm\"#\"mainWasmPath\":\"main.dart.wasm?v=$V\"#" flutter_bootstrap.js \

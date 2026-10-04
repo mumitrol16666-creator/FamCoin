@@ -77,6 +77,9 @@
   <script>
     // Push-уведомления (Web Push). На iPhone работают только у сайта,
     // добавленного на экран «Домой», и только после нажатия кнопки.
+    // Проверка обновлений (D103): приложение просит перезагрузить страницу,
+    // когда на сервере новая сборка.
+    window.famcoinReload = function () { window.location.reload(); };
     window.famcoinPush = {
       _ios: function () {
         return /iPad|iPhone|iPod/.test(navigator.userAgent) ||

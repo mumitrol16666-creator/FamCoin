@@ -5,6 +5,7 @@ import 'state/api_client.dart';
 import 'state/app_scope.dart';
 import 'state/app_state.dart';
 import 'state/settings.dart';
+import 'state/update_check.dart';
 import 'theme/app_theme.dart';
 import 'ui/auth/login_screen.dart';
 import 'ui/auth/pin_screen.dart';
@@ -19,9 +20,12 @@ Future<void> main() async {
 }
 
 class FamCoinApp extends StatefulWidget {
-  const FamCoinApp({super.key, required this.settings, this.clock});
+  const FamCoinApp({super.key, required this.settings, this.clock, this.updates});
   final Settings settings;
   final DateTime Function()? clock;
+
+  /// Проверка обновлений (D103); `null` — создаётся своя по адресу API.
+  final UpdateCheck? updates;
 
   @override
   State<FamCoinApp> createState() => _FamCoinAppState();
@@ -29,6 +33,7 @@ class FamCoinApp extends StatefulWidget {
 
 class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
   AppState? _state;
+  late final UpdateCheck _updates = widget.updates ?? UpdateCheck(site: apiUrl.replaceFirst(RegExp(r'/api$'), ''));
 
   Settings get settings => widget.settings;
 
@@ -38,6 +43,7 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     settings.addListener(_syncSession);
     _syncSession();
+    _updates.start();
   }
 
   @override
@@ -45,6 +51,7 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     settings.removeListener(_syncSession);
     _state?.dispose();
+    _updates.dispose();
     super.dispose();
   }
 
@@ -55,6 +62,7 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
       case AppLifecycleState.resumed:
         settings.noteResumed();
         _state?.checkDayChange();
+        _updates.check();
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
       case AppLifecycleState.inactive:
@@ -93,7 +101,9 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
         return AppScope(
           settings: settings,
           stateOrNull: _state,
-          child: MaterialApp(
+          child: UpdateScope(
+            notifier: _updates,
+            child: MaterialApp(
             title: 'FamCoin',
             debugShowCheckedModeBanner: false,
             locale: settings.locale,
@@ -108,6 +118,7 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
                 : settings.locked
                     ? const PinLockScreen()
                     : _Home(state: _state!),
+            ),
           ),
         );
       },

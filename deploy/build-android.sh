@@ -23,7 +23,8 @@ if [ ! -f keys/upload.jks ]; then
   chmod 600 keys/key.properties keys/upload.jks
 fi
 
-echo "→ собираю APK (API: $PUBLIC_URL/api)"
+VERSION="$(grep -E "^version:" app/pubspec.yaml | awk "{print \$2}")"
+echo "→ собираю APK $VERSION (API: $PUBLIC_URL/api)"
 docker run --rm \
   -v "$DIR/app:/src/app" -v "$DIR/packages:/src/packages" -v "$DIR/keys:/keys:ro" \
   -v famcoin_pub_cache:/root/.pub-cache -v famcoin_gradle:/root/.gradle \
@@ -32,11 +33,11 @@ docker run --rm \
     git config --global --add safe.directory "*" 2>/dev/null || true
     cp /keys/key.properties android/key.properties
     flutter pub get
-    flutter build apk --release --dart-define=API_URL='"$PUBLIC_URL"'/api
+    flutter build apk --release --dart-define=API_URL='"$PUBLIC_URL"'/api --dart-define=APP_VERSION='"$VERSION"'
     rm -f android/key.properties
   '
 
-VERSION="$(grep -E "^version:" app/pubspec.yaml | awk "{print \$2}")"
+# Версия и ссылка для проверки обновлений в приложении (D103).
 cp app/build/app/outputs/flutter-apk/app-release.apk "dist/famcoin.apk"
 cp app/build/app/outputs/flutter-apk/app-release.apk "dist/famcoin-$VERSION.apk"
 printf '{"version":"%s","builtAt":"%s","url":"%s/download/famcoin.apk"}\n' "$VERSION" "$(date -Is)" "$PUBLIC_URL" > dist/android.json

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../state/app_scope.dart';
+import '../state/reload.dart';
+import '../state/update_check.dart';
 import '../theme/app_theme.dart';
 import 'budget/budget_screen.dart';
 import 'home/home_screen.dart';
@@ -83,7 +86,11 @@ class _ShellState extends State<Shell> {
       // Сезонный фон живёт под вкладками; их Scaffold и AppBar здесь прозрачные.
       // Экраны, открываемые поверх, остаются непрозрачными — иначе при переходе
       // просвечивала бы предыдущая страница.
-      body: SeasonBackground(
+      body: Column(children: [
+        // Вышло обновление (D103): плашка над вкладками, пока не нажали «Позже».
+        const UpdateBanner(),
+        Expanded(
+          child: SeasonBackground(
         child: Theme(
           data: theme.copyWith(
             scaffoldBackgroundColor: Colors.transparent,
@@ -117,6 +124,8 @@ class _ShellState extends State<Shell> {
           ]),
         ),
       ),
+        ),
+      ]),
       // Кнопка живёт у Scaffold, а не внутри панели: так вся её площадь
       // нажимается, включая часть, выступающую над панелью.
       floatingActionButton: Material(
@@ -159,6 +168,42 @@ class _ShellState extends State<Shell> {
               item(3, Icons.more_horiz, l.navMore),
             ]),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Плашка «Вышло обновление» (D103): на сайте — «Обновить» перезагружает
+/// страницу, в APK — «Скачать» открывает новый файл. «Позже» прячет до
+/// следующей версии. Без проверки в дереве (тесты) ничего не рисует.
+class UpdateBanner extends StatelessWidget {
+  const UpdateBanner({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final updates = UpdateScope.maybeOf(context);
+    final info = updates?.available;
+    if (updates == null || info == null || !updates.show) return const SizedBox.shrink();
+    final l = context.l10n;
+    final fam = context.fam;
+    return Material(
+      color: fam.accent,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+          child: Row(children: [
+            Icon(Icons.system_update_alt, color: fam.onAccent, size: 20),
+            const SizedBox(width: 10),
+            Expanded(child: Text(l.updateAvailable(info.version).trim(), style: TextStyle(color: fam.onAccent, fontWeight: FontWeight.w600))),
+            TextButton(onPressed: updates.dismiss, child: Text(l.later, style: TextStyle(color: fam.onAccent))),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: fam.onAccent, foregroundColor: fam.accent),
+              onPressed: () => info.isDownload ? launchUrl(Uri.parse(info.url!), mode: LaunchMode.externalApplication) : reloadApp(),
+              child: Text(info.isDownload ? l.updateDownload : l.updateReload),
+            ),
+          ]),
         ),
       ),
     );
