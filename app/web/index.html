@@ -50,8 +50,55 @@
 
   <title>FamCoin</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    /* Заставка на время загрузки (D104): iPhone выгружает сайт из памяти в
+       фоне, и при возврате он стартует заново — вместо белого экрана логотип
+       и индикатор в цветах приложения. Прячется по первому кадру Flutter. */
+    html, body { background: #F5F3EE; margin: 0; }
+    @media (prefers-color-scheme: dark) { html, body { background: #12151A; } }
+    #famcoin-splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 18px; background: inherit; z-index: 9999; transition: opacity .25s;
+      font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; color: #1F5E4F; }
+    @media (prefers-color-scheme: dark) { #famcoin-splash { color: #7FC8B4; } }
+    #famcoin-splash .logo { width: 72px; height: 72px; border-radius: 20px; background: #1F5E4F; color: #fff;
+      display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 700; }
+    #famcoin-splash .ring { width: 26px; height: 26px; border-radius: 50%; border: 3px solid currentColor;
+      border-right-color: transparent; animation: famcoin-spin .9s linear infinite; opacity: .8; }
+    @keyframes famcoin-spin { to { transform: rotate(360deg); } }
+    #famcoin-splash.hidden { opacity: 0; pointer-events: none; }
+  </style>
 </head>
 <body>
+  <div id="famcoin-splash" aria-hidden="true">
+    <div class="logo">₸</div>
+    <div class="ring"></div>
+  </div>
+  <script>
+    // Первый кадр Flutter — заставка уходит. Сторож (D104): если через 3 секунды
+    // после возврата на экран приложения на странице нет (iOS выгрузила вкладку
+    // или загрузчик не отработал), страница перезагружается сама — один раз на
+    // каждое возвращение, чтобы не зациклиться.
+    (function () {
+      var splash = document.getElementById('famcoin-splash');
+      var ready = false;
+      window.addEventListener('flutter-first-frame', function () {
+        ready = true;
+        if (splash) { splash.classList.add('hidden'); setTimeout(function () { splash.remove(); }, 400); }
+      });
+      var started = Date.now();
+      function alive() { return !!document.querySelector('flutter-view'); }
+      var armed = false;
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible' || armed) return;
+        armed = true;
+        setTimeout(function () {
+          armed = false;
+          // Свежая загрузка ещё идёт — не трогаем; старая страница без приложения — перезагрузка.
+          if (!alive() && (ready || Date.now() - started > 20000)) window.location.reload();
+        }, 3000);
+      });
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
