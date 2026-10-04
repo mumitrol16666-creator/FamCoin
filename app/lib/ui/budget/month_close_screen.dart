@@ -1,3 +1,4 @@
+import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -10,10 +11,7 @@ import '../widgets/common.dart';
 import '../analytics/analytics_screen.dart';
 import 'sheets.dart';
 
-/// Сверка месяца (D75): итоги месяца сразу, потом несколько вопросов —
-/// остатки на счетах, платежи, что осталось, лимит на следующий месяц.
-/// Любой шаг можно пропустить; «Закрыть месяц» только отмечает, что порядок
-/// наведён, и ничего не блокирует.
+/// Сверяем завершённый месяц по остаткам на его последний день.
 class MonthCloseScreen extends StatefulWidget {
   const MonthCloseScreen({super.key, required this.month});
   final DateTime month;
@@ -23,13 +21,16 @@ class MonthCloseScreen extends StatefulWidget {
 }
 
 class _MonthCloseScreenState extends State<MonthCloseScreen> {
-  /// Счета, остаток которых уже сверен (совпал или исправлен) — только на экране.
-  final _checked = <String>{};
+  // Запоминаем именно проверенную сумму: правка платежа снимает подтверждение.
+  final _checked = <String, int>{};
   bool _justClosed = false;
+  bool _saving = false;
 
   Future<void> _close(AppState state) async {
+    setState(() => _saving = true);
     final ok = await runAction(context, () => state.closeMonth(widget.month));
-    if (ok && mounted) setState(() => _justClosed = true);
+    if (mounted) setState(() { _saving = false; _justClosed = ok; });
+    if (!ok && mounted) await runAction(context, state.refresh);
   }
 
   @override
@@ -45,155 +46,104 @@ class _MonthCloseScreenState extends State<MonthCloseScreen> {
         listenable: state,
         builder: (context, _) {
           final fam = context.fam;
-          final m = widget.month;
+          final m = DateTime(widget.month.year, widget.month.month, 1);
+          final lastDay = reconciliationEnd(m);
+          final date = DateFormat('d MMMM y', locale).format(lastDay);
+          final available = canReconcileMonth(m, state.today);
           final sum = state.monthSummary(m);
           final closed = state.isMonthClosed(m);
-          final accounts = state.activeAccounts;
-          final unchecked = [for (final a in accounts) if (!_checked.contains(a.id)) a.id];
-          final lastDay = DateTime(m.year, m.month + 1, 0);
-          final due = state.dueItems(lastDay);
-          final goals = [for (final g in state.goals) if (g.account != null) g];
+          final balances = state.balancesAtMonthEnd(m);
+          final accounts = state.moneyAccounts.where((a) => balances.containsKey(a.id)).toList();
+          final unchecked = [for (final a in accounts) if (_checked[a.id] != balances[a.id]) a.id];
+          final due = state.dueItems(lastDay).where((d) => !d.date.isBefore(m)).toList();
           final limit = state.dailyLimit;
+          final savedAt = state.monthReconciliation(m)?['closedAt'] as String?;
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
             children: [
               Text(l.monthCloseIntro, style: TextStyle(fontSize: 13, color: fam.text2)),
               const SizedBox(height: 12),
+              if (!available) AppCard(child: Text(l.monthAvailableFrom(DateFormat('d MMMM y', locale).format(DateTime(m.year, m.month + 1, 1))))),
+              if (available && state.monthNeedsRecheck(m)) AppCard(
+                color: fam.warn.withValues(alpha: .12),
+                child: Text(l.monthRecheckHint),
+              ),
+              if (closed && savedAt != null) AppCard(
+                color: fam.income.withValues(alpha: .12),
+                child: Text(l.monthSnapshotSaved(DateFormat.yMd(locale).add_Hm().format(DateTime.parse(savedAt).toUtc().add(const Duration(hours: 5))))),
+              ),
               _SummaryCard(sum: sum),
-
-              // 1. Остатки на счетах
-              _Step(
-                title: l.monthStepBalances,
-                hint: l.monthStepBalancesHint,
-                children: [
-                  for (final a in accounts)
-                    _AccountRow(
-                      name: a.name,
-                      balance: state.ledger.balance(a.id),
-                      checked: _checked.contains(a.id),
-                      onMatches: () => setState(() => _checked.add(a.id)),
-                      onFix: () async {
-                        await showAdjustBalanceSheet(context, a.id);
-                        if (mounted) setState(() => _checked.add(a.id));
-                      },
-                    ),
-                  if (unchecked.length > 1)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
+              if (available) ...[
+                _Step(
+                  title: l.monthStepBalances,
+                  hint: l.monthBalancesAsOf(date),
+                  children: [
+                    Text(l.monthStepBalancesHint, style: TextStyle(fontSize: 12, color: fam.text2)),
+                    const SizedBox(height: 12),
+                    for (final a in accounts)
+                      _AccountRow(
+                        name: a.archived ? '${a.name} · ${l.archived}' : a.name,
+                        balance: balances[a.id]!,
+                        checked: closed || _checked[a.id] == balances[a.id],
+                        onMatches: closed ? null : () => setState(() => _checked[a.id] = balances[a.id]!),
+                        onFix: closed ? null : () async {
+                          final saved = await showAdjustBalanceSheet(context, a.id, asOf: lastDay);
+                          if (saved && mounted) setState(() => _checked[a.id] = state.balancesAtMonthEnd(m)[a.id]!);
+                        },
+                      ),
+                    if (!closed && unchecked.length > 1)
+                      TextButton.icon(
                         icon: const Icon(Icons.done_all, size: 18),
                         label: Text(l.monthAllMatch),
-                        onPressed: () => setState(() => _checked.addAll(unchecked)),
+                        onPressed: () => setState(() { for (final id in unchecked) { _checked[id] = balances[id]!; } }),
                       ),
-                    ),
-                ],
-              ),
-
-              // 2. Платежи месяца
-              _Step(
-                title: l.monthStepPayments,
-                hint: due.isEmpty ? null : l.monthPaymentsHint,
-                children: [
-                  if (due.isEmpty)
-                    Text(l.monthPaymentsAllPaid, style: TextStyle(color: fam.income, fontWeight: FontWeight.w600))
-                  else
-                    for (final d in due) ...[
-                      DueTile(due: d, locale: locale),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        // «Уже оплачено» записывает факт датой срока (D98):
-                        // иначе платёж пропадал из расходов, а остаток
-                        // расходился с банком.
-                        child: TextButton(
-                          onPressed: () => showPayDueSheet(context, d, date: d.date, title: l.payAlreadyTitle(d.planned.name)),
-                          child: Text(l.monthAlreadyPaid),
-                        ),
-                      ),
-                    ],
-                ],
-              ),
-
-              // 3. Что осталось
-              if (sum.result != 0)
-                _Step(
-                  title: l.monthStepLeft,
+                    const Divider(),
+                    Text(l.monthBalanceTotal(date), style: TextStyle(fontSize: 12, color: fam.text2)),
+                    MoneyText(balances.values.fold(0, (a, b) => a + b), style: const TextStyle(fontSize: 22)),
+                  ],
+                ),
+                if (!closed) _Step(
+                  title: l.monthStepPayments,
+                  hint: due.isEmpty ? null : l.monthPaymentsHint,
                   children: [
-                    if (sum.result > 0) ...[
-                      Text(l.monthLeftPlus(moneyInText(sum.result))),
-                      const SizedBox(height: 8),
-                      Wrap(spacing: 8, runSpacing: 4, children: [
-                        for (final g in goals)
-                          ActionChip(
-                            label: Text(l.monthToGoal(g.name)),
-                            onPressed: () => showReserveSheet(context, g, release: false, initial: sum.result),
-                          ),
-                        if (goals.isEmpty)
-                          ActionChip(
-                            avatar: const Icon(Icons.flag_outlined, size: 18),
-                            label: Text(l.monthNewGoal),
-                            onPressed: () => showGoalSheet(context),
-                          ),
-                      ]),
-                    ] else
-                      Text(l.monthLeftMinus(moneyInText(-sum.result))),
+                    if (due.isEmpty)
+                      Text(l.monthPaymentsAllPaid, style: TextStyle(color: fam.income, fontWeight: FontWeight.w600))
+                    else for (final d in due) ...[
+                      ListTile(contentPadding: EdgeInsets.zero, title: Text(d.planned.name), subtitle: Text(DateFormat.yMd(locale).format(d.date)), trailing: MoneyText(d.planned.amount)),
+                      Align(alignment: Alignment.centerRight, child: TextButton(
+                        onPressed: () => showPayDueSheet(context, d, date: d.date, title: l.payAlreadyTitle(d.planned.name)),
+                        child: Text(l.monthAlreadyPaid),
+                      )),
+                    ],
                   ],
                 ),
-
-              // 4. Следующий месяц
-              _Step(
-                title: l.monthStepNext,
-                children: [
-                  Text(limit == null
-                      ? l.monthNoLimit
-                      : sum.avgDaily > 0
-                          ? l.monthLimitLine(moneyInText(limit), moneyInText(sum.avgDaily))
-                          : l.monthLimitOnly(moneyInText(limit))),
-                  const SizedBox(height: 8),
-                  Wrap(spacing: 8, runSpacing: 4, children: [
-                    OutlinedButton(
-                      onPressed: () => HomeScreen.showLimitSheet(context, state),
-                      child: Text(limit == null ? l.dailyLimitSet : l.explainChangeLimit),
-                    ),
-                    OutlinedButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen(initialSection: AnalyticsSection.budget))),
-                      child: Text(l.monthCheckLimits),
-                    ),
-                  ]),
-                  if (limit != null && state.dailyLimitCarryOn && state.dailyLimitCarry != 0) ...[
-                    const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(child: Text(l.monthCarryLine(moneyInText(state.dailyLimitCarry)))),
-                      TextButton(onPressed: () => runAction(context, state.resetDailyLimitCarry), child: Text(l.carryReset)),
+                _Step(
+                  title: l.monthStepNext,
+                  hint: l.monthCurrentPlansHint,
+                  children: [
+                    Text(limit == null ? l.monthNoLimit : l.monthLimitOnly(moneyInText(limit))),
+                    const SizedBox(height: 8),
+                    Wrap(spacing: 8, runSpacing: 4, children: [
+                      OutlinedButton(onPressed: () => HomeScreen.showLimitSheet(context, state), child: Text(limit == null ? l.dailyLimitSet : l.explainChangeLimit)),
+                      OutlinedButton(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen(initialSection: AnalyticsSection.budget))),
+                        child: Text(l.monthCheckLimits),
+                      ),
                     ]),
                   ],
-                ],
-              ),
-
-              const SizedBox(height: 8),
-              if (_justClosed) ...[
-                AppCard(
-                  color: fam.guideBg,
-                  child: DefaultTextStyle(
-                    style: const TextStyle(color: FamColors.onGuide),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(l.monthClosedDone, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                      if (state.closedStreakFrom(m) > 1) ...[
-                        const SizedBox(height: 4),
-                        Text(l.monthClosedStreak(state.closedStreakFrom(m))),
-                      ],
-                      const SizedBox(height: 4),
-                      Text(l.monthNextRecon, style: const TextStyle(fontSize: 12)),
-                    ]),
-                  ),
                 ),
-                const SizedBox(height: 12),
-                FilledButton(onPressed: () => Navigator.pop(context), child: Text(l.monthDone)),
-              ] else
+                const SizedBox(height: 8),
+                if (_justClosed && closed) AppCard(child: Text(l.monthClosedDone)),
+                if (!closed && unchecked.isNotEmpty) Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(l.monthCheckAllHint, style: TextStyle(fontSize: 13, color: fam.text2)),
+                ),
                 FilledButton(
-                  onPressed: closed ? null : () => _close(state),
+                  onPressed: closed || _saving || state.busy || unchecked.isNotEmpty ? null : () => _close(state),
                   child: Text(closed ? l.monthClosed : l.monthCloseAction),
                 ),
+              ],
             ],
           );
         },
@@ -240,9 +190,11 @@ class _SummaryCard extends StatelessWidget {
           ),
         const Divider(height: 20),
         Row(children: [
-          Expanded(child: Text(l.reportResult, style: TextStyle(color: fam.text2))),
+          Expanded(child: Text(l.monthResultLabel, style: TextStyle(color: fam.text2))),
           MoneyText(sum.result, sign: true, style: const TextStyle(fontSize: 17)),
         ]),
+        const SizedBox(height: 6),
+        Text(l.monthResultHint, style: TextStyle(fontSize: 12, color: fam.text2)),
         if (pct != null && pct != 0) ...[
           const SizedBox(height: 4),
           Text(pct < 0 ? l.monthExpenseLess(-pct) : l.monthExpenseMore(pct), style: TextStyle(fontSize: 12, color: fam.text2)),
@@ -315,8 +267,8 @@ class _AccountRow extends StatelessWidget {
   final String name;
   final int balance;
   final bool checked;
-  final VoidCallback onMatches;
-  final VoidCallback onFix;
+  final VoidCallback? onMatches;
+  final VoidCallback? onFix;
 
   @override
   Widget build(BuildContext context) {
@@ -337,13 +289,13 @@ class _AccountRow extends StatelessWidget {
               const SizedBox(width: 6),
               Text(l.monthChecked, style: TextStyle(fontSize: 12, color: fam.income)),
               const Spacer(),
-              TextButton(onPressed: onFix, child: Text(l.monthFix)),
+              if (onFix != null) TextButton(onPressed: onFix, child: Text(l.monthFix)),
             ]),
           )
         else
           Wrap(spacing: 8, children: [
             TextButton(onPressed: onMatches, child: Text(l.monthMatches)),
-            TextButton(onPressed: onFix, child: Text(l.monthFix)),
+            if (onFix != null) TextButton(onPressed: onFix, child: Text(l.monthFix)),
           ]),
       ]),
     );
@@ -360,15 +312,19 @@ class MonthCloseListScreen extends StatelessWidget {
     final state = AppScope.of(context).state;
     final fam = context.fam;
     final locale = Localizations.localeOf(context).toString();
-    final months = [
-      for (var i = 0; i <= 12; i++)
-        if (i == 0 || state.hasActivityIn(state.monthOf(-i)) || state.isMonthClosed(state.monthOf(-i))) state.monthOf(-i),
-    ];
     return Scaffold(
       appBar: AppBar(title: Text(l.monthCloseTitle)),
       body: ListenableBuilder(
         listenable: state,
-        builder: (context, _) => ListView(
+        builder: (context, _) {
+          final months = <DateTime>{
+            state.monthStart,
+            for (final tx in state.ledger.transactions)
+              if (!tx.date.isAfter(state.today) && tx.postings.isNotEmpty) DateTime(tx.date.year, tx.date.month, 1),
+            for (final key in state.monthReconciliations.keys) DateTime.parse('$key-01'),
+            for (final key in (state.profile['closedMonths'] as List?) ?? const []) DateTime.parse('$key-01'),
+          }.where((m) => !m.isAfter(state.monthStart)).toList()..sort((a, b) => b.compareTo(a));
+          return ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           children: [
             Text(l.monthCloseIntro, style: TextStyle(fontSize: 13, color: fam.text2)),
@@ -381,7 +337,7 @@ class MonthCloseListScreen extends StatelessWidget {
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('${toBeginningOfSentenceCase(DateFormat.LLLL(locale).format(m))} ${m.year}', style: const TextStyle(fontWeight: FontWeight.w600)),
                       Text(
-                        state.isMonthClosed(m) ? l.monthListStatusClosed : (m == state.monthStart ? l.monthListStatusNow : l.monthListStatusOpen),
+                        state.isMonthClosed(m) ? l.monthListStatusClosed : (m == state.monthStart ? l.monthAvailableFrom(DateFormat('d MMMM y', locale).format(DateTime(m.year, m.month + 1, 1))) : state.monthNeedsRecheck(m) ? l.monthRecheckStatus : l.monthListStatusOpen),
                         style: TextStyle(fontSize: 12, color: state.isMonthClosed(m) ? fam.income : fam.text2),
                       ),
                     ]),
@@ -390,7 +346,8 @@ class MonthCloseListScreen extends StatelessWidget {
                 ]),
               ),
           ],
-        ),
+        );
+        },
       ),
     );
   }

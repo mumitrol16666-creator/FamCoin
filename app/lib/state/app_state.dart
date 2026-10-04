@@ -56,6 +56,7 @@ class AppState extends ChangeNotifier {
   }
 
   Ledger ledger = Ledger();
+  final Map<String, Map<String, dynamic>> monthReconciliations = {};
   String plan = 'free';
 
   /// До какого момента действует оплаченный Pro; пусто — бессрочно или тариф обычный.
@@ -234,6 +235,11 @@ class AppState extends ChangeNotifier {
     name = s['name'] as String?;
     profile = Map<String, dynamic>.from(s['profile'] as Map? ?? const {});
     revision = s['revision'] as int? ?? 0;
+    monthReconciliations.clear();
+    for (final r in (s['monthReconciliations'] as List?) ?? const []) {
+      final record = Map<String, dynamic>.from(r as Map);
+      monthReconciliations['${record['month']}'.substring(0, 7)] = record;
+    }
     _entities.clear();
     for (final e in (s['entities'] as List).cast<Map<String, dynamic>>()) {
       _entities.putIfAbsent(e['kind'] as String, () => {})[e['id'] as String] = Map<String, dynamic>.from(e['data'] as Map);
@@ -301,7 +307,14 @@ class AppState extends ChangeNotifier {
       case 'updateProfile':
         profile = {...profile, ...(c['profile'] as Map).cast<String, dynamic>()};
       default:
+        final before = ledger.transactions.length;
         applyLedgerCommand(ledger, c);
+        final affected = earliestPostingDate(ledger.transactions.skip(before));
+        if (affected != null) {
+          for (final e in monthReconciliations.entries) {
+            if (e.key.compareTo(_period(affected)) >= 0) e.value['invalidatedAt'] ??= _clock().toUtc().toIso8601String();
+          }
+        }
     }
   }
 
@@ -1050,9 +1063,13 @@ class AppState extends ChangeNotifier {
   /// Сверка остатка (O21): разница между фактическим остатком и остатком в
   /// приложении проводится отдельной записью с причиной.
   Future<void> adjustBalance({required String account, required int actualBalance, required String reason, DateTime? date}) {
-    final delta = actualBalance - ledger.balance(account);
+    final delta = actualBalance - ledger.balance(account, asOf: date);
     if (delta == 0) return Future.value();
-    return send({'type': 'adjustment', 'id': newId(), 'date': _date(date ?? today), 'account': account, 'delta': delta.toString(), 'reason': reason});
+    return send({
+      'type': 'adjustment', 'id': newId(), 'date': _date(date ?? today),
+      'account': account, 'delta': delta.toString(), 'reason': reason,
+      if (date != null && canReconcileMonth(date, today) && ledger.account(account).archived) 'allowArchived': true,
+    });
   }
 
   int adjustmentsFor(DateTime monthStart) => ledger.adjustmentsFor(monthStart, DateTime(monthStart.year, monthStart.month + 1, 1));
@@ -1064,16 +1081,30 @@ class AppState extends ChangeNotifier {
   /// главной уходит, но месяц можно закрыть из «Ещё → Сверка месяца».
   static const closeWindowDays = 15;
 
-  /// Закрытые месяцы `ГГГГ-ММ` (профиль `closedMonths`).
-  Set<String> get closedMonths => {...((profile['closedMonths'] as List?) ?? const []).cast<String>()};
+  /// Подтверждённые снимки. Старые отметки без снимка требуют новой сверки.
+  Set<String> get closedMonths => {for (final e in monthReconciliations.entries) if (e.value['invalidatedAt'] == null) e.key};
 
-  bool isMonthClosed(DateTime month) => closedMonths.contains(_period(month));
+  bool isMonthClosed(DateTime month) => canReconcileMonth(month, today) && closedMonths.contains(_period(month));
+
+  Map<String, dynamic>? monthReconciliation(DateTime month) => monthReconciliations[_period(month)];
+
+  bool monthNeedsRecheck(DateTime month) => !isMonthClosed(month) &&
+      (monthReconciliation(month) != null || ((profile['closedMonths'] as List?) ?? const []).contains(_period(month)));
+
+  Map<String, int> balancesAtMonthEnd(DateTime month) {
+    final saved = monthReconciliation(month);
+    if (isMonthClosed(month) && saved != null) {
+      return {for (final e in ((saved['snapshot'] as Map)['balances'] as Map).entries) e.key as String: parseMinor(e.value)};
+    }
+    return reconciliationBalances(ledger, month);
+  }
 
   /// В месяце внесены операции (расход или доход) — есть что сверять.
   bool hasActivityIn(DateTime month) {
     final start = DateTime(month.year, month.month, 1);
     final end = DateTime(month.year, month.month + 1, 1);
-    return ledger.transactions.any((t) => (t.type == EventType.expense || t.type == EventType.income) && !t.date.isBefore(start) && t.date.isBefore(end));
+    return ledger.transactions.any((t) => t.postings.isNotEmpty && t.type != EventType.reversal &&
+        !ledger.isReversed(t.id) && !t.date.isBefore(start) && t.date.isBefore(end));
   }
 
   /// Прошлый месяц, если его пора закрыть: идут первые дни нового, он не
@@ -1081,16 +1112,14 @@ class AppState extends ChangeNotifier {
   DateTime? get monthToClose {
     if (today.day > closeWindowDays) return null;
     final prev = monthOf(-1);
-    return !isMonthClosed(prev) && hasActivityIn(prev) ? prev : null;
+    return !isMonthClosed(prev) && (hasActivityIn(prev) || monthNeedsRecheck(prev)) ? prev : null;
   }
 
-  /// Отметить месяц закрытым. Закрытие ничего не блокирует: записи по-прежнему
-  /// можно вносить и править, отметка нужна для порядка и напоминаний.
+  /// Сервер сохраняет снимок на конец месяца. После ответа send перечитает
+  /// состояние: эту серверную команду нельзя подменять локальной отметкой.
   Future<void> closeMonth(DateTime month) {
-    final all = {...closedMonths, _period(month)}.toList()..sort();
-    // Последние 60 месяцев — профиль не должен расти бесконечно.
-    final kept = all.length > 60 ? all.sublist(all.length - 60) : all;
-    return send({'type': 'updateProfile', 'profile': {'closedMonths': kept}});
+    if (!canReconcileMonth(month, today)) throw LedgerException('Месяц ещё не закончился', code: 'monthNotEnded');
+    return send({'type': 'closeMonth', 'month': _date(DateTime(month.year, month.month, 1)), 'expectedRevision': revision});
   }
 
   /// Сколько месяцев подряд закрыто, считая от [month] назад.

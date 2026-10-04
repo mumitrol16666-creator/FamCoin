@@ -44,7 +44,7 @@ void main() {
       return;
     }
     final auth = AuthService(db);
-    final ledger = LedgerService(db);
+    final ledger = LedgerService(db, clock: () => DateTime.utc(2026, 9, 2));
     final svc = NotificationService(db, ledger, Telegram(db, token: null), WebPush(db, subject: 'mailto:test@example.com'));
     final ids = <String>[];
     var n = 0;
@@ -54,12 +54,17 @@ void main() {
       final id = ((r['user'] as Map)['id']) as String;
       ids.add(id);
       Future<void> cmd(Map<String, dynamic> c) => ledger.command(id, {'commandId': 'c${n++}-${DateTime.now().microsecondsSinceEpoch}', ...c});
-      await cmd({'type': 'updateProfile', 'profile': {'onboarded': true, ...profile}});
+      await cmd({'type': 'updateProfile', 'profile': {'onboarded': true}});
       await cmd({'type': 'addMoneyAccount', 'accountId': 'cash'});
       await cmd({'type': 'opening', 'id': 'op', 'date': '2026-07-01', 'account': 'cash', 'amount': '10000000'});
       if (activity) {
         await cmd({'type': 'income', 'id': 'i1', 'date': '2026-08-05', 'account': 'cash', 'source': 'salary', 'amount': '30000000'});
         await cmd({'type': 'expense', 'id': 'e1', 'date': '2026-08-10', 'account': 'cash', 'splits': {'food': '2000000'}});
+      }
+      if (profile.containsKey('closedMonths')) {
+        for (final month in profile['closedMonths'] as List) {
+          await cmd({'type': 'closeMonth', 'month': '$month-01', 'expectedRevision': (await ledger.state(id))['revision']});
+        }
       }
       return id;
     }
@@ -95,13 +100,35 @@ void main() {
       expect(await rows(active), hasLength(2), reason: 'после сброса метки уходит снова — метка и есть защита от повтора');
 
       // Пробное уведомление: сегодня (сентябрь) операций нет — берём прошлый месяц с учётом;
-      // а если в текущем месяце операции есть — текущий.
+      // текущий месяц даже для предпросмотра закрывать нельзя.
       final preview = await user();
       await svc.sendMonthNudgePreview(preview, DateTime(2026, 9, 5, 12));
       expect((await rows(preview)).single[0], 'Сверьте август', reason: 'в сентябре учёта нет — предпросмотр по августу');
       final now = DateTime(2026, 8, 20, 12);
       await svc.sendMonthNudgePreview(preview, now);
-      expect((await rows(preview)).map((r) => r[0]), ['Сверьте август', 'Сверьте август'], reason: 'в августе есть операции — предпросмотр по идущему месяцу');
+      expect((await rows(preview)).map((r) => r[0]), ['Сверьте август', 'Сверьте июль'], reason: 'предпросмотр всегда по завершённому месяцу');
+
+      // Новый пользователь с учётом в сентябре получает каждую стадию один раз.
+      final prepare = await user();
+      await ledger.command(prepare, {'commandId': 'sept-expense', 'type': 'expense', 'id': 'sept', 'date': '2026-09-15', 'account': 'cash', 'splits': {'food': '10000'}});
+      Future<List<String>> titles(String id) async => [for (final r in await db.execute(Sql.named('SELECT title FROM notifications WHERE user_id = @u'), parameters: {'u': id})) r[0] as String];
+      await svc.runMonth(DateTime(2026, 9, 27, 12));
+      expect(await titles(prepare), isEmpty);
+      await Future.wait([svc.runMonth(DateTime(2026, 9, 28, 10)), svc.runMonth(DateTime(2026, 9, 28, 10))]);
+      expect(await titles(prepare), ['Через 3 дня сверка месяца']);
+      await svc.runMonth(DateTime(2026, 9, 29, 10));
+      expect(await titles(prepare), hasLength(1));
+      await svc.runMonth(DateTime(2026, 9, 30, 10));
+      await svc.runMonth(DateTime(2026, 9, 30, 21));
+      expect((await titles(prepare)).where((t) => t == 'Завтра сверка месяца'), hasLength(1));
+      await svc.runMonth(DateTime(2026, 10, 1, 10));
+      expect(await titles(prepare), contains('Сверьте сентябрь'));
+      await svc.sendBrief(prepare, 'evening', DateTime(2026, 9, 30));
+      final evening = await svc.list(prepare);
+      expect(evening.first['body'], contains('Завтра сверка месяца'));
+      await svc.updateSettings(prepare, {'month': false});
+      await svc.sendBrief(prepare, 'evening', DateTime(2026, 9, 30));
+      expect((await svc.list(prepare)).first['body'], isNot(contains('Завтра сверка месяца')));
     } finally {
       for (final id in ids) {
         await deleteUserData(db, id);

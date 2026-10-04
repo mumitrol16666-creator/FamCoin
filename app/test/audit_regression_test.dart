@@ -25,6 +25,7 @@ class FakeServer {
   final ledger = Ledger();
   final entities = <String, Map<String, Map<String, dynamic>>>{};
   var profile = <String, dynamic>{};
+  final reconciliations = <String, Map<String, dynamic>>{};
   final seen = <String>{};
 
   late final AppState state = AppState(
@@ -129,6 +130,11 @@ class FakeServer {
         for (final item in (c['commands'] as List).cast<Map<String, dynamic>>()) {
           _apply(item);
         }
+      case 'closeMonth':
+        final month = dateFromJson(c['month']);
+        if (!canReconcileMonth(month, now)) throw LedgerException('monthNotEnded');
+        if (c['expectedRevision'] != revision) throw LedgerException('monthChanged');
+        reconciliations[dateToJson(month)] = {'month': dateToJson(month), 'snapshot': reconciliationSnapshot(ledger, month), 'closedAt': now.toUtc().toIso8601String(), 'invalidatedAt': null};
       case 'upsertEntity':
         entities.putIfAbsent(c['kind'] as String, () => {})[c['entityId'] as String] = Map<String, dynamic>.from(c['data'] as Map);
       case 'deleteEntity':
@@ -140,12 +146,20 @@ class FakeServer {
         }
         profile = {...profile, ...patch};
       default:
+        final before = ledger.transactions.length;
         applyLedgerCommand(ledger, c);
+        final affected = earliestPostingDate(ledger.transactions.skip(before));
+        if (affected != null) {
+          for (final r in reconciliations.values) {
+            if (!dateFromJson(r['month']).isBefore(DateTime(affected.year, affected.month, 1))) r['invalidatedAt'] ??= now.toUtc().toIso8601String();
+          }
+        }
     }
   }
 
   Map<String, Object?> _snapshot() => {
         'revision': revision,
+        'monthReconciliations': reconciliations.values.toList(),
         'plan': billingPlan,
         'email': 'audit@example.test',
         'profile': profile,

@@ -1,6 +1,8 @@
 /// Общие элементы интерфейса: суммы, карточки, заголовки, шкалы, поля.
 library;
 
+import 'dart:async';
+
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -95,6 +97,8 @@ String errorText(AppLocalizations l, Object e) {
 /// Ошибка ядра по машинному коду — на языке пользователя; `null`, если код
 /// неизвестен (тогда показывается русский текст ядра).
 String? ledgerErrorText(AppLocalizations l, String? code) => switch (code) {
+      'monthNotEnded' => l.monthNotEnded,
+      'monthChanged' => l.monthChanged,
       'invalidId' => l.leInvalidId,
       'accountExists' => l.leAccountExists,
       'accountNotFound' => l.leAccountNotFound,
@@ -173,27 +177,29 @@ TimeOfDay? timeFromField(Object? v) {
 }
 
 /// Сумма из поля ввода в тиынах; `null`, если пусто или некорректно.
-int? parseAmount(String text, {bool allowZero = false}) {
+int? parseAmount(String text, {bool allowZero = false, bool allowNegative = false}) {
   final raw = text.replaceAll(RegExp(r'[\s ]'), '').replaceAll(',', '.');
   if (raw.isEmpty) return allowZero ? 0 : null;
   final v = double.tryParse(raw);
-  if (v == null || v < 0 || (!allowZero && v == 0) || v > 1e12) return null;
+  if (v == null || !v.isFinite || (!allowNegative && v < 0) || (!allowZero && v == 0) || v.abs() > 1e12) return null;
   return kzt(v);
 }
 
 /// Сумма в тенге для поля ввода: `1250000` тиын → `12500`.
 String amountToField(int minor) {
-  final units = minor ~/ minorPerUnit;
-  final frac = minor % minorPerUnit;
-  return frac == 0 ? '$units' : '$units.${frac.toString().padLeft(2, '0')}';
+  final sign = minor < 0 ? '-' : '';
+  final units = minor.abs() ~/ minorPerUnit;
+  final frac = minor.abs() % minorPerUnit;
+  return frac == 0 ? '$sign$units' : '$sign$units.${frac.toString().padLeft(2, '0')}';
 }
 
 class AmountField extends StatelessWidget {
-  const AmountField({super.key, required this.controller, this.label, this.hint, this.autofocus = false, this.onChanged});
+  const AmountField({super.key, required this.controller, this.label, this.hint, this.autofocus = false, this.allowNegative = false, this.onChanged});
   final TextEditingController controller;
   final String? label;
   final String? hint;
   final bool autofocus;
+  final bool allowNegative;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -201,8 +207,8 @@ class AmountField extends StatelessWidget {
     return TextField(
       controller: controller,
       autofocus: autofocus,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9\s.,]'))],
+      keyboardType: TextInputType.numberWithOptions(decimal: true, signed: allowNegative),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(allowNegative ? r'[0-9\s.,-]' : r'[0-9\s.,]'))],
       onChanged: onChanged,
       decoration: InputDecoration(labelText: label, hintText: hint ?? '0', suffixText: '₸'),
       style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
@@ -283,18 +289,20 @@ class FadeIn extends StatefulWidget {
 }
 
 class _FadeInState extends State<FadeIn> with SingleTickerProviderStateMixin {
+  Timer? _delay;
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
 
   @override
   void initState() {
     super.initState();
-    Future.delayed(Duration(milliseconds: 40 * widget.index.clamp(0, 8)), () {
+    _delay = Timer(Duration(milliseconds: 40 * widget.index.clamp(0, 8)), () {
       if (mounted) _c.forward();
     });
   }
 
   @override
   void dispose() {
+    _delay?.cancel();
     _c.dispose();
     super.dispose();
   }

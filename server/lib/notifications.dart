@@ -53,7 +53,7 @@ class NotificationService {
       final now = DateTime.now().toUtc().add(kzOffset);
       if (now.hour >= morningHour && now.hour < eveningHour) await _run('morning', now);
       if (now.hour >= eveningHour) await _run('evening', now);
-      if (now.hour >= monthHour && now.day <= monthWindowDays) await runMonth(now);
+      if (now.hour >= monthHour) await runMonth(now);
     } catch (e, st) {
       stderr.writeln('notifications: ${e.runtimeType}\n$st');
     } finally {
@@ -94,62 +94,65 @@ class NotificationService {
     }
   }
 
-  /// Раз в месяц, в первые дни: тем, кто ещё не закрыл прошлый месяц и вёл в нём
-  /// учёт, — «Сверьте сентябрь» (D75). Метка `sentMonth` не даёт повторить.
+  /// Подготовка за 3 дня / за день и одно напоминание после конца месяца.
+  /// У каждой стадии своя метка; атомарный захват защищает от двух обработчиков.
   Future<void> runMonth(DateTime now) async {
-    final month = previousMonth(now);
+    if (now.hour < monthHour) return;
+    final preparation = monthPreparationDays(now);
+    if (preparation == null && now.day > monthWindowDays) return;
+    final month = preparation == null ? previousMonth(now) : DateTime(now.year, now.month, 1);
     final key = monthKey(month);
+    final flag = preparation == null ? 'sentMonth' : 'sentMonthPrepare$preparation';
     final users = await db.execute(
       Sql.named('''
         SELECT u.id FROM users u
         WHERE (u.profile->>'onboarded') = 'true'
           AND coalesce((u.notif->>'month')::boolean, true)
-          AND coalesce(u.notif->>'sentMonth', '') <> @key
-          AND NOT (coalesce(u.profile->'closedMonths', '[]'::jsonb) @> to_jsonb(@key::text))
-          AND EXISTS (
+          AND coalesce(u.notif->>@flag, '') <> @key
+          AND NOT EXISTS (SELECT 1 FROM month_reconciliations r
+            WHERE r.user_id = u.id AND r.month = @from::date AND r.invalidated_at IS NULL)
+          AND (EXISTS (
             SELECT 1 FROM transactions t
-            WHERE t.user_id = u.id AND t.type IN ('expense', 'income')
-              AND t.date >= @from::date AND t.date < @to::date)
+            WHERE t.user_id = u.id AND t.type <> 'reversal'
+              AND t.date >= @from::date AND t.date < @to::date
+              AND EXISTS (SELECT 1 FROM postings p WHERE p.user_id = t.user_id AND p.tx_id = t.id)
+              AND NOT EXISTS (SELECT 1 FROM transactions rev WHERE rev.user_id = t.user_id AND rev.reverses = t.id))
+            OR EXISTS (SELECT 1 FROM month_reconciliations r WHERE r.user_id = u.id AND r.month = @from::date AND r.invalidated_at IS NOT NULL))
         LIMIT $batchSize'''),
-      parameters: {'key': key, 'from': _day(month), 'to': _day(DateTime(now.year, now.month, 1))},
+      parameters: {'key': key, 'flag': flag, 'from': _day(month), 'to': _day(DateTime(month.year, month.month + 1, 1))},
     );
     final ids = [for (final r in users) r[0].toString()];
     for (var i = 0; i < ids.length; i += concurrency) {
-      await Future.wait([for (final id in ids.skip(i).take(concurrency)) _deliverMonth(id, month, key)]);
+      await Future.wait([for (final id in ids.skip(i).take(concurrency)) _deliverMonth(id, month, key, flag, preparation)]);
     }
   }
 
   static String _day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  Future<void> _deliverMonth(String userId, DateTime month, String key) async {
+  Future<void> _deliverMonth(String userId, DateTime month, String key, String flag, int? preparation) async {
     try {
-      await db.execute(
-        Sql.named("UPDATE users SET notif = notif || jsonb_build_object('sentMonth', @k::text) WHERE id = @u"),
-        parameters: {'k': key, 'u': userId},
+      final claim = await db.execute(
+        Sql.named("UPDATE users SET notif = notif || jsonb_build_object(@flag::text, @k::text) WHERE id = @u AND coalesce(notif->>@flag, '') <> @k AND coalesce((notif->>'month')::boolean, true) RETURNING id"),
+        parameters: {'k': key, 'flag': flag, 'u': userId},
       );
-      await sendMonthNudge(userId, month).timeout(const Duration(seconds: 90));
+      if (claim.isEmpty) return;
+      await sendMonthNudge(userId, month, preparationDays: preparation).timeout(const Duration(seconds: 90));
     } catch (e) {
       stderr.writeln('month nudge for $userId: ${e.runtimeType}');
     }
   }
 
-  /// Пробное уведомление по кнопке в настройках: показывает то, что придёт
-  /// в начале месяца. Берёт текущий месяц, если в нём уже есть операции
-  /// (так видно живые цифры), иначе прошлый.
-  Future<void> sendMonthNudgePreview(String userId, DateTime now) async {
-    final current = DateTime(now.year, now.month, 1);
-    final r = await db.execute(
-      Sql.named("SELECT EXISTS (SELECT 1 FROM transactions WHERE user_id = @u AND type IN ('expense', 'income') AND date >= @from::date AND date < @to::date)"),
-      parameters: {'u': userId, 'from': _day(current), 'to': _day(DateTime(now.year, now.month + 1, 1))},
-    );
-    await sendMonthNudge(userId, r.first[0] == true ? current : previousMonth(now));
-  }
+  /// Предпросмотр никогда не предлагает закрыть незавершённый месяц.
+  Future<void> sendMonthNudgePreview(String userId, DateTime now) => sendMonthNudge(userId, previousMonth(now));
 
   /// Уведомление «Сверьте <месяц>»: итоги коротко, ссылка открывает сверку в приложении.
-  Future<void> sendMonthNudge(String userId, DateTime month) async {
+  Future<void> sendMonthNudge(String userId, DateTime month, {int? preparationDays}) async {
     final s = await ledger.state(userId);
     final r = _ledgerOf(s).report(month, DateTime(month.year, month.month + 1, 1));
-    final brief = monthNudge(month: month, income: r.income, expense: r.total, locale: s['locale'] as String? ?? 'ru');
+    final locale = s['locale'] as String? ?? 'ru';
+    final brief = preparationDays == null
+        ? monthNudge(month: month, income: r.income, expense: r.total, locale: locale)
+        : monthPreparation(month: month, days: preparationDays, locale: locale);
     await notify(userId, 'system', brief.title, brief.body, openQuery: 'close=${monthKey(month)}');
   }
 
@@ -158,7 +161,9 @@ class NotificationService {
     final l = _ledgerOf(s);
     final entities = (s['entities'] as List).cast<Map<String, dynamic>>();
     List<Map<String, dynamic>> ofKind(String k) => [for (final e in entities) if (e['kind'] == k) Map<String, dynamic>.from(e['data'] as Map)];
+    final preferences = await settings(userId);
     final input = BriefInput(
+      monthRemindersEnabled: preferences['month'] != false,
       ledger: l,
       today: today,
       profile: Map<String, dynamic>.from(s['profile'] as Map? ?? const {}),

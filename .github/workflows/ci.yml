@@ -56,7 +56,7 @@ jobs:
       - name: Тесты сервера на настоящей базе
         env:
           TEST_DB_REQUIRED: '1'
-        run: cd server && dart pub get && dart test test/telegram_login_db_test.dart test/month_nudge_db_test.dart test/chat_entry_db_test.dart test/ai_db_test.dart test/entity_kinds_db_test.dart test/statement_import_db_test.dart
+        run: cd server && dart pub get && dart test test/telegram_login_db_test.dart test/month_nudge_db_test.dart test/month_reconciliation_db_test.dart test/chat_entry_db_test.dart test/ai_db_test.dart test/entity_kinds_db_test.dart test/statement_import_db_test.dart
       # Сервер при старте читает свой проверочный PDF: в образе должен быть
       # pdftotext, и запускаться он должен без прав и с потолком памяти.
       - name: Чтение PDF в образе сервера

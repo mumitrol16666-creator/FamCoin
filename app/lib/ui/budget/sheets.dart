@@ -530,23 +530,25 @@ Future<void> addLimitFlow(BuildContext context, {LimitInfo? initial}) async {
 
 /// Q06 — сверка остатка: пользователь вводит фактический остаток, разница
 /// проводится корректировкой с причиной. Не доход и не расход.
-Future<void> showAdjustBalanceSheet(BuildContext context, String accountId) {
+Future<bool> showAdjustBalanceSheet(BuildContext context, String accountId, {DateTime? asOf}) async {
   final l = context.l10n;
   final state = AppScope.of(context).state;
-  final current = state.ledger.balance(accountId);
+  final current = state.ledger.balance(accountId, asOf: asOf);
   final actual = TextEditingController(text: amountToField(current));
   final reason = TextEditingController();
-  return showFormSheet<void>(
+  var saved = false;
+  await showFormSheet<void>(
     context,
     title: l.adjustBalance,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) {
-        final target = parseAmount(actual.text, allowZero: true);
+        final target = parseAmount(actual.text, allowZero: true, allowNegative: true);
         final delta = target == null ? null : target - current;
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (asOf != null) Text(l.monthAdjustmentAsOf(DateFormat('d MMMM y', Localizations.localeOf(context).toString()).format(asOf))),
           Text('${l.inApp}: ${formatMoney(current)}', style: TextStyle(color: ctx.fam.text2)),
           const SizedBox(height: 12),
-          AmountField(controller: actual, label: l.actualBalance, autofocus: true, onChanged: (_) => set(() {})),
+          AmountField(controller: actual, label: l.actualBalance, autofocus: true, allowNegative: true, onChanged: (_) => set(() {})),
           const SizedBox(height: 8),
           if (delta != null)
             Text(
@@ -562,11 +564,12 @@ Future<void> showAdjustBalanceSheet(BuildContext context, String accountId) {
             label: l.save,
             onSubmit: () async {
               if (target == null || delta == 0 || reason.text.trim().isEmpty) return false;
-              return runAction(ctx, () => state.adjustBalance(account: accountId, actualBalance: target, reason: reason.text.trim()));
+              saved = await runAction(ctx, () => state.adjustBalance(account: accountId, actualBalance: target, reason: reason.text.trim(), date: asOf));
+              return saved;
             },
           ),
         ]);
       },
     ),
-  );
+  );  return saved;
 }

@@ -49,9 +49,10 @@ class _Cached {
 }
 
 class LedgerService {
-  LedgerService(this.db);
+  LedgerService(this.db, {DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   final Pool db;
+  final DateTime Function() _clock;
 
   /// Журналы в памяти по ревизии владельца: без повторного чтения всей
   /// истории на каждую команду. Не больше [cacheLimit] владельцев —
@@ -128,7 +129,7 @@ class LedgerService {
   Future<Map<String, Object?>> state(String userId) async {
     return db.runTx((s) async {
       final u = await s.execute(
-        Sql.named('SELECT email, locale, plan, profile, revision, display_name, pro_until FROM users WHERE id = @u'),
+        Sql.named('SELECT email, locale, plan, profile, revision, display_name, pro_until FROM users WHERE id = @u FOR SHARE'),
         parameters: {'u': userId},
       );
       if (u.isEmpty) throw ApiError(401, 'unauthorized');
@@ -136,6 +137,10 @@ class LedgerService {
       final ledger = await _loadLedger(s, userId, revision);
       final entities = await s.execute(
         Sql.named('SELECT kind, id, data FROM entities WHERE user_id = @u ORDER BY updated_at'),
+        parameters: {'u': userId},
+      );
+      final reconciliations = await s.execute(
+        Sql.named('SELECT month, snapshot, closed_at, invalidated_at FROM month_reconciliations WHERE user_id = @u ORDER BY month'),
         parameters: {'u': userId},
       );
       return {
@@ -146,6 +151,14 @@ class LedgerService {
         'proUntil': (u.first[6] as DateTime?)?.toIso8601String(),
         'profile': u.first[3],
         'revision': revision,
+        'monthReconciliations': [
+          for (final r in reconciliations) {
+            'month': dateToJson(r[0] as DateTime),
+            'snapshot': r[1],
+            'closedAt': (r[2] as DateTime).toUtc().toIso8601String(),
+            'invalidatedAt': (r[3] as DateTime?)?.toUtc().toIso8601String(),
+          },
+        ],
         'accounts': [for (final a in ledger.accounts) accountToJson(a)],
         'transactions': [for (final t in ledger.transactions) transactionToJson(t)],
         'reservations': reservationsToJson(ledger),
@@ -208,11 +221,16 @@ class LedgerService {
           parameters: {'u': userId, 'id': commandId},
         );
         if (seen.isNotEmpty) return (revision: revision, repeated: true); // повтор уже принятой команды
+        if (cmd['type'] == 'closeMonth' && cmd['expectedRevision'] != revision) {
+          throw LedgerException('Данные изменились во время сверки', code: 'monthChanged');
+        }
 
         final ledger = await _loadLedger(s, userId, revision);
         final before = _Snapshot.of(ledger);
         final ctx = _Ctx(s, userId, plan, ledger, Map<String, dynamic>.from(u.first[2] as Map));
         await _apply(ctx, cmd, depth: 0);
+        final affected = earliestPostingDate(ledger.transactions.skip(before.txCount));
+        if (affected != null) await _invalidateReconciliations(ctx, affected);
 
         await _persistLedger(s, userId, ledger, before);
         if (ctx.profileChanged) {
@@ -252,6 +270,10 @@ class LedgerService {
       return;
     }
     if (ledgerCommandTypes.contains(type)) {
+      if (type == 'adjustment' && c['allowArchived'] == true &&
+          !canReconcileMonth(dateFromJson(c['date']), _clock().toUtc().add(const Duration(hours: 5)))) {
+        throw LedgerException('Для архивного счёта можно уточнить только завершённый месяц', code: 'monthNotEnded');
+      }
       if (type == 'addMoneyAccount' && ctx.plan == 'free') {
         final newId = c['accountId'];
         final active = ctx.ledger.accounts.where((a) => a.isMoney && !a.archived && !isPiggy(a.id)).length;
@@ -261,6 +283,9 @@ class LedgerService {
       return;
     }
     switch (type) {
+      case 'closeMonth':
+        if (depth != 0) throw ApiError(400, 'bad_request');
+        await _closeMonth(ctx, dateFromJson(c['month']));
       case 'upsertEntity':
         final kind = c['kind'];
         final id = c['entityId'];
@@ -303,6 +328,24 @@ class LedgerService {
       case 'updateProfile':
         final p = c['profile'];
         if (p is! Map) throw ApiError(400, 'bad_request');
+        // Старый экран сверял текущие остатки. Его отметку нельзя выдавать
+        // за подтверждение исторического снимка: нужна обновлённая версия.
+        if (p.containsKey('closedMonths')) {
+          final months = p['closedMonths'];
+          if (months is! List || months.any((m) => m is! String || !RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(m))) {
+            throw ApiError(400, 'bad_request');
+          }
+          final old = (ctx.profile['closedMonths'] as List?) ?? const [];
+          for (final key in months) {
+            if (!old.contains(key)) {
+              final month = dateFromJson('$key-01');
+              if (!canReconcileMonth(month, _clock().toUtc().add(const Duration(hours: 5)))) {
+                throw LedgerException('Сверка доступна только после окончания месяца', code: 'monthNotEnded');
+              }
+              throw LedgerException('Обновите приложение, чтобы сверить остатки на конец месяца', code: 'monthClientUpdate');
+            }
+          }
+        }
         for (final e in p.entries) {
           if (!profileKeys.contains(e.key)) throw ApiError(400, 'bad_request');
           ctx.profile[e.key as String] = e.value;
@@ -311,6 +354,40 @@ class LedgerService {
         ctx.profileChanged = true;
       default:
         throw ApiError(400, 'bad_request');
+    }
+  }
+
+  Future<void> _closeMonth(_Ctx ctx, DateTime month) async {
+    final start = DateTime(month.year, month.month, 1);
+    final today = _clock().toUtc().add(const Duration(hours: 5));
+    if (!canReconcileMonth(start, today)) {
+      throw LedgerException('Сверка доступна только после окончания месяца', code: 'monthNotEnded');
+    }
+    await ctx.s.execute(
+      Sql.named('''INSERT INTO month_reconciliations (user_id, month, snapshot)
+        VALUES (@u, @m::date, @snapshot:jsonb)
+        ON CONFLICT (user_id, month) DO UPDATE SET snapshot = EXCLUDED.snapshot,
+          closed_at = now(), invalidated_at = NULL'''),
+      parameters: {'u': ctx.userId, 'm': dateToJson(start), 'snapshot': reconciliationSnapshot(ctx.ledger, start)},
+    );
+    final key = dateToJson(start).substring(0, 7);
+    final months = {...((ctx.profile['closedMonths'] as List?) ?? const []).cast<String>(), key}.toList()..sort();
+    ctx.profile['closedMonths'] = months.length > 60 ? months.sublist(months.length - 60) : months;
+    ctx.profileChanged = true;
+  }
+
+  Future<void> _invalidateReconciliations(_Ctx ctx, DateTime affected) async {
+    final from = DateTime(affected.year, affected.month, 1);
+    await ctx.s.execute(
+      Sql.named('UPDATE month_reconciliations SET invalidated_at = now() WHERE user_id = @u AND month >= @m::date AND invalidated_at IS NULL'),
+      parameters: {'u': ctx.userId, 'm': dateToJson(from)},
+    );
+    final key = dateToJson(from).substring(0, 7);
+    final closed = ((ctx.profile['closedMonths'] as List?) ?? const []).cast<String>();
+    final kept = closed.where((m) => m.compareTo(key) < 0).toList();
+    if (kept.length != closed.length) {
+      ctx.profile['closedMonths'] = kept;
+      ctx.profileChanged = true;
     }
   }
 

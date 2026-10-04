@@ -45,13 +45,14 @@ List<(Map<String, dynamic>, DateTime)> _due(List<Map<String, dynamic>> planned, 
 }
 
 class BriefInput {
-  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}});
+  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}, this.monthRemindersEnabled = true});
   final Ledger ledger;
   final DateTime today;
   final Map<String, dynamic> profile;
   final List<Map<String, dynamic>> planned;
   final List<Map<String, dynamic>> limits;
   final String locale;
+  final bool monthRemindersEnabled;
 
   /// Свои категории владельца: id → данные (`name`). Встроенные называются
   /// тем же словарём, что и в боте, — в сводке не бывает `food` или id.
@@ -143,6 +144,11 @@ Brief eveningBrief(BriefInput i) {
   if (dueTomorrow.isNotEmpty) {
     lines.add(kk ? 'Ертең төлем: ${dueTomorrow.map((e) => e.$1['name']).join(', ')}.' : 'Завтра платёж: ${dueTomorrow.map((e) => e.$1['name']).join(', ')}.');
   }
+  final preparation = monthPreparationDays(today);
+  if (i.monthRemindersEnabled && preparation != null) {
+    final reminder = monthPreparation(month: monthStart, days: preparation, locale: i.locale);
+    lines.insertAll(0, ['📅 <b>${reminder.title}</b>', reminder.body, '']);
+  }
   return Brief(kk ? 'Кешкі есеп' : 'Вечерний отчёт', lines.join('\n'));
 }
 
@@ -166,10 +172,30 @@ Brief monthNudge({required DateTime month, required int income, required int exp
   return kk
       ? Brief(
           'Айды жабыңыз: $name',
-          'Ай қорытындысы және бірнеше сұрақ — 5 минут. Кіріс ${_kzt(income)}, шығыс ${_kzt(expense)}. FamCoin-ді ашып, айды жабыңыз.',
+          'Ай аяқталды. Соңғы күннің соңындағы қалдықтарды банк көшірмелерімен салыстырыңыз — 5–10 минут. Кіріс ${_kzt(income)}, шығыс ${_kzt(expense)}. FamCoin-ді ашып, айды жабыңыз.',
         )
       : Brief(
           'Сверьте $name',
-          'Итоги месяца и несколько вопросов — 5 минут. Доходы ${_kzt(income)}, расходы ${_kzt(expense)}. Откройте FamCoin и закройте месяц.',
+          'Месяц закончился. Сравните остатки на его последний день с банковскими выписками — 5–10 минут. Доходы ${_kzt(income)}, расходы ${_kzt(expense)}. Откройте FamCoin и закройте месяц.',
         );
+}
+
+/// За 3 дня и за день до первого числа. UTC исключает влияние летнего времени.
+int? monthPreparationDays(DateTime today) {
+  final days = DateTime.utc(today.year, today.month + 1, 1)
+      .difference(DateTime.utc(today.year, today.month, today.day)).inDays;
+  return days == 3 || days == 1 ? days : null;
+}
+
+Brief monthPreparation({required DateTime month, required int days, required String locale}) {
+  final kk = locale == 'kk';
+  final name = monthName(month.month, locale);
+  final end = reconciliationEnd(month);
+  final date = '${end.day}.${end.month.toString().padLeft(2, '0')}.${end.year}';
+  return Brief(
+    kk ? (days == 1 ? 'Ертең айды тексеру керек' : '3 күннен кейін айды тексеру керек')
+       : (days == 1 ? 'Завтра сверка месяца' : 'Через 3 дня сверка месяца'),
+    kk ? '$name айын тексеруге 5–10 минут бөліңіз. $date күнінің соңындағы қалдықтар көрсетілген банк көшірмелерін дайындап, қолма-қол ақшаны санаңыз. Тексеру келесі айдың 1-күні ашылады.'
+       : 'Выделите 5–10 минут, чтобы сверить $name. В конце $date сохраните остатки из банковских выписок и посчитайте наличные. Сверка откроется 1-го числа.',
+  );
 }

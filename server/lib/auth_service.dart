@@ -287,7 +287,7 @@ class AuthService {
 /// «Начать всё заново»: стереть журнал, справочники, планы, уведомления и
 /// анкету, оставив аккаунт, вход, тариф и настройки Telegram.
 Future<void> resetUserData(Pool db, String userId) => db.runTx((tx) async {
-      for (final table in ['postings', 'reservations', 'transactions', 'ledger_accounts', 'entities', 'commands', 'notifications', 'telegram_drafts', 'telegram_imports', 'ai_conversations', 'ai_monthly_reviews']) {
+      for (final table in ['month_reconciliations', 'postings', 'reservations', 'transactions', 'ledger_accounts', 'entities', 'commands', 'notifications', 'telegram_drafts', 'telegram_imports', 'ai_conversations', 'ai_monthly_reviews']) {
         await tx.execute(Sql.named('DELETE FROM $table WHERE user_id = @u'), parameters: {'u': userId});
       }
       final r = await tx.execute(

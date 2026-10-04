@@ -123,7 +123,7 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
       if (reason is! String || reason.trim().isEmpty || reason.length > 200) {
         throw LedgerException('Укажите причину корректировки', code: 'adjustmentReason');
       }
-      l.adjustment(id: s('id'), date: date(), account: s('account'), delta: m('delta'), reason: reason.trim());
+      l.adjustment(id: s('id'), date: date(), account: s('account'), delta: m('delta'), reason: reason.trim(), allowArchived: c['allowArchived'] == true);
     case 'reverse':
       l.reverse(s('txId'), newId: s('id'));
     case 'reserve':

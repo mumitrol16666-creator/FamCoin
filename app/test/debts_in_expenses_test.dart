@@ -75,6 +75,7 @@ void main() {
     // Высокий экран: форма оплаты целиком в кадре, без прокрутки листа.
     final f = await pumpApp(tester, home: MonthCloseScreen(month: DateTime(2026, 9, 1)), size: const Size(390, 1400));
     final s = f.state;
+    f.now = DateTime(2026, 10, 1); // сверяем завершённый сентябрь
     await s.upsert('planned', 'rent', PlannedInfo('', 'Аренда', kzt(150000), 5, 'home', null, const {}, start: DateTime(2026, 9, 1)).toJson());
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -97,8 +98,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     final tx = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
     expect(tx.date, DateTime(2026, 9, 5));
-    expect(s.monthReport.expense, kzt(150000));
-    expect(s.dueItems(s.today).where((d) => d.planned.id == 'rent'), isEmpty, reason: 'срок отмечен оплаченным');
+    expect(s.reportFor(DateTime(2026, 9)).expense, kzt(150000));
+    expect(s.dueItems(DateTime(2026, 9, 30)).where((d) => d.planned.id == 'rent'), isEmpty, reason: 'срок отмечен оплаченным');
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpWidget(const SizedBox());
   });

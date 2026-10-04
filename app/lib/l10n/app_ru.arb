@@ -983,7 +983,7 @@
     }
   },
   "monthCloseTitle": "Сверка месяца",
-  "monthCloseIntro": "Пять минут раз в месяц — и в деньгах порядок. Любой шаг можно пропустить.",
+  "monthCloseIntro": "После окончания месяца проверьте остатки и платежи. Сверка сохранит подтверждённые суммы на последний день месяца.",
   "monthPartial": "Месяц ещё идёт — итоги промежуточные.",
   "monthExpenseLess": "Расходы на {pct}% меньше, чем в прошлом месяце",
   "@monthExpenseLess": {
@@ -1014,16 +1014,16 @@
     }
   },
   "monthStepBalances": "1. Остатки на счетах",
-  "monthStepBalancesHint": "Сравните с банковским приложением и наличными. Расхождение запишется корректировкой — это не доход и не расход.",
+  "monthStepBalancesHint": "Сравните с остатком на конец этого дня в банковской выписке. Для наличных восстановите сумму на эту дату. Более поздние покупки здесь не учитываются.",
   "monthMatches": "Совпадает",
   "monthFix": "Исправить",
   "monthChecked": "Сверено",
   "monthAllMatch": "Все остатки совпадают",
   "monthStepPayments": "2. Платежи месяца",
-  "monthPaymentsHint": "Оплатите или отметьте уже оплаченные — от этого зависит, сколько денег свободно.",
+  "monthPaymentsHint": "Если платёж уже прошёл в этом месяце, внесите его датой оплаты. Если оплатили позже — запишите операцию с её фактической датой через «Операции».",
   "monthPaymentsAllPaid": "Все платежи оплачены ✓",
   "monthAlreadyPaid": "Уже оплачено",
-  "monthStepLeft": "3. Что осталось",
+  "monthStepLeft": "3. Результат месяца",
   "monthLeftPlus": "В плюсе на {amount}. Отложите часть на цель, пока деньги не потрачены.",
   "@monthLeftPlus": {
     "placeholders": {
@@ -1049,7 +1049,7 @@
     }
   },
   "monthNewGoal": "Создать цель",
-  "monthStepNext": "4. Следующий месяц",
+  "monthStepNext": "3. Текущие планы",
   "monthLimitLine": "Дневной лимит {limit} — деньги на мелочи и перекусы. В этом месяце тратили в среднем {avg} в день.",
   "@monthLimitLine": {
     "placeholders": {
@@ -1079,9 +1079,9 @@
     }
   },
   "monthCheckLimits": "Проверить лимиты по категориям",
-  "monthCloseAction": "Закрыть месяц",
-  "monthClosed": "Месяц закрыт ✓",
-  "monthClosedDone": "Молодец: месяц закрыт.",
+  "monthCloseAction": "Подтвердить сверку",
+  "monthClosed": "Месяц сверен ✓",
+  "monthClosedDone": "Сверка сохранена. Остатки на конец месяца зафиксированы.",
   "monthClosedStreak": "Закрыто месяцев подряд: {n}",
   "@monthClosedStreak": {
     "placeholders": {
@@ -1096,7 +1096,7 @@
   "monthListStatusOpen": "не закрыт",
   "monthListStatusNow": "идёт",
   "notifMonthTitle": "Сверка месяца",
-  "notifMonthDesc": "В начале месяца — итоги прошлого и несколько вопросов.",
+  "notifMonthDesc": "За 3 дня, за день и после окончания месяца. Подготовка также в вечернем отчёте.",
   "sendTestMonth": "Тест: сверка месяца",
   "monthCardTitle": "Сверьте {month}",
   "@monthCardTitle": {
@@ -1469,5 +1469,53 @@
   "goalRealizeSaved": "В копилке {amount}",
   "@goalRealizeSaved": {"placeholders": {"amount": {"type": "String"}}},
   "payAlreadyTitle": "Уже оплачено: {name}",
-  "@payAlreadyTitle": {"placeholders": {"name": {"type": "String"}}}
+  "@payAlreadyTitle": {"placeholders": {"name": {"type": "String"}}},
+  "monthAvailableFrom": "Сверка откроется {date}, когда месяц закончится. Пока доступны предварительные итоги.",
+  "@monthAvailableFrom": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "monthBalancesAsOf": "Остатки на конец дня: {date}",
+  "@monthBalancesAsOf": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "monthBalanceTotal": "Всего на счетах на конец дня {date}",
+  "@monthBalanceTotal": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "monthAdjustmentAsOf": "Исправляем остаток на конец дня {date}. Корректировка будет записана этой датой и также изменит текущий баланс.",
+  "@monthAdjustmentAsOf": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "monthSnapshotSaved": "Сверка подтверждена {date} (UTC+5). Показаны сохранённые остатки.",
+  "@monthSnapshotSaved": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "monthRecheckHint": "Нужна повторная сверка: операции изменились или прежняя отметка не содержит сохранённых остатков. Проверьте суммы и подтвердите их заново.",
+  "monthRecheckStatus": "Нужна повторная сверка",
+  "monthCheckAllHint": "Сначала подтвердите остаток каждого счёта. Для нескольких счетов есть кнопка «Все остатки совпадают».",
+  "monthResultHint": "Поступления минус расходы за месяц. Это изменение за период, а не остаток на счетах и не сумма, которую можно потратить сейчас.",
+  "monthCurrentPlansHint": "Эти настройки действуют сейчас. Изменение лимита не меняет итоги проверяемого месяца.",
+  "monthNotEnded": "Месяц ещё не закончился. Сверка откроется 1-го числа следующего месяца.",
+  "monthChanged": "Данные изменились во время сверки. Обновите остатки и проверьте их ещё раз.",
+  "monthResultLabel": "Результат месяца"
 }

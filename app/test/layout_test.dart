@@ -336,7 +336,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('сверка месяца (D75): карточка на главной, итоги и вопросы сразу, «Закрыть месяц» снимает карточку', (tester) async {
+  testWidgets('сверка месяца (D75): карточка на главной, итоги и вопросы сразу, «Подтвердить сверку» снимает карточку', (tester) async {
     final f = await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
     final s = f.state;
     await s.addIncome(amount: kzt(300000), source: 'salary', account: 'cash', date: DateTime(2026, 9, 1));
@@ -357,20 +357,25 @@ void main() {
     expect(find.text('Сентябрь 2026'), findsOneWidget);
     expect(find.text('Доходы'), findsWidgets);
     expect(find.text('1. Остатки на счетах'), findsOneWidget);
-    expect(find.text('2. Платежи месяца', skipOffstage: false), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('4. Следующий месяц'), 300, scrollable: find.byType(Scrollable).first);
-    expect(find.text('4. Следующий месяц'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Совпадает'), 150, scrollable: find.byType(Scrollable).first);
+    await Scrollable.ensureVisible(tester.element(find.text('Совпадает')), alignment: .5);
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('Совпадает'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.scrollUntilVisible(find.text('2. Платежи месяца'), 200, scrollable: find.byType(Scrollable).first);
+    expect(find.text('2. Платежи месяца'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('3. Текущие планы'), 300, scrollable: find.byType(Scrollable).first);
+    expect(find.text('3. Текущие планы'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('Закрыть месяц'), 300, scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.text('Закрыть месяц'));
+    await tester.scrollUntilVisible(find.text('Подтвердить сверку'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Подтвердить сверку'));
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pump(const Duration(milliseconds: 600));
     expect(s.isMonthClosed(DateTime(2026, 9, 1)), isTrue);
-    expect(find.text('Молодец: месяц закрыт.', skipOffstage: false), findsOneWidget);
+    expect(find.text('Сверка сохранена. Остатки на конец месяца зафиксированы.', skipOffstage: false), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.scrollUntilVisible(find.text('Готово'), 300, scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.text('Готово'));
+    await tester.tap(find.byTooltip('Назад').last);
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Сверьте сентябрь'), findsNothing, reason: 'месяц закрыт — карточка ушла');

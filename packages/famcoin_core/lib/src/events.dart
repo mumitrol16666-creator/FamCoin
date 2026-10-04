@@ -529,13 +529,16 @@ extension LedgerEvents on Ledger {
     required String account,
     required int delta,
     required String reason,
+    bool allowArchived = false,
   }) {
     if (delta == 0) throw LedgerException('Нулевая корректировка', code: 'zeroAdjustment');
+    final money = allowArchived ? this.account(account) : requireActiveMoney(account);
+    if (!money.isMoney) throw LedgerException('Счёт не денежный', code: 'accountNotMoney');
     return _post(Transaction(
       id: id,
       date: date,
       type: EventType.adjustment,
-      postings: [Posting(_money(account), delta), Posting(_equity(equityAdjustment), delta)],
+      postings: [Posting(money.id, delta), Posting(_equity(equityAdjustment), delta)],
       meta: {'reason': reason},
     ));
   }
