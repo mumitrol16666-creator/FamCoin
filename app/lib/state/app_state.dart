@@ -15,12 +15,18 @@ import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'models.dart';
 
+/// Отмена пользователем сохраняет форму и не отправляет команду на сервер.
+class ReconciliationEditCancelled implements Exception {}
+
 class AppState extends ChangeNotifier {
   AppState({required this.api, required this.token, DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   final ApiClient api;
   final String token;
   final DateTime Function() _clock;
+
+  /// UI спрашивает до изменения ранее сверенного месяца.
+  Future<bool> Function(DateTime month)? confirmReconciliationEdit;
 
   Timer? _dayTimer;
   DateTime? _observedDay;
@@ -265,6 +271,15 @@ class AppState extends ChangeNotifier {
   /// остаток. [commandId] задаёт форма и повторяет при повторной отправке:
   /// сервер не применит команду дважды, а клиент перечитает состояние.
   Future<void> send(Map<String, dynamic> command, {String? commandId}) async {
+    final affected = _commandDate(command);
+    final confirm = confirmReconciliationEdit;
+    if (affected != null && confirm != null) {
+      final closed = {...closedMonths, ...((profile['closedMonths'] as List?) ?? const []).cast<String>()}
+          .where((key) => key.compareTo(_period(affected)) >= 0 && key.compareTo(_period(today)) < 0).toList()..sort();
+      if (closed.isNotEmpty && !await confirm(DateTime.parse('${closed.first}-01'))) {
+        throw ReconciliationEditCancelled();
+      }
+    }
     _ahead++;
     notifyListeners();
     try {
@@ -285,6 +300,20 @@ class AppState extends ChangeNotifier {
       _ahead--;
       notifyListeners();
     }
+  }
+
+  /// Для правки учитывается исходная дата отменяемой записи, даже если
+  /// новую версию операции пользователь переносит в текущий месяц.
+  DateTime? _commandDate(Map<String, dynamic> command) {
+    if (command['type'] == 'batch') {
+      final dates = [for (final item in (command['commands'] as List).cast<Map<String, dynamic>>()) _commandDate(item)].whereType<DateTime>().toList()..sort();
+      return dates.firstOrNull;
+    }
+    if (!ledgerCommandTypes.contains(command['type'])) return null;
+    if (command['type'] == 'reverse' || command['type'] == 'restore') {
+      return ledger.transactions.where((t) => t.id == command['txId'] && t.postings.isNotEmpty).firstOrNull?.date;
+    }
+    return command['date'] == null ? null : dateFromJson(command['date']);
   }
 
   Future<void> sendBatch(List<Map<String, dynamic>> commands, {String? commandId}) =>
@@ -311,6 +340,7 @@ class AppState extends ChangeNotifier {
         applyLedgerCommand(ledger, c);
         final affected = earliestPostingDate(ledger.transactions.skip(before));
         if (affected != null) {
+          profile['closedMonths'] = ((profile['closedMonths'] as List?) ?? const []).where((key) => (key as String).compareTo(_period(affected)) < 0).toList();
           for (final e in monthReconciliations.entries) {
             if (e.key.compareTo(_period(affected)) >= 0) e.value['invalidatedAt'] ??= _clock().toUtc().toIso8601String();
           }

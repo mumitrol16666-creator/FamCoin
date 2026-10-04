@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../state/api_client.dart';
@@ -151,6 +152,8 @@ Future<bool> runAction(BuildContext context, Future<void> Function() action) asy
   try {
     await action();
     return true;
+  } on ReconciliationEditCancelled {
+    return false;
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text(errorText(l, e))));
     return false;
@@ -595,6 +598,15 @@ Future<bool> confirm(BuildContext context, {required String title, String? messa
   );
   return ok == true;
 }
+
+/// Один вопрос до записи. «Отмена» ничего не меняет, подтверждение сохраняет
+/// операцию и пересчитывает зависимые остатки обычными формулами журнала.
+Future<bool> confirmReconciliationRecalculation(BuildContext context, DateTime month) => confirm(
+  context,
+  title: context.l10n.monthRecalculateTitle,
+  message: context.l10n.monthRecalculateBody(DateFormat.yMMMM(Localizations.localeOf(context).toString()).format(month)),
+  action: context.l10n.monthRecalculateAction,
+);
 
 /// Выбор денежного счёта.
 class AccountPicker extends StatelessWidget {

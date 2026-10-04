@@ -33,6 +33,7 @@ class FamCoinApp extends StatefulWidget {
 
 class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
   AppState? _state;
+  final _navigatorKey = GlobalKey<NavigatorState>();
   late final UpdateCheck _updates = widget.updates ?? UpdateCheck(site: apiUrl.replaceFirst(RegExp(r'/api$'), ''));
 
   Settings get settings => widget.settings;
@@ -84,6 +85,10 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
     if (_state?.token == token) return;
     _state?.dispose();
     final state = AppState(api: settings.api, token: token, clock: widget.clock);
+    state.confirmReconciliationEdit = (month) async {
+      final context = _navigatorKey.currentContext;
+      return context != null && context.mounted && await confirmReconciliationRecalculation(context, month);
+    };
     state.startDayUpdates();
     setState(() => _state = state);
     state.load().then((_) {
@@ -105,6 +110,7 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
             notifier: _updates,
             child: MaterialApp(
             title: 'FamCoin',
+            navigatorKey: _navigatorKey,
             debugShowCheckedModeBanner: false,
             locale: settings.locale,
             supportedLocales: AppLocalizations.supportedLocales,

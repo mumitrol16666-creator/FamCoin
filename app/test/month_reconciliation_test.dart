@@ -1,3 +1,4 @@
+import 'package:famcoin/state/app_state.dart';
 import 'package:famcoin/ui/budget/month_close_screen.dart';
 import 'package:famcoin/ui/widgets/common.dart';
 import 'package:famcoin_core/famcoin_core.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'audit_regression_test.dart' show FakeServer;
 import 'layout_test.dart' show pumpApp;
+import 'day_rollover_test.dart' show openApp;
 
 void main() {
   test(
@@ -62,6 +64,59 @@ void main() {
       );
     },
   );
+
+  test('перенос операции из сверенного месяца в текущий сначала спрашивает; отмена не отправляет batch', () async {
+    final f = FakeServer();
+    await f.init();
+    f.now = DateTime(2026, 10, 2);
+    await f.state.addExpense(amount: kzt(100), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 30));
+    final old = f.state.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    await f.state.closeMonth(DateTime(2026, 9));
+    final before = f.revision;
+    var asked = 0;
+    f.state.confirmReconciliationEdit = (month) async { asked++; expect(month, DateTime(2026, 9)); return false; };
+    await expectLater(f.state.sendBatch([
+      {'type': 'reverse', 'txId': old.id, 'id': 'undo-for-edit'},
+      {'type': 'expense', 'id': 'new-date', 'date': '2026-10-02', 'account': 'cash', 'splits': {'cafe': '20000'}},
+    ]), throwsA(isA<ReconciliationEditCancelled>()));
+    expect(asked, 1);
+    expect(f.revision, before);
+    expect(f.state.ledger.isReversed(old.id), isFalse);
+    expect(f.state.isMonthClosed(DateTime(2026, 9)), isTrue);
+    await f.state.addExpense(amount: kzt(50), category: 'cafe', account: 'cash', date: f.now);
+    expect(asked, 1, reason: 'текущая покупка не требует подтверждения');
+  });
+
+  testWidgets('настоящая оболочка: предупреждение до записи, отмена сохраняет данные, подтверждение пересчитывает', (tester) async {
+    final app = await openApp(tester, now: DateTime(2026, 10, 2));
+    final s = app.state;
+    await s.closeMonth(DateTime(2026, 9));
+    await tester.pump(const Duration(seconds: 1));
+    final balance = s.ledger.balance('cash');
+    final revision = s.revision;
+    final cancelled = expectLater(s.addExpense(amount: kzt(1000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 30)), throwsA(isA<ReconciliationEditCancelled>()));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Пересчитать остатки?'), findsOneWidget);
+    expect(find.textContaining('включая текущий'), findsOneWidget);
+    expect(s.revision, revision);
+    await tester.tap(find.text('Отмена'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await cancelled;
+    expect(s.ledger.balance('cash'), balance);
+    final saving = s.addExpense(amount: kzt(1000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 30));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('Пересчитать и сохранить'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await saving;
+    expect(s.ledger.balance('cash'), balance - kzt(1000));
+    expect(s.monthNeedsRecheck(DateTime(2026, 9)), isTrue);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   test('историческая корректировка архивного счёта сохраняет архив и правильную дату', () async {
     final f = FakeServer();

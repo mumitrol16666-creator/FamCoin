@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../state/api_client.dart' show ApiException;
 import '../../state/app_scope.dart';
+import '../../state/app_state.dart' show ReconciliationEditCancelled;
 import '../../state/models.dart' show newId;
 import '../../theme/app_theme.dart';
 import '../budget/sheets.dart';
@@ -267,6 +268,9 @@ class _TransactionFieldsState extends State<TransactionFields> {
             await state.addPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), account: account, date: _date, time: time, id: _txId, commandId: _commandId);
           }
       }
+    } on ReconciliationEditCancelled {
+      if (mounted) setState(() => _busy = false);
+      return;
     } catch (e) {
       if (!mounted) return;
       setState(() {
