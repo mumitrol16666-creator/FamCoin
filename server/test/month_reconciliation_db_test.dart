@@ -6,35 +6,23 @@ import 'package:postgres/postgres.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test(
-      'сохранение, граница UTC+5, защита от гонки и повторная сверка на PostgreSQL',
-      () async {
+  test('сохранение, граница UTC+5, защита от гонки и повторная сверка на PostgreSQL', () async {
     final db = Pool.withEndpoints([
       Endpoint(
-          host: 'localhost',
-          port: int.parse(Platform.environment['TEST_DB_PORT'] ?? '5433'),
-          database: 'famcoin',
-          username: 'famcoin',
-          password: 'famcoin')
+          host: 'localhost', port: int.parse(Platform.environment['TEST_DB_PORT'] ?? '5433'), database: 'famcoin', username: 'famcoin', password: 'famcoin')
     ], settings: const PoolSettings(sslMode: SslMode.disable));
     try {
-      await db
-          .execute('SELECT 1 FROM month_reconciliations LIMIT 1')
-          .timeout(const Duration(seconds: 3));
+      await db.execute('SELECT 1 FROM month_reconciliations LIMIT 1').timeout(const Duration(seconds: 3));
     } catch (_) {
       await db.close();
-      if (Platform.environment['TEST_DB_REQUIRED'] == '1')
-        fail('База недоступна');
+      if (Platform.environment['TEST_DB_REQUIRED'] == '1') fail('База недоступна');
       markTestSkipped('локальная база не запущена');
       return;
     }
     final auth = AuthService(db);
     var now = DateTime.utc(2026, 9, 30, 18, 59); // 23:59 в Казахстане
     final service = LedgerService(db, clock: () => now);
-    final user = await auth.register(
-        'reconcile-${DateTime.now().microsecondsSinceEpoch}@example.test',
-        'Test-pass-12345',
-        'ru');
+    final user = await auth.register('reconcile-${DateTime.now().microsecondsSinceEpoch}@example.test', 'Test-pass-12345', 'ru');
     final id = (user['user'] as Map)['id'] as String;
     var n = 0;
     Future<void> cmd(Map<String, dynamic> c) async {
@@ -43,31 +31,18 @@ void main() {
 
     Future<void> close(String month, {int? revision}) async {
       final state = await service.state(id);
-      await cmd({
-        'type': 'closeMonth',
-        'month': month,
-        'expectedRevision': revision ?? state['revision']
-      });
+      await cmd({'type': 'closeMonth', 'month': month, 'expectedRevision': revision ?? state['revision']});
     }
 
     Future<Map> row(String month) async {
       final state = await service.state(id);
-      return (state['monthReconciliations'] as List)
-          .cast<Map>()
-          .singleWhere((r) => r['month'] == month);
+      return (state['monthReconciliations'] as List).cast<Map>().singleWhere((r) => r['month'] == month);
     }
 
-    Matcher error(String code) =>
-        isA<ApiError>().having((e) => e.ledgerCode, 'ledgerCode', code);
+    Matcher error(String code) => isA<ApiError>().having((e) => e.ledgerCode, 'ledgerCode', code);
     try {
       await cmd({'type': 'addMoneyAccount', 'accountId': 'cash'});
-      await cmd({
-        'type': 'opening',
-        'id': 'opening',
-        'date': '2026-09-01',
-        'account': 'cash',
-        'amount': '10000000'
-      });
+      await cmd({'type': 'opening', 'id': 'opening', 'date': '2026-09-01', 'account': 'cash', 'amount': '10000000'});
       await expectLater(close('2026-09-01'), throwsA(error('monthNotEnded')));
       await expectLater(
           cmd({
@@ -88,15 +63,9 @@ void main() {
       });
       final revision = (await service.state(id))['revision'] as int;
       await close('2026-09-01');
-      expect((await row('2026-09-01'))['snapshot']['balances']['cash'],
-          '10000000');
+      expect((await row('2026-09-01'))['snapshot']['balances']['cash'], '10000000');
       // Повтор того же запроса после потери ответа не создаёт новый снимок.
-      final repeated = await service.command(id, {
-        'commandId': 'c${n - 1}',
-        'type': 'closeMonth',
-        'month': '2026-09-01',
-        'expectedRevision': revision
-      });
+      final repeated = await service.command(id, {'commandId': 'c${n - 1}', 'type': 'closeMonth', 'month': '2026-09-01', 'expectedRevision': revision});
       expect(repeated.repeated, isTrue);
       final otherDevice = LedgerService(db, clock: () => now);
       await otherDevice.command(id, {
@@ -108,8 +77,7 @@ void main() {
         'splits': {'cafe': '20000'}
       });
       expect((await row('2026-09-01'))['invalidatedAt'], isNull);
-      await expectLater(close('2026-09-01', revision: revision),
-          throwsA(error('monthChanged')));
+      await expectLater(close('2026-09-01', revision: revision), throwsA(error('monthChanged')));
       now = DateTime.utc(2026, 11, 1);
       await close('2026-10-01');
       // Правка сентября меняет также октябрьский остаток.
@@ -122,27 +90,105 @@ void main() {
       });
       expect((await row('2026-09-01'))['invalidatedAt'], isNotNull);
       expect((await row('2026-10-01'))['invalidatedAt'], isNotNull);
-      expect(
-          (await row('2026-09-01'))['snapshot']['balances']['cash'], '10000000',
-          reason: 'старый снимок сохраняется до повторного подтверждения');
+      expect((await row('2026-09-01'))['snapshot']['balances']['cash'], '10000000', reason: 'старый снимок сохраняется до повторного подтверждения');
       await close('2026-09-01');
       expect((await row('2026-09-01'))['invalidatedAt'], isNull);
-      expect(
-          (await row('2026-09-01'))['snapshot']['balances']['cash'], '9950000');
-      await cmd({
-        'type': 'reverse',
-        'id': 'undo-september',
-        'txId': 'late-september'
-      });
+      expect((await row('2026-09-01'))['snapshot']['balances']['cash'], '9950000');
+      await cmd({'type': 'reverse', 'id': 'undo-september', 'txId': 'late-september'});
       expect((await row('2026-09-01'))['invalidatedAt'], isNotNull);
       // Старый экран сверял текущие суммы: его отметка не подтверждает снимок.
-      await expectLater(cmd({'type': 'updateProfile', 'profile': {'closedMonths': ['2026-09']}}), throwsA(error('monthClientUpdate')));
+      await expectLater(
+          cmd({
+            'type': 'updateProfile',
+            'profile': {
+              'closedMonths': ['2026-09']
+            }
+          }),
+          throwsA(error('monthClientUpdate')));
       expect((await row('2026-09-01'))['invalidatedAt'], isNotNull);
       await close('2026-09-01');
       expect((await row('2026-09-01'))['snapshot']['balances']['cash'], '10000000');
+      expect((await row('2026-10-01'))['invalidatedAt'], isNull, reason: 'отмена сентябрьской правки восстановила октябрьские суммы');
+      // Старый алгоритм мог пометить неизменившийся снимок. Чтение исправляет
+      // только такой ложный статус и сохраняет подтверждённые суммы/дату.
+      final saved = await row('2026-09-01');
+      await db.execute(Sql.named("UPDATE month_reconciliations SET invalidated_at = now() WHERE user_id = @u"), parameters: {'u': id});
+      final repaired = await row('2026-09-01');
+      expect(repaired['invalidatedAt'], isNull);
+      expect(repaired['snapshot'], saved['snapshot']);
+      expect(repaired['closedAt'], saved['closedAt']);
+      final persisted =
+          await db.execute(Sql.named('SELECT count(*) FROM month_reconciliations WHERE user_id = @u AND invalidated_at IS NOT NULL'), parameters: {'u': id});
+      expect(persisted.first[0], 0);
+      // Доход и расход сентября взаимно покрываются: сентябрьские итоги
+      // меняются, но остатки и итоги октября сохраняются.
+      await cmd({
+        'type': 'batch',
+        'commands': [
+          {'type': 'income', 'id': 'offset-income', 'date': '2026-09-30', 'account': 'cash', 'source': 'salary', 'amount': '10000'},
+          {
+            'type': 'expense',
+            'id': 'offset-expense',
+            'date': '2026-09-30',
+            'account': 'cash',
+            'splits': {'food': '10000'}
+          },
+        ]
+      });
+      expect((await row('2026-09-01'))['invalidatedAt'], isNotNull);
+      expect((await row('2026-10-01'))['invalidatedAt'], isNull);
+      await close('2026-09-01');
+      final unchanged = await row('2026-09-01');
+      // Отмена и новая версия — одна атомарная правка, без промежуточного
+      // снятия сверки. Меняются только категория, примечание и день в месяце.
+      await cmd({
+        'type': 'batch',
+        'commands': [
+          {'type': 'reverse', 'id': 'offset-edit-undo', 'txId': 'offset-expense'},
+          {
+            'type': 'expense',
+            'id': 'offset-edited',
+            'date': '2026-09-20',
+            'account': 'cash',
+            'splits': {'cafe': '10000'},
+            'meta': {'note': 'Исправление'}
+          },
+        ]
+      });
+      expect((await row('2026-09-01'))['invalidatedAt'], isNull);
+      expect((await row('2026-09-01'))['closedAt'], unchanged['closedAt']);
+      expect((await row('2026-10-01'))['invalidatedAt'], isNull);
+      await expectLater(
+          cmd({
+            'type': 'batch',
+            'commands': [
+              {'type': 'reverse', 'id': 'failed-undo', 'txId': 'offset-edited'},
+              {
+                'type': 'expense',
+                'id': 'failed-edit',
+                'date': '2026-09-20',
+                'account': 'cash',
+                'splits': {'cafe': '0'}
+              },
+            ]
+          }),
+          throwsA(isA<ApiError>()));
+      expect((await row('2026-09-01'))['invalidatedAt'], isNull);
+      expect((await row('2026-09-01'))['snapshot'], unchanged['snapshot']);
       await cmd({'type': 'archiveAccount', 'accountId': 'cash'});
-      await expectLater(cmd({'type': 'adjustment', 'id': 'bad-archive-adjust', 'account': 'cash', 'date': '2026-11-01', 'delta': '100', 'reason': 'Проверка', 'allowArchived': true}), throwsA(error('monthNotEnded')));
-      await cmd({'type': 'adjustment', 'id': 'archive-adjust', 'account': 'cash', 'date': '2026-09-30', 'delta': '100', 'reason': 'Выписка', 'allowArchived': true});
+      await expectLater(
+          cmd({
+            'type': 'adjustment',
+            'id': 'bad-archive-adjust',
+            'account': 'cash',
+            'date': '2026-11-01',
+            'delta': '100',
+            'reason': 'Проверка',
+            'allowArchived': true
+          }),
+          throwsA(error('monthNotEnded')));
+      await cmd(
+          {'type': 'adjustment', 'id': 'archive-adjust', 'account': 'cash', 'date': '2026-09-30', 'delta': '100', 'reason': 'Выписка', 'allowArchived': true});
       expect((await service.state(id))['accounts'], contains(isA<Map>().having((a) => a['id'], 'id', 'cash').having((a) => a['archived'], 'archived', true)));
       expect((await row('2026-09-01'))['invalidatedAt'], isNotNull);
       await resetUserData(db, id);
@@ -152,5 +198,5 @@ void main() {
       await deleteUserData(db, id);
       await db.close();
     }
-  });
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

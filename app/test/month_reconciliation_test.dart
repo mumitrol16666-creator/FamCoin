@@ -10,60 +10,34 @@ import 'layout_test.dart' show pumpApp;
 import 'day_rollover_test.dart' show openApp;
 
 void main() {
-  test(
-    'кофе первого числа не меняет сверку; корректировка относится к концу месяца',
-    () async {
-      final f = FakeServer();
-      await f.init();
-      final s = f.state;
-      final september = DateTime(2026, 9);
-      expect(() => s.closeMonth(september), throwsA(isA<LedgerException>()));
-      f.now = DateTime(2026, 10, 1);
-      await s.addExpense(
-        amount: kzt(1000),
-        category: 'cafe',
-        account: 'cash',
-        date: f.now,
-      );
-      expect(s.ledger.balance('cash'), kzt(99000));
-      expect(s.balancesAtMonthEnd(september)['cash'], kzt(100000));
-      await s.adjustBalance(
-        account: 'cash',
-        actualBalance: kzt(98000),
-        reason: 'Выписка на 30 сентября',
-        date: DateTime(2026, 9, 30),
-      );
-      expect(s.balancesAtMonthEnd(september)['cash'], kzt(98000));
-      expect(s.ledger.balance('cash'), kzt(97000));
-      await s.closeMonth(september);
-      expect(s.isMonthClosed(september), isTrue);
-      await s.addExpense(
-        amount: kzt(500),
-        category: 'cafe',
-        account: 'cash',
-        date: f.now,
-      );
-      expect(s.isMonthClosed(september), isTrue);
-      expect(s.balancesAtMonthEnd(september)['cash'], kzt(98000));
-      await s.addExpense(
-        amount: kzt(200),
-        category: 'cafe',
-        account: 'cash',
-        date: DateTime(2026, 9, 30),
-      );
-      expect(s.isMonthClosed(september), isFalse);
-      expect(s.monthNeedsRecheck(september), isTrue);
-      expect(s.balancesAtMonthEnd(september)['cash'], kzt(97800));
-      await s.refresh();
-      expect(s.monthNeedsRecheck(september), isTrue);
-      await s.closeMonth(september);
-      expect(s.isMonthClosed(september), isTrue);
-      expect(
-        s.monthReconciliation(september)!['snapshot']['balances']['cash'],
-        '9780000',
-      );
-    },
-  );
+  test('кофе первого числа не меняет сверку; корректировка относится к концу месяца', () async {
+    final f = FakeServer();
+    await f.init();
+    final s = f.state;
+    final september = DateTime(2026, 9);
+    expect(() => s.closeMonth(september), throwsA(isA<LedgerException>()));
+    f.now = DateTime(2026, 10, 1);
+    await s.addExpense(amount: kzt(1000), category: 'cafe', account: 'cash', date: f.now);
+    expect(s.ledger.balance('cash'), kzt(99000));
+    expect(s.balancesAtMonthEnd(september)['cash'], kzt(100000));
+    await s.adjustBalance(account: 'cash', actualBalance: kzt(98000), reason: 'Выписка на 30 сентября', date: DateTime(2026, 9, 30));
+    expect(s.balancesAtMonthEnd(september)['cash'], kzt(98000));
+    expect(s.ledger.balance('cash'), kzt(97000));
+    await s.closeMonth(september);
+    expect(s.isMonthClosed(september), isTrue);
+    await s.addExpense(amount: kzt(500), category: 'cafe', account: 'cash', date: f.now);
+    expect(s.isMonthClosed(september), isTrue);
+    expect(s.balancesAtMonthEnd(september)['cash'], kzt(98000));
+    await s.addExpense(amount: kzt(200), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 30));
+    expect(s.isMonthClosed(september), isFalse);
+    expect(s.monthNeedsRecheck(september), isTrue);
+    expect(s.balancesAtMonthEnd(september)['cash'], kzt(97800));
+    await s.refresh();
+    expect(s.monthNeedsRecheck(september), isTrue);
+    await s.closeMonth(september);
+    expect(s.isMonthClosed(september), isTrue);
+    expect(s.monthReconciliation(september)!['snapshot']['balances']['cash'], '9780000');
+  });
 
   test('перенос операции из сверенного месяца в текущий сначала спрашивает; отмена не отправляет batch', () async {
     final f = FakeServer();
@@ -74,11 +48,24 @@ void main() {
     await f.state.closeMonth(DateTime(2026, 9));
     final before = f.revision;
     var asked = 0;
-    f.state.confirmReconciliationEdit = (month) async { asked++; expect(month, DateTime(2026, 9)); return false; };
-    await expectLater(f.state.sendBatch([
-      {'type': 'reverse', 'txId': old.id, 'id': 'undo-for-edit'},
-      {'type': 'expense', 'id': 'new-date', 'date': '2026-10-02', 'account': 'cash', 'splits': {'cafe': '20000'}},
-    ]), throwsA(isA<ReconciliationEditCancelled>()));
+    f.state.confirmReconciliationEdit = (month) async {
+      asked++;
+      expect(month, DateTime(2026, 9));
+      return false;
+    };
+    await expectLater(
+      f.state.sendBatch([
+        {'type': 'reverse', 'txId': old.id, 'id': 'undo-for-edit'},
+        {
+          'type': 'expense',
+          'id': 'new-date',
+          'date': '2026-10-02',
+          'account': 'cash',
+          'splits': {'cafe': '20000'},
+        },
+      ]),
+      throwsA(isA<ReconciliationEditCancelled>()),
+    );
     expect(asked, 1);
     expect(f.revision, before);
     expect(f.state.ledger.isReversed(old.id), isFalse);
@@ -94,7 +81,10 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     final balance = s.ledger.balance('cash');
     final revision = s.revision;
-    final cancelled = expectLater(s.addExpense(amount: kzt(1000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 30)), throwsA(isA<ReconciliationEditCancelled>()));
+    final cancelled = expectLater(
+      s.addExpense(amount: kzt(1000), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 30)),
+      throwsA(isA<ReconciliationEditCancelled>()),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Пересчитать остатки?'), findsOneWidget);
@@ -153,9 +143,7 @@ void main() {
     expect(parseAmount('NaN', allowNegative: true), isNull);
   });
 
-  testWidgets('текущий месяц недоступен для сверки даже по прямому переходу', (
-    tester,
-  ) async {
+  testWidgets('текущий месяц недоступен для сверки даже по прямому переходу', (tester) async {
     await pumpApp(
       tester,
       home: MonthCloseScreen(month: DateTime(2026, 9)),
@@ -167,41 +155,121 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'отмена корректировки не подтверждает счёт, после проверки можно закрыть',
-    (tester) async {
-      final f = await pumpApp(
-        tester,
-        home: MonthCloseScreen(month: DateTime(2026, 9)),
-        size: const Size(360, 740),
-      );
-      f.now = DateTime(2026, 10, 1);
-      await f.state.refresh();
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Исправить'), 180);
-      await tester.tap(find.text('Исправить'));
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('Исправляем остаток на конец дня'),
-        findsOneWidget,
-      );
-      Navigator.of(
-        tester.element(find.textContaining('Исправляем остаток на конец дня')),
-      ).pop();
-      await tester.pumpAndSettle();
-      expect(find.text('Совпадает'), findsOneWidget);
-      await Scrollable.ensureVisible(
-        tester.element(find.text('Совпадает')),
-        alignment: .5,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Совпадает'));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Подтвердить сверку'), 250);
-      await tester.tap(find.text('Подтвердить сверку'));
-      await tester.pumpAndSettle();
-      expect(f.state.isMonthClosed(DateTime(2026, 9)), isTrue);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('отмена корректировки не подтверждает счёт, после проверки можно закрыть', (tester) async {
+    final f = await pumpApp(
+      tester,
+      home: MonthCloseScreen(month: DateTime(2026, 9)),
+      size: const Size(360, 740),
+    );
+    f.now = DateTime(2026, 10, 1);
+    await f.state.refresh();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Исправить'), 180);
+    await Scrollable.ensureVisible(tester.element(find.text('Исправить')), alignment: .5);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Исправить'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Исправляем остаток на конец дня'), findsOneWidget);
+    Navigator.of(tester.element(find.textContaining('Исправляем остаток на конец дня'))).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Совпадает'), findsOneWidget);
+    await Scrollable.ensureVisible(tester.element(find.text('Совпадает')), alignment: .5);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Совпадает'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Подтвердить сверку'), 250);
+    await tester.tap(find.text('Подтвердить сверку'));
+    await tester.pumpAndSettle();
+    expect(f.state.isMonthClosed(DateTime(2026, 9)), isTrue);
+    expect(tester.takeException(), isNull);
+  });
+  test('правка категории не предупреждает и не снимает сверку; отмена реальной правки восстанавливает её', () async {
+    final f = FakeServer();
+    await f.init();
+    f.now = DateTime(2026, 11, 20);
+    final s = f.state;
+    await s.addExpense(amount: kzt(100), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 30));
+    final old = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    await s.closeMonth(DateTime(2026, 9));
+    await s.closeMonth(DateTime(2026, 10));
+    var asked = 0;
+    s.confirmReconciliationEdit = (_) async {
+      asked++;
+      return true;
+    };
+    await s.sendBatch([
+      {'type': 'reverse', 'txId': old.id, 'id': 'edit-undo'},
+      {
+        'type': 'expense',
+        'id': 'edit-replacement',
+        'date': '2026-09-29',
+        'account': 'cash',
+        'splits': {'food': '10000'},
+        'meta': {'note': 'Другая категория'},
+      },
+    ]);
+    expect(asked, 0);
+    expect(s.isMonthClosed(DateTime(2026, 9)), isTrue);
+    expect(s.isMonthClosed(DateTime(2026, 10)), isTrue);
+    await s.refresh();
+    expect(s.isMonthClosed(DateTime(2026, 9)), isTrue);
+    await s.send({
+      'type': 'expense',
+      'id': 'forgotten',
+      'date': '2026-09-30',
+      'account': 'cash',
+      'splits': {'food': '5000'},
+    });
+    expect(asked, 1);
+    expect(s.monthChanges(DateTime(2026, 9))!.balances['cash'], (before: kzt(99900), after: kzt(99850)));
+    expect(s.monthToClose, DateTime(2026, 9), reason: 'старое расхождение видно даже после 15 числа');
+    expect(s.monthChangesSinceConfirmation(DateTime(2026, 9))!.map((t) => t.id), contains('forgotten'));
+    await s.send({'type': 'reverse', 'id': 'undo-forgotten', 'txId': 'forgotten'});
+    expect(s.isMonthClosed(DateTime(2026, 9)), isTrue);
+    expect(s.isMonthClosed(DateTime(2026, 10)), isTrue);
+    await s.refresh();
+    expect(s.isMonthClosed(DateTime(2026, 9)), isTrue);
+    expect(s.monthToClose, isNull);
+  });
+
+  testWidgets('повторная сверка показывает было → стало и записи; нет шага лимитов', (tester) async {
+    final f = await pumpApp(
+      tester,
+      home: MonthCloseScreen(month: DateTime(2026, 9)),
+      size: const Size(320, 740),
+    );
+    f.now = DateTime(2026, 10, 2);
+    await f.state.closeMonth(DateTime(2026, 9));
+    await f.state.addExpense(amount: kzt(500), category: 'cafe', account: 'cash', date: DateTime(2026, 9, 30));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('${moneyInText(kzt(100000))} → ${moneyInText(kzt(99500))}'), findsOneWidget);
+    expect(find.textContaining('Расходы: ${moneyInText(0)} → ${moneyInText(kzt(500))}'), findsOneWidget);
+    expect(find.text('3. Текущие планы'), findsNothing);
+    await tester.scrollUntilVisible(find.text('Записи после подтверждения'), 150);
+    await Scrollable.ensureVisible(tester.element(find.text('Записи после подтверждения')), alignment: .5);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Записи после подтверждения'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('30.09.2026'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('старая отметка объясняется обновлением, без заявления об изменении операций', (tester) async {
+    final f = await pumpApp(
+      tester,
+      home: MonthCloseScreen(month: DateTime(2026, 9)),
+      size: const Size(360, 740),
+    );
+    f.now = DateTime(2026, 10, 2);
+    await f.state.send({
+      'type': 'updateProfile',
+      'profile': {
+        'closedMonths': ['2026-09'],
+      },
+    });
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Это не означает, что ваши операции изменились.'), findsOneWidget);
+    expect(find.text('Нужна повторная сверка'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

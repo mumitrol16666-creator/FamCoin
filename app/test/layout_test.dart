@@ -364,8 +364,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     await tester.scrollUntilVisible(find.text('2. Платежи месяца'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('2. Платежи месяца'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('3. Текущие планы'), 300, scrollable: find.byType(Scrollable).first);
-    expect(find.text('3. Текущие планы'), findsOneWidget);
+    expect(find.text('3. Текущие планы'), findsNothing);
 
     await tester.scrollUntilVisible(find.text('Подтвердить сверку'), 300, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Подтвердить сверку'));
@@ -375,7 +374,7 @@ void main() {
     expect(find.text('Сверка сохранена. Остатки на конец месяца зафиксированы.', skipOffstage: false), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byTooltip('Назад').last);
+    await tester.tap(find.text('Готово'));
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Сверьте сентябрь'), findsNothing, reason: 'месяц закрыт — карточка ушла');

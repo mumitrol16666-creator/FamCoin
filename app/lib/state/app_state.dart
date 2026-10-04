@@ -276,8 +276,25 @@ class AppState extends ChangeNotifier {
     if (affected != null && confirm != null) {
       final closed = {...closedMonths, ...((profile['closedMonths'] as List?) ?? const []).cast<String>()}
           .where((key) => key.compareTo(_period(affected)) >= 0 && key.compareTo(_period(today)) < 0).toList()..sort();
-      if (closed.isNotEmpty && !await confirm(DateTime.parse('${closed.first}-01'))) {
-        throw ReconciliationEditCancelled();
+      if (closed.isNotEmpty) {
+        final preview = ledgerFromSnapshot(
+          accounts: ledger.accounts.map(accountToJson),
+          transactions: ledger.transactions.map(transactionToJson),
+          reservations: reservationsToJson(ledger),
+        );
+        void apply(Map<String, dynamic> c) {
+          if (c['type'] == 'batch') {
+            for (final item in (c['commands'] as List).cast<Map<String, dynamic>>()) { apply(item); }
+          } else if (ledgerCommandTypes.contains(c['type'])) {
+            applyLedgerCommand(preview, c);
+          }
+        }
+        apply(command);
+        final changed = closed.where((key) {
+          final month = DateTime.parse('$key-01');
+          return !reconciliationChanges(reconciliationSnapshot(ledger, month), reconciliationSnapshot(preview, month)).isEmpty;
+        }).firstOrNull;
+        if (changed != null && !await confirm(DateTime.parse('$changed-01'))) throw ReconciliationEditCancelled();
       }
     }
     _ahead++;
@@ -290,7 +307,10 @@ class AppState extends ChangeNotifier {
         await _reload();
       } else {
         try {
+          final before = ledger.transactions.length;
           _applyLocal(command);
+          final affected = earliestPostingDate(ledger.transactions.skip(before));
+          if (affected != null) _updateReconciliations(affected);
           revision = r.revision;
         } catch (_) {
           await _reload();
@@ -336,16 +356,26 @@ class AppState extends ChangeNotifier {
       case 'updateProfile':
         profile = {...profile, ...(c['profile'] as Map).cast<String, dynamic>()};
       default:
-        final before = ledger.transactions.length;
         applyLedgerCommand(ledger, c);
-        final affected = earliestPostingDate(ledger.transactions.skip(before));
-        if (affected != null) {
-          profile['closedMonths'] = ((profile['closedMonths'] as List?) ?? const []).where((key) => (key as String).compareTo(_period(affected)) < 0).toList();
-          for (final e in monthReconciliations.entries) {
-            if (e.key.compareTo(_period(affected)) >= 0) e.value['invalidatedAt'] ??= _clock().toUtc().toIso8601String();
-          }
-        }
     }
+  }
+
+  // Только после всей команды: отмена + новая версия могут не менять суммы.
+  void _updateReconciliations(DateTime affected) {
+    final closed = {...((profile['closedMonths'] as List?) ?? const []).cast<String>()};
+    for (final e in monthReconciliations.entries) {
+      if (e.key.compareTo(_period(affected)) < 0) continue;
+      final month = DateTime.parse('${e.key}-01');
+      if (monthChanges(month)!.isEmpty) {
+        e.value['invalidatedAt'] = null;
+        closed.add(e.key);
+      } else {
+        e.value['invalidatedAt'] ??= _clock().toUtc().toIso8601String();
+        closed.remove(e.key);
+      }
+    }
+    final months = closed.toList()..sort();
+    profile['closedMonths'] = months.length > 60 ? months.sublist(months.length - 60) : months;
   }
 
   /// Перечитать состояние с сервера (после оплаты Pro и т.п.).
@@ -1118,6 +1148,21 @@ class AppState extends ChangeNotifier {
 
   Map<String, dynamic>? monthReconciliation(DateTime month) => monthReconciliations[_period(month)];
 
+  bool monthHasLegacyMark(DateTime month) => monthReconciliation(month) == null &&
+      ((profile['closedMonths'] as List?) ?? const []).contains(_period(month));
+
+  ReconciliationChanges? monthChanges(DateTime month) {
+    final record = monthReconciliation(month);
+    return record == null ? null : reconciliationChanges(record['snapshot'] as Map, reconciliationSnapshot(ledger, month));
+  }
+
+  List<Transaction>? monthChangesSinceConfirmation(DateTime month) {
+    final count = (monthReconciliation(month)?['snapshot'] as Map?)?['transactionCount'] as int?;
+    if (count == null) return null; // Старый снимок не содержит границу журнала.
+    final until = DateTime(month.year, month.month + 1, 1);
+    return ledger.transactions.skip(count).where((t) => t.postings.isNotEmpty && t.date.isBefore(until)).toList().reversed.toList();
+  }
+
   bool monthNeedsRecheck(DateTime month) => !isMonthClosed(month) &&
       (monthReconciliation(month) != null || ((profile['closedMonths'] as List?) ?? const []).contains(_period(month)));
 
@@ -1140,6 +1185,8 @@ class AppState extends ChangeNotifier {
   /// Прошлый месяц, если его пора закрыть: идут первые дни нового, он не
   /// закрыт и в нём вёлся учёт. Иначе `null` — карточка на главной не нужна.
   DateTime? get monthToClose {
+    final changed = monthReconciliations.entries.where((e) => e.value['invalidatedAt'] != null && e.key.compareTo(_period(today)) < 0).map((e) => e.key).toList()..sort();
+    if (changed.isNotEmpty) return DateTime.parse('${changed.first}-01');
     if (today.day > closeWindowDays) return null;
     final prev = monthOf(-1);
     return !isMonthClosed(prev) && (hasActivityIn(prev) || monthNeedsRecheck(prev)) ? prev : null;

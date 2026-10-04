@@ -143,11 +143,15 @@ class NotificationService {
   }
 
   /// Предпросмотр никогда не предлагает закрыть незавершённый месяц.
-  Future<void> sendMonthNudgePreview(String userId, DateTime now) => sendMonthNudge(userId, previousMonth(now));
+  Future<void> sendMonthNudgePreview(String userId, DateTime now) => sendMonthNudge(userId, previousMonth(now), preview: true);
 
   /// Уведомление «Сверьте <месяц>»: итоги коротко, ссылка открывает сверку в приложении.
-  Future<void> sendMonthNudge(String userId, DateTime month, {int? preparationDays}) async {
+  Future<void> sendMonthNudge(String userId, DateTime month, {int? preparationDays, bool preview = false}) async {
     final s = await ledger.state(userId);
+    // Пока уведомление готовилось, пользователь мог завершить сверку.
+    // state также восстанавливает ложные отметки старого алгоритма.
+    if (!preview && preparationDays == null && (s['monthReconciliations'] as List).cast<Map>().any(
+        (r) => r['month'] == _day(month) && r['invalidatedAt'] == null)) return;
     final r = _ledgerOf(s).report(month, DateTime(month.year, month.month + 1, 1));
     final locale = s['locale'] as String? ?? 'ru';
     final brief = preparationDays == null

@@ -474,6 +474,12 @@ class _CloseMonthCard extends StatelessWidget {
     final fam = context.fam;
     final locale = Localizations.localeOf(context).toString();
     final sum = state.monthSummary(month);
+    final changes = state.monthNeedsRecheck(month) ? state.monthChanges(month) : null;
+    final balanceChange = changes?.balances.entries.firstOrNull;
+    final body = state.monthHasLegacyMark(month) ? l.monthLegacyStatus
+        : balanceChange != null ? l.monthChangedAmount(state.accountInfo(balanceChange.key)?.name ?? balanceChange.key, moneyInText(balanceChange.value.before), moneyInText(balanceChange.value.after))
+        : changes != null ? l.monthChangedTotalsHint
+        : l.monthCardBody(moneyInText(sum.income), moneyInText(sum.expense));
     return AppCard(
       color: fam.warnBg,
       onTap: onOpen,
@@ -484,7 +490,7 @@ class _CloseMonthCard extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(l.monthCardTitle(DateFormat.LLLL(locale).format(month)), style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
-            Text(l.monthCardBody(moneyInText(sum.income), moneyInText(sum.expense)), style: TextStyle(fontSize: 12, color: fam.text2)),
+            Text(body, style: TextStyle(fontSize: 12, color: fam.text2)),
           ]),
         ),
         const Icon(Icons.chevron_right),

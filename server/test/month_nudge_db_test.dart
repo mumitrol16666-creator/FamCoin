@@ -72,6 +72,8 @@ void main() {
     try {
       final active = await user();
       final closed = await user(profile: {'closedMonths': ['2026-08']});
+      // Ложное снятие сверки старым алгоритмом не должно порождать напоминание.
+      await db.execute(Sql.named('UPDATE month_reconciliations SET invalidated_at = now() WHERE user_id = @u'), parameters: {'u': closed});
       final quiet = await user(activity: false);
       final off = await user();
       await db.execute(Sql.named("UPDATE users SET notif = notif || '{\"month\": false}'::jsonb WHERE id = @u"), parameters: {'u': off});

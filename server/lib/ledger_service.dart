@@ -143,6 +143,24 @@ class LedgerService {
         Sql.named('SELECT month, snapshot, closed_at, invalidated_at FROM month_reconciliations WHERE user_id = @u ORDER BY month'),
         parameters: {'u': userId},
       );
+      final records = <Map<String, Object?>>[];
+      for (final r in reconciliations) {
+        final month = r[0] as DateTime;
+        var invalidatedAt = r[3] as DateTime?;
+        // Старый алгоритм снимал подтверждение по одной лишь дате правки.
+        // Восстанавливаем его, если все подтверждённые суммы совпадают.
+        // FOR SHARE на users не даёт команде изменить журнал в это время.
+        if (invalidatedAt != null && reconciliationChanges(r[1] as Map, reconciliationSnapshot(ledger, month)).isEmpty) {
+          await s.execute(Sql.named('UPDATE month_reconciliations SET invalidated_at = NULL WHERE user_id = @u AND month = @m::date'),
+            parameters: {'u': userId, 'm': dateToJson(month)});
+          invalidatedAt = null;
+        }
+        records.add({
+          'month': dateToJson(month), 'snapshot': r[1],
+          'closedAt': (r[2] as DateTime).toUtc().toIso8601String(),
+          'invalidatedAt': invalidatedAt?.toUtc().toIso8601String(),
+        });
+      }
       return {
         'email': u.first[0],
         'name': u.first[5],
@@ -151,14 +169,7 @@ class LedgerService {
         'proUntil': (u.first[6] as DateTime?)?.toIso8601String(),
         'profile': u.first[3],
         'revision': revision,
-        'monthReconciliations': [
-          for (final r in reconciliations) {
-            'month': dateToJson(r[0] as DateTime),
-            'snapshot': r[1],
-            'closedAt': (r[2] as DateTime).toUtc().toIso8601String(),
-            'invalidatedAt': (r[3] as DateTime?)?.toUtc().toIso8601String(),
-          },
-        ],
+        'monthReconciliations': records,
         'accounts': [for (final a in ledger.accounts) accountToJson(a)],
         'transactions': [for (final t in ledger.transactions) transactionToJson(t)],
         'reservations': reservationsToJson(ledger),
@@ -378,16 +389,27 @@ class LedgerService {
 
   Future<void> _invalidateReconciliations(_Ctx ctx, DateTime affected) async {
     final from = DateTime(affected.year, affected.month, 1);
-    await ctx.s.execute(
-      Sql.named('UPDATE month_reconciliations SET invalidated_at = now() WHERE user_id = @u AND month >= @m::date AND invalidated_at IS NULL'),
+    final rows = await ctx.s.execute(
+      Sql.named('SELECT month, snapshot, invalidated_at FROM month_reconciliations WHERE user_id = @u AND month >= @m::date ORDER BY month'),
       parameters: {'u': ctx.userId, 'm': dateToJson(from)},
     );
-    final key = dateToJson(from).substring(0, 7);
-    final closed = ((ctx.profile['closedMonths'] as List?) ?? const []).cast<String>();
-    final kept = closed.where((m) => m.compareTo(key) < 0).toList();
-    if (kept.length != closed.length) {
-      ctx.profile['closedMonths'] = kept;
-      ctx.profileChanged = true;
+    final closed = {...((ctx.profile['closedMonths'] as List?) ?? const []).cast<String>()};
+    for (final row in rows) {
+      final month = row[0] as DateTime;
+      final changed = !reconciliationChanges(row[1] as Map, reconciliationSnapshot(ctx.ledger, month)).isEmpty;
+      if (changed != (row[2] != null)) {
+        await ctx.s.execute(
+          Sql.named('UPDATE month_reconciliations SET invalidated_at = ${changed ? 'now()' : 'NULL'} WHERE user_id = @u AND month = @m::date'),
+          parameters: {'u': ctx.userId, 'm': dateToJson(month)},
+        );
+      }
+      final key = dateToJson(month).substring(0, 7);
+      final profileChanged = changed ? closed.remove(key) : closed.add(key);
+      if (profileChanged) ctx.profileChanged = true;
+    }
+    if (ctx.profileChanged) {
+      final months = closed.toList()..sort();
+      ctx.profile['closedMonths'] = months.length > 60 ? months.sublist(months.length - 60) : months;
     }
   }
 

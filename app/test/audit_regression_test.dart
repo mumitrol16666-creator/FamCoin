@@ -110,7 +110,16 @@ class FakeServer {
     final id = cmd['commandId'] as String;
     if (seen.contains(id)) return http.Response(jsonEncode({'revision': revision, 'repeated': true}), 200);
     try {
+      final before = ledger.transactions.length;
       _apply(cmd);
+      final affected = earliestPostingDate(ledger.transactions.skip(before));
+      if (affected != null) {
+        for (final r in reconciliations.values) {
+          if (dateFromJson(r['month']).isBefore(DateTime(affected.year, affected.month, 1))) continue;
+          final changes = reconciliationChanges(r['snapshot'] as Map, reconciliationSnapshot(ledger, dateFromJson(r['month'])));
+          r['invalidatedAt'] = changes.isEmpty ? null : r['invalidatedAt'] ?? now.toUtc().toIso8601String();
+        }
+      }
     } on LedgerException catch (e) {
       return http.Response(jsonEncode({'error': 'ledger', 'message': e.message}), 422);
     }
@@ -146,14 +155,7 @@ class FakeServer {
         }
         profile = {...profile, ...patch};
       default:
-        final before = ledger.transactions.length;
         applyLedgerCommand(ledger, c);
-        final affected = earliestPostingDate(ledger.transactions.skip(before));
-        if (affected != null) {
-          for (final r in reconciliations.values) {
-            if (!dateFromJson(r['month']).isBefore(DateTime(affected.year, affected.month, 1))) r['invalidatedAt'] ??= now.toUtc().toIso8601String();
-          }
-        }
     }
   }
 

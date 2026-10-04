@@ -43,7 +43,41 @@ Map<String, dynamic> reconciliationSnapshot(Ledger ledger, DateTime month) {
     'income': report.income.toString(),
     'expense': report.total.toString(),
     'cashFlow': report.cashFlow.toString(),
+    // Журнал дописывается, а не переписывается. Позволяет показать записи,
+    // появившиеся после подтверждения, включая отмены старых операций.
+    'transactionCount': ledger.transactions.length,
   };
+}
+
+typedef ReconciliationAmountChange = ({int before, int after});
+
+class ReconciliationChanges {
+  const ReconciliationChanges(this.balances, this.totals);
+  final Map<String, ReconciliationAmountChange> balances;
+  final Map<String, ReconciliationAmountChange> totals;
+  bool get isEmpty => balances.isEmpty && totals.isEmpty;
+}
+
+/// Сверка подтверждает остатки каждого счёта и денежные итоги месяца.
+/// Названия, категории, комментарии, лимиты и число записей сами по себе
+/// подтверждения не снимают. Сравнивается результат всей атомарной команды.
+ReconciliationChanges reconciliationChanges(Map saved, Map current) {
+  final before = saved['balances'] as Map;
+  final after = current['balances'] as Map;
+  final balances = <String, ReconciliationAmountChange>{};
+  for (final id in {...before.keys, ...after.keys}) {
+    final oldValue = parseMinor(before[id] ?? '0');
+    final newValue = parseMinor(after[id] ?? '0');
+    if (oldValue != newValue)
+      balances[id as String] = (before: oldValue, after: newValue);
+  }
+  final totals = <String, ReconciliationAmountChange>{};
+  for (final key in ['income', 'expense', 'cashFlow']) {
+    final oldValue = parseMinor(saved[key]);
+    final newValue = parseMinor(current[key]);
+    if (oldValue != newValue) totals[key] = (before: oldValue, after: newValue);
+  }
+  return ReconciliationChanges(balances, totals);
 }
 
 /// Новая проводка задним числом затрагивает и последующие остатки. Дата
