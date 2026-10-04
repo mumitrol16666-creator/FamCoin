@@ -103,15 +103,20 @@ Map<String, Object?> _operations(AppState s, AppLocalizations l) {
   }
 
   final shown = [for (final t in all) if (chosen.contains(t)) t];
-  List<Map<String, Object?>> on(int daysAgo) => [for (final t in shown) if (daysBetween(t.date, s.today) == daysAgo) row(t, dated: false)];
+  // Доходы — отдельным списком (D100): в общем списке за день модель
+  // перечисляла «подработку» и «уроки» среди того, на что ушли деньги.
+  final spends = [for (final t in shown) if (t.type == EventType.expense) t];
+  final incomes = [for (final t in shown) if (t.type == EventType.income) t];
+  List<Map<String, Object?>> on(int daysAgo) => [for (final t in spends) if (daysBetween(t.date, s.today) == daysAgo) row(t, dated: false)];
   return {
     'operationsToday': on(0),
     'operationsYesterday': on(1),
     'operationsDayBeforeYesterday': on(2),
     'operationsEarlier': [
-      for (final t in shown)
+      for (final t in spends)
         if (daysBetween(t.date, s.today) case final d when d > 2 || d < 0) row(t, dated: true),
     ],
+    'incomes': [for (final t in incomes) row(t, dated: true)],
   };
 }
 
@@ -291,7 +296,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'looksIncomplete': s.recurringMonthly > avgIncome,
     },
     ..._operations(s, l),
-    'operationsNote': 'Расходы и доходы этого и прошлого месяца по дням: последние $_recentOperations и $_largestOperations самых крупных. Пустой список — за этот день операций нет. Заметки написал сам человек.',
+    'operationsNote': 'operationsToday, operationsYesterday, operationsDayBeforeYesterday, operationsEarlier — только траты (расходы) по дням; incomes — только доходы, с датой. Из операций этого и прошлого месяца взяты последние $_recentOperations и $_largestOperations самых крупных. Пустой список — за этот день трат нет. Заметки написал сам человек.',
     'familyMode': s.familyMode,
   };
 }

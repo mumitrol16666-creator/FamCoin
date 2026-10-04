@@ -540,6 +540,7 @@ void main() {
     f.aiLimit = 3;
     await f.state.load();
     await f.state.addExpense(amount: kzt(1500), category: 'cafe', account: 'cash', date: f.state.today, note: 'Латте');
+    await f.state.addIncome(amount: kzt(8000), source: 'side', account: 'cash', date: f.state.today, note: 'уроки');
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.textContaining('отправляются сервису ИИ'), findsOneWidget);
@@ -569,6 +570,8 @@ void main() {
     for (final day in ['operationsYesterday', 'operationsDayBeforeYesterday', 'operationsEarlier']) {
       expect(context[day], isEmpty, reason: 'пустой день — явный пустой список ($day)');
     }
+    // Доход — не трата: в дневных списках его нет, он в своём списке с датой (D100).
+    expect((context['incomes'] as List).single, allOf(containsPair('type', 'income'), containsPair('amount', 8000), containsPair('note', 'уроки'), contains('date')));
     expect(context['tracking'], containsPair('daysOfHistory', 1), reason: 'учёт начат сегодня — консультант это видит');
     expect((context['monthEndBalanceForecast'] as Map)['roughEstimate'], isNotNull);
     expect((context['observations'] as Map)['incomeDaySpendRatio'], isNull, reason: 'меньше трёх доходов — не закономерность');
