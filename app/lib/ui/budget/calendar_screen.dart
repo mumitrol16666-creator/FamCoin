@@ -120,7 +120,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       isPaid
                           ? ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: CategoryAvatar(p.debtId != null ? Icons.account_balance_outlined : categoryById(p.category).icon),
+                              leading: CategoryAvatar.of(categoryById(p.debtId != null ? debtsCategory : p.category)),
                               title: Text(p.name),
                               subtitle: Text('${DateFormat.MMMMd(locale).format(d)} · ${l.paidThisMonth}', style: TextStyle(fontSize: 12, color: fam.income)),
                               trailing: MoneyText(p.amount, color: fam.text2),

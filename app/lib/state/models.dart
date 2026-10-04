@@ -16,10 +16,16 @@ String newId() {
 int _minor(Object? v) => v == null ? 0 : parseMinor(v);
 
 class CategoryDef {
-  const CategoryDef(this.id, this.icon, {this.isIncome = false, this.name, this.iconIndex, this.expenseType});
+  const CategoryDef(this.id, this.icon, {this.isIncome = false, this.name, this.iconIndex, this.expenseType, this.emoji});
   final String id;
   final IconData icon;
   final bool isIncome;
+
+  /// Свой смайлик вместо значка (D107); `null` — рисуется [icon].
+  final String? emoji;
+
+  /// Есть ли смайлик (пустая строка — как отсутствие).
+  bool get hasEmoji => emoji != null && emoji!.trim().isNotEmpty;
 
   /// Название своей категории; у встроенных подпись берётся из локализации.
   final String? name;
@@ -50,7 +56,8 @@ CategoryDef customCategoryFromJson(String id, Map<String, dynamic> d) {
   final idx = ((d['icon'] as num?)?.toInt() ?? 0).clamp(0, customIcons.length - 1);
   final typeName = d['expenseType'] as String?;
   final type = typeName == null ? null : ExpenseType.values.where((t) => t.name == typeName).firstOrNull;
-  return CategoryDef(id, customIcons[idx], isIncome: d['income'] == true, name: d['name'] as String? ?? '?', iconIndex: idx, expenseType: type);
+  final emoji = (d['emoji'] as String?)?.trim();
+  return CategoryDef(id, customIcons[idx], isIncome: d['income'] == true, name: d['name'] as String? ?? '?', iconIndex: idx, expenseType: type, emoji: emoji == null || emoji.isEmpty ? null : emoji);
 }
 
 const categories = <CategoryDef>[

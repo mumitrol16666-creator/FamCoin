@@ -1632,9 +1632,9 @@ class AppState extends ChangeNotifier {
   /// Категория используется в журнале — удалять нельзя, иначе история потеряет подпись.
   bool categoryInUse(String id) => ledger.hasAccount(expenseAccount(id)) || ledger.hasAccount(incomeAccount(id));
 
-  Future<String> addCategory({required String name, required int iconIndex, required bool income, ExpenseType? expenseType}) async {
+  Future<String> addCategory({required String name, required int iconIndex, required bool income, ExpenseType? expenseType, String? emoji}) async {
     final id = 'c${newId().substring(0, 12)}';
-    await upsert('category', id, {'name': name, 'icon': iconIndex, 'income': income, if (expenseType != null) 'expenseType': expenseType.name});
+    await upsert('category', id, {'name': name, 'icon': iconIndex, 'income': income, if (expenseType != null) 'expenseType': expenseType.name, if (emoji != null && emoji.trim().isNotEmpty) 'emoji': emoji.trim()});
     return id;
   }
 

@@ -69,7 +69,7 @@ class BudgetScreen extends StatelessWidget {
                         final paidNow = p.paid.contains(period);
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: CategoryAvatar(p.debtId != null ? Icons.account_balance_outlined : categoryById(p.category).icon),
+                          leading: CategoryAvatar.of(categoryById(p.debtId != null ? debtsCategory : p.category)),
                           title: Text(p.name),
                           subtitle: Text(
                             [
@@ -118,7 +118,7 @@ class BudgetScreen extends StatelessWidget {
                                     : l.purchaseBy(name, moneyInText(monthly));
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: CategoryAvatar(categoryById(p.category).icon),
+                          leading: CategoryAvatar.of(categoryById(p.category)),
                           title: Text(p.name),
                           subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(when, style: TextStyle(fontSize: 12, color: overdue ? fam.expense : fam.text2)),

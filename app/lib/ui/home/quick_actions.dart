@@ -58,7 +58,7 @@ class QuickActionsRow extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Icon(categoryById(q.category).icon, size: 20, color: context.scheme.primary),
+                        CategoryGlyph(categoryById(q.category), size: 20, color: context.scheme.primary),
                         const SizedBox(height: 6),
                         Text(q.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                         MoneyText(q.amount, style: TextStyle(fontSize: 12, color: fam.text2)),

@@ -248,7 +248,9 @@ void main() {
     await tester.tap(find.byTooltip('Добавить лимит'));
     await tester.pumpAndSettle();
     expect(find.text('Своя категория'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).last, 'Новый лимит');
+    // Внутри листа первое поле — название; последнее теперь «Свой смайлик» (D107),
+    // а под листом есть поле поиска экрана лимитов.
+    await tester.enterText(find.descendant(of: find.byType(BottomSheet), matching: find.byType(TextField)).first, 'Новый лимит');
     await tester.ensureVisible(find.text('Сохранить'));
     await tester.tap(find.text('Сохранить'));
     await tester.pumpAndSettle();

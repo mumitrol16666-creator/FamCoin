@@ -412,10 +412,17 @@ class UsageBar extends StatelessWidget {
 }
 
 class CategoryAvatar extends StatelessWidget {
-  const CategoryAvatar(this.icon, {super.key, this.color, this.size = 40});
+  const CategoryAvatar(this.icon, {super.key, this.color, this.size = 40, this.emoji});
+
+  /// Плашка категории: смайлик, если он задан (D107), иначе значок.
+  CategoryAvatar.of(CategoryDef def, {Key? key, Color? color, double size = 40}) : this(def.icon, key: key, color: color, size: size, emoji: def.hasEmoji ? def.emoji : null);
+
   final IconData icon;
   final Color? color;
   final double size;
+
+  /// Свой смайлик вместо значка.
+  final String? emoji;
 
   @override
   Widget build(BuildContext context) {
@@ -426,8 +433,27 @@ class CategoryAvatar extends StatelessWidget {
         color: color ?? context.scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(size * .3),
       ),
-      child: Icon(icon, size: size * .5, color: color == null ? context.scheme.onSurface : Colors.white),
+      child: emoji != null
+          ? Center(child: Text(emoji!, style: TextStyle(fontSize: size * .5, height: 1), textAlign: TextAlign.center))
+          : Icon(icon, size: size * .5, color: color == null ? context.scheme.onSurface : Colors.white),
     );
+  }
+}
+
+/// Значок категории в строке текста: смайлик, если задан (D107), иначе [Icon]
+/// того же размера и цвета.
+class CategoryGlyph extends StatelessWidget {
+  const CategoryGlyph(this.def, {super.key, this.size = 20, this.color});
+  final CategoryDef def;
+  final double size;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    if (def.hasEmoji) {
+      return SizedBox(width: size, height: size, child: Center(child: Text(def.emoji!, style: TextStyle(fontSize: size * .85, height: 1))));
+    }
+    return Icon(def.icon, size: size, color: color);
   }
 }
 
@@ -678,7 +704,7 @@ class CategoryPicker extends StatelessWidget {
     return Wrap(spacing: 8, runSpacing: 4, children: [
       for (final c in options)
         ChoiceChip(
-          avatar: Icon(c.icon, size: 16, color: value == c.id ? context.scheme.onPrimary : null),
+          avatar: CategoryGlyph(c, size: 16, color: value == c.id ? context.scheme.onPrimary : null),
           label: Text(categoryName(l, c.id)),
           selected: value == c.id,
           onSelected: (_) => onChanged(c.id),

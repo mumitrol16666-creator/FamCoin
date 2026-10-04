@@ -164,7 +164,7 @@ class HomeScreen extends StatelessWidget {
                           padding: const EdgeInsets.only(bottom: 10),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Row(children: [
-                              Icon(categoryById(def.category).icon, size: 18),
+                              CategoryGlyph(categoryById(def.category), size: 18),
                               const SizedBox(width: 8),
                               Expanded(child: Text(categoryName(l, def.category))),
                               MoneyText(st.spent, style: const TextStyle(fontSize: 13)),
@@ -797,7 +797,7 @@ class DueTile extends StatelessWidget {
     final p = due.planned;
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: CategoryAvatar(p.debtId != null ? Icons.account_balance_outlined : categoryById(p.category).icon),
+      leading: CategoryAvatar.of(categoryById(p.debtId != null ? debtsCategory : p.category)),
       title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
         '${DateFormat.MMMMd(locale).format(due.date)}${overdue ? ' · ${l.overdue}' : ''}',

@@ -14,11 +14,14 @@ import 'edit_transaction_sheet.dart';
 /// Как операция выглядит для человека: заголовок, подпись, сумма, знак.
 /// Всё выводится из проводок, а не из отдельно хранимого текста.
 class TxView {
-  TxView({required this.title, required this.subtitle, required this.amount, required this.icon, required this.kind});
+  TxView({required this.title, required this.subtitle, required this.amount, required this.icon, required this.kind, this.emoji});
   final String title;
   final List<String> subtitle;
   final int amount;
   final IconData icon;
+
+  /// Свой смайлик категории вместо значка (D107).
+  final String? emoji;
 
   /// `expense`, `income`, `neutral`, `debt`.
   final String kind;
@@ -71,6 +74,7 @@ class TxView {
           subtitle: [if (tx.meta['unexpected'] == true) l.unexpectedTag else if (tx.meta['plannedPurchase'] == true) l.plannedPurchaseTag, if (note.isNotEmpty) note, ?accountName, ?whoName],
           amount: -expense,
           icon: categoryById(cats.first).icon,
+          emoji: categoryById(cats.first).hasEmoji ? categoryById(cats.first).emoji : null,
           kind: 'expense',
         );
       case EventType.income:
@@ -79,6 +83,7 @@ class TxView {
           subtitle: [if (note.isNotEmpty) note, ?accountName],
           amount: income,
           icon: categoryById(cats.first).icon,
+          emoji: categoryById(cats.first).hasEmoji ? categoryById(cats.first).emoji : null,
           kind: 'income',
         );
       case EventType.transfer:
@@ -134,6 +139,7 @@ class TxView {
           subtitle: [l.installment, if (note.isNotEmpty) note],
           amount: -expense,
           icon: categoryById(cats.first).icon,
+          emoji: categoryById(cats.first).hasEmoji ? categoryById(cats.first).emoji : null,
           kind: 'expense',
         );
       default:
@@ -167,7 +173,7 @@ class TransactionTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       enabled: !cancelled || deleted,
-      leading: CategoryAvatar(deleted ? Icons.restore_from_trash_outlined : v.icon),
+      leading: CategoryAvatar(deleted ? Icons.restore_from_trash_outlined : v.icon, emoji: deleted ? null : v.emoji),
       title: Text(v.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: cancelled ? TextStyle(decoration: TextDecoration.lineThrough, color: fam.text2) : null),
       subtitle: subtitle.isEmpty ? null : Text(subtitle.join(' · '), style: TextStyle(fontSize: 12, color: fam.text2), maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: MoneyText(v.amount, sign: v.kind != 'expense' && (v.kind != 'neutral' || tx.type == EventType.adjustment), color: cancelled ? fam.text2 : color),

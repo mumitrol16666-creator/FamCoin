@@ -434,7 +434,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       for (final lim in _limits)
         AppCard(
           child: Row(children: [
-            CategoryAvatar(categoryById(lim.category).icon, size: 36),
+            CategoryAvatar.of(categoryById(lim.category), size: 36),
             const SizedBox(width: 12),
             Expanded(child: Text(categoryName(l, lim.category))),
             MoneyText(lim.amount),

@@ -344,7 +344,7 @@ class _SummaryCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(
                   children: [
-                    Icon(categoryById(e.key).icon, size: 18, color: fam.text2),
+                    CategoryGlyph(categoryById(e.key), size: 18, color: fam.text2),
                     const SizedBox(width: 8),
                     Expanded(child: Text(categoryName(l, e.key), maxLines: 1, overflow: TextOverflow.ellipsis)),
                     MoneyText(e.value),

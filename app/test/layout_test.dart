@@ -361,6 +361,20 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('своя категория со смайликом (D107): смайлик вместо значка в журнале и в плитке', (tester) async {
+    final f = await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
+    final s = f.state;
+    final id = await s.addCategory(name: 'Сигареты', iconIndex: 0, income: false, emoji: '🚬');
+    expect(categoryById(id).hasEmoji, isTrue);
+    await s.upsert('quick', 'q1', QuickAction('', 'Пачка', id, kzt(1270)).toJson());
+    await s.addExpense(amount: kzt(1270), category: id, account: 'cash', date: s.today, note: 'пачка');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('🚬'), findsWidgets, reason: 'смайлик рисуется и на плитке, и в последних операциях');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('сверка месяца (D75): карточка на главной, итоги и вопросы сразу, «Подтвердить сверку» снимает карточку', (tester) async {
     final f = await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
     final s = f.state;

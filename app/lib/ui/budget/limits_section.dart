@@ -260,7 +260,7 @@ class _LimitRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
-              Icon(categoryById(def.category).icon, size: 20, color: categoryChartColor(context, def.category)),
+              CategoryGlyph(categoryById(def.category), size: 20, color: categoryChartColor(context, def.category)),
               const SizedBox(width: 10),
               Expanded(child: Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
               const SizedBox(width: 8),

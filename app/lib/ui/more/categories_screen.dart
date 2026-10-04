@@ -41,7 +41,7 @@ class CategoriesScreen extends StatelessWidget {
                     for (final c in own)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: CategoryAvatar(c.icon),
+                        leading: CategoryAvatar.of(c),
                         title: Text(c.name!),
                         subtitle: Text(c.isIncome ? l.income : l.expense, style: TextStyle(fontSize: 12, color: fam.text2)),
                         trailing: PopupMenuButton<String>(
@@ -68,10 +68,10 @@ class CategoriesScreen extends StatelessWidget {
                 child: Wrap(spacing: 8, runSpacing: 8, children: [
                   for (final c in categories.where((c) => c.id != 'interest' && c.id != 'fees'))
                     if (c.id == 'other' || c.id == 'otherIncome')
-                      Chip(avatar: Icon(c.icon, size: 16), label: Text(categoryName(l, c.id)))
+                      Chip(avatar: CategoryGlyph(c, size: 16), label: Text(categoryName(l, c.id)))
                     else
                       FilterChip(
-                        avatar: Icon(c.icon, size: 16, color: state.hiddenCategories.contains(c.id) ? fam.text2 : null),
+                        avatar: CategoryGlyph(c, size: 16, color: state.hiddenCategories.contains(c.id) ? fam.text2 : null),
                         label: Text(categoryName(l, c.id), style: state.hiddenCategories.contains(c.id) ? TextStyle(color: fam.text2, decoration: TextDecoration.lineThrough) : null),
                         selected: !state.hiddenCategories.contains(c.id),
                         onSelected: (visible) => runAction(context, () => state.setCategoryHidden(c.id, !visible)),
@@ -95,6 +95,8 @@ Future<String?> showCategorySheet(BuildContext context, {CategoryDef? initial, b
   final state = AppScope.of(context).state;
   final name = TextEditingController(text: initial?.name ?? '');
   var icon = initial?.iconIndex ?? 0;
+  // Свой смайлик вместо значка (D107): один символ, заменяет значок везде.
+  final emoji = TextEditingController(text: initial?.hasEmoji == true ? initial!.emoji : '');
   var isIncome = initial?.isIncome ?? income;
   // Тип расхода можно задать и поменять (F12) — иначе своя категория всегда
   // молча считалась свободной, а владелец мог не знать, что это вообще
@@ -130,16 +132,36 @@ Future<String?> showCategorySheet(BuildContext context, {CategoryDef? initial, b
           ),
         ],
         const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: emoji,
+              maxLength: 1,
+              onChanged: (_) => set(() {}),
+              decoration: InputDecoration(labelText: l.categoryEmoji, hintText: l.categoryEmojiHint, counterText: ''),
+            ),
+          ),
+          const SizedBox(width: 12),
+          CategoryAvatar(customIcons[icon], emoji: emoji.text.trim().isEmpty ? null : emoji.text.trim(), color: ctx.scheme.primary),
+        ]),
+        Text(l.categoryEmojiNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+        const SizedBox(height: 12),
         Text(l.categoryIcon, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
         const SizedBox(height: 6),
-        Wrap(spacing: 6, runSpacing: 6, children: [
-          for (var i = 0; i < customIcons.length; i++)
-            InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => set(() => icon = i),
-              child: CategoryAvatar(customIcons[i], color: icon == i ? ctx.scheme.primary : null),
-            ),
-        ]),
+        Opacity(
+          opacity: emoji.text.trim().isEmpty ? 1 : .45,
+          child: Wrap(spacing: 6, runSpacing: 6, children: [
+            for (var i = 0; i < customIcons.length; i++)
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => set(() {
+                  icon = i;
+                  emoji.clear();
+                }),
+                child: CategoryAvatar(customIcons[i], color: icon == i ? ctx.scheme.primary : null),
+              ),
+          ]),
+        ),
         const SizedBox(height: 20),
         SubmitButton(
           label: l.save,
@@ -149,9 +171,10 @@ Future<String?> showCategorySheet(BuildContext context, {CategoryDef? initial, b
             String? id = initial?.id;
             final ok = await runAction(ctx, () async {
               if (initial == null) {
-                id = await state.addCategory(name: n, iconIndex: icon, income: isIncome, expenseType: isIncome ? null : expenseType);
+                id = await state.addCategory(name: n, iconIndex: icon, income: isIncome, expenseType: isIncome ? null : expenseType, emoji: emoji.text);
               } else {
-                await state.upsert('category', initial.id, {'name': n, 'icon': icon, 'income': initial.isIncome, if (!initial.isIncome) 'expenseType': expenseType.name});
+                final e = emoji.text.trim();
+                await state.upsert('category', initial.id, {'name': n, 'icon': icon, 'income': initial.isIncome, if (!initial.isIncome) 'expenseType': expenseType.name, if (e.isNotEmpty) 'emoji': e});
               }
             });
             if (ok && ctx.mounted) Navigator.of(ctx).pop(id);
