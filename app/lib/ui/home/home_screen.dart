@@ -511,17 +511,20 @@ class _PushPromptCardState extends State<_PushPromptCard> {
         const SizedBox(height: 6),
         Text(install ? l.pushNeedsInstall : l.pushPromptOff, style: TextStyle(fontSize: 12, color: fam.text2)),
         const SizedBox(height: 8),
-        Row(children: [
+        // В теме у кнопок минимальная ширина «во всю строку»; внутри Row это
+        // бесконечная ширина, и кнопка «Включить» не рисовалась (на Mac была
+        // только «Позже»). Здесь ширина по содержимому, а Wrap переносит
+        // кнопку на вторую строку на узком экране.
+        Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
           TextButton(onPressed: scope.settings.dismissPushPrompt, child: Text(install ? l.gotIt : l.later)),
-          if (!install) ...[
-            const Spacer(),
+          if (!install)
             FilledButton.tonal(
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
               onPressed: () async {
                 if (await enablePushNotifications(context, scope.state)) await scope.settings.dismissPushPrompt();
               },
               child: Text(l.pushEnable),
             ),
-          ],
         ]),
       ]),
     );

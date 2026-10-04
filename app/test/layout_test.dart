@@ -7,6 +7,7 @@ library;
 
 import 'package:famcoin/l10n/app_localizations.dart';
 import 'package:famcoin/state/app_scope.dart';
+import 'package:famcoin/state/push.dart';
 import 'package:famcoin/state/secret_store.dart';
 import 'package:famcoin/state/settings.dart';
 import 'package:famcoin/theme/app_theme.dart';
@@ -310,6 +311,19 @@ void main() {
     expect(s.spentUnexpectedBetween(s.today, s.today), kzt(7000));
     expect(s.userTransactions.first.meta['unexpected'], isTrue);
     expect(s.userTransactions.first.meta.containsKey('plannedPurchase'), isFalse);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('карточка push на главной: при статусе off есть кнопка «Включить уведомления» и строка не ломается', (tester) async {
+    debugPushStatusOverride = 'off';
+    addTearDown(() => debugPushStatusOverride = null);
+    await pumpApp(tester, home: const Shell(), size: const Size(360, 732));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Уведомления на телефон'), findsOneWidget);
+    expect(find.text('Позже'), findsOneWidget);
+    expect(find.text('Включить уведомления'), findsOneWidget, reason: 'кнопка включения рядом с «Позже» (на Mac её не было: кнопка с минимальной шириной «во всю строку» внутри Row)');
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 

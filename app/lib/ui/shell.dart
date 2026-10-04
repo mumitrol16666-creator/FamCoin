@@ -199,7 +199,8 @@ class UpdateBanner extends StatelessWidget {
             Expanded(child: Text(l.updateAvailable(info.version).trim(), style: TextStyle(color: fam.onAccent, fontWeight: FontWeight.w600))),
             TextButton(onPressed: updates.dismiss, child: Text(l.later, style: TextStyle(color: fam.onAccent))),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: fam.onAccent, foregroundColor: fam.accent),
+              // Внутри Row — ширина по содержимому, не «во всю строку» из темы.
+              style: FilledButton.styleFrom(backgroundColor: fam.onAccent, foregroundColor: fam.accent, minimumSize: const Size(0, 40)),
               onPressed: () => info.isDownload ? launchUrl(Uri.parse(info.url!), mode: LaunchMode.externalApplication) : reloadApp(),
               child: Text(info.isDownload ? l.updateDownload : l.updateReload),
             ),

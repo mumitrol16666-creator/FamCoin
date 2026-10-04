@@ -2,7 +2,11 @@
 // «Позже» помнится до следующей версии; ошибки сети не беспокоят.
 import 'dart:convert';
 
+import 'package:famcoin/l10n/app_localizations.dart';
 import 'package:famcoin/state/update_check.dart';
+import 'package:famcoin/theme/app_theme.dart';
+import 'package:famcoin/ui/shell.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -100,5 +104,35 @@ void main() {
     final older = make({'version': '0.1.2+3', 'url': 'https://coin.test/download/famcoin.apk'});
     await older.check();
     expect(older.available, isNull);
+  });
+
+  testWidgets('плашка «Вышло обновление»: кнопка «Обновить» видна в строке, «Позже» прячет', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final check = UpdateCheck(
+      site: 'https://coin.test',
+      web: true,
+      currentBuild: 'b1',
+      client: MockClient((_) async => http.Response(jsonEncode({'buildId': 'b2', 'version': '0.1.4+5'}), 200)),
+    );
+    await check.check();
+    expect(check.show, isTrue);
+    await tester.pumpWidget(UpdateScope(
+      notifier: check,
+      child: MaterialApp(
+        locale: const Locale('ru'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: buildTheme(Brightness.light),
+        home: const Scaffold(body: Column(children: [UpdateBanner()])),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Вышло обновление 0.1.4+5'), findsOneWidget);
+    expect(find.text('Обновить'), findsOneWidget, reason: 'кнопка в Row не должна требовать бесконечной ширины');
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Позже'));
+    await tester.pumpAndSettle();
+    expect(find.text('Обновить'), findsNothing);
+    check.dispose();
   });
 }
