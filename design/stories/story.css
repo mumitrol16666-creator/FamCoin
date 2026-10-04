@@ -1,0 +1,48 @@
+:root {
+  --bg: #0b0e12; --card: #161b22; --line: #26303b;
+  --text: #f2f4f6; --text2: #98a2ae;
+  --green: #2ea078; --green2: #1f5e4f; --mint: #7fd8b4; --gold: #e6aa3c; --red: #e66262;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+.stage { position: absolute; inset: 0; overflow: hidden; }
+.cam { position: absolute; inset: 0; animation: push var(--dur, 20s) linear both; }
+@keyframes push { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+/* Свет и зерно — «киношная» глубина */
+.glow { position: absolute; border-radius: 50%; filter: blur(140px); }
+.g1 { width: 1000px; height: 1000px; background: #1f5e4f; left: -380px; top: -260px; opacity: .65; animation: drift1 var(--dur, 20s) ease-in-out both; }
+.g2 { width: 760px; height: 760px; background: #7a5418; right: -320px; bottom: -200px; opacity: .45; animation: drift2 var(--dur, 20s) ease-in-out both; }
+@keyframes drift1 { from { transform: translate(0, 0); } to { transform: translate(180px, 260px); } }
+@keyframes drift2 { from { transform: translate(0, 0); } to { transform: translate(-160px, -320px); } }
+.grain { position: absolute; inset: -200px; opacity: .08; mix-blend-mode: overlay; pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation: grain .6s steps(5) infinite; }
+@keyframes grain { 0% { transform: translate(0, 0); } 20% { transform: translate(-40px, 30px); } 40% { transform: translate(30px, -50px); } 60% { transform: translate(-20px, -20px); } 80% { transform: translate(50px, 40px); } 100% { transform: translate(0, 0); } }
+.vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.55) 100%); pointer-events: none; }
+
+/* Слова */
+.w { display: inline-block; opacity: 0; animation: wordIn .8s cubic-bezier(.2,.75,.2,1) both; }
+@keyframes wordIn { from { opacity: 0; transform: translateY(46px); filter: blur(16px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes lineOut { from { opacity: 1; transform: none; filter: blur(0); } to { opacity: 0; transform: translateY(-40px); filter: blur(14px); } }
+@keyframes blockIn { from { opacity: 0; transform: translateY(60px) scale(.96); filter: blur(12px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes blockOut { from { opacity: 1; transform: none; filter: blur(0); } to { opacity: 0; transform: translateY(-40px) scale(.98); filter: blur(12px); } }
+@keyframes popIn { 0% { opacity: 0; transform: scale(.6); filter: blur(10px); } 60% { opacity: 1; transform: scale(1.04); filter: blur(0); } 100% { opacity: 1; transform: scale(1); } }
+
+.line { position: absolute; left: 50px; right: 50px; text-align: center; font-weight: 800; letter-spacing: -1.5px; line-height: 1.08; }
+.big { font-size: 100px; }
+.mid { font-size: 80px; }
+.sub { font-size: 50px; font-weight: 600; color: var(--text2); letter-spacing: -.3px; }
+.accent { color: var(--mint); }
+.gold { color: var(--gold); }
+.money { font-variant-numeric: tabular-nums; }
+.tenge { font-weight: 700; opacity: .8; margin-left: .12em; }
+
+/* Финальный кадр */
+.end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px; }
+.end img { width: 230px; height: 230px; border-radius: 56px; box-shadow: 0 30px 120px rgba(46,160,120,.45); }
+.end .name { font-size: 112px; font-weight: 800; letter-spacing: -2px; }
+.end .tag { font-size: 46px; color: var(--text2); font-weight: 600; }
+.end .pill { margin-top: 26px; padding: 26px 54px; border-radius: 60px; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.14); font-size: 52px; font-weight: 700; }
+.end .tg { font-size: 42px; color: var(--mint); font-weight: 600; }

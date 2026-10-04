@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>FamCoin — сторис 1: куда уходят деньги</title>
+<link rel="stylesheet" href="story.css">
+<style>
+  :root { --dur: 20s; }
+  .counter { position: absolute; left: 0; right: 0; top: 700px; text-align: center; font-size: 150px; font-weight: 800; letter-spacing: -4px;
+    animation: blockIn .9s cubic-bezier(.2,.7,.2,1) .5s both, drain 2.4s ease-in-out 3.4s both, blockOut .7s cubic-bezier(.4,0,.2,1) 6s forwards; }
+  @keyframes drain { from { color: var(--mint); } to { color: var(--red); } }
+  .chip { position: absolute; padding: 18px 30px; border-radius: 40px; background: rgba(230,98,98,.14); border: 2px solid rgba(230,98,98,.35);
+    color: #ffb4b4; font-size: 40px; font-weight: 700; white-space: nowrap; opacity: 0; animation: fall 2s cubic-bezier(.45,0,.6,1) both; }
+  @keyframes fall { 0% { opacity: 0; transform: translateY(-50px) rotate(var(--r0)); } 18% { opacity: 1; } 75% { opacity: .9; } 100% { opacity: 0; transform: translateY(140px) rotate(var(--r1)); } }
+
+  .persp { position: absolute; left: 0; right: 0; top: 330px; display: flex; justify-content: center; perspective: 2200px; }
+  .phone { width: 760px; height: 1480px; border-radius: 96px; background: #10141a; border: 14px solid #050607;
+    box-shadow: 0 0 0 3px #2a3038, 0 60px 160px rgba(0,0,0,.7), 0 0 120px rgba(46,160,120,.18);
+    padding: 46px 40px; overflow: hidden; position: relative;
+    animation: phoneIn 1.4s cubic-bezier(.16,.84,.24,1) 11.7s both, blockOut .7s cubic-bezier(.4,0,.2,1) 17s forwards; }
+  @keyframes phoneIn { from { opacity: 0; transform: translateY(760px) rotateX(26deg) scale(.86); } to { opacity: 1; transform: none; } }
+  .status { display: flex; justify-content: space-between; font-size: 28px; font-weight: 700; color: #e9edf1; padding: 0 24px 26px; }
+  .head { display: flex; align-items: center; justify-content: space-between; margin: 10px 6px 30px; }
+  .head h2 { font-size: 58px; font-weight: 800; letter-spacing: -1px; }
+  .pro { padding: 12px 26px; border-radius: 30px; background: var(--gold); color: #1b1406; font-size: 28px; font-weight: 800; }
+  .guide { border-radius: 46px; padding: 42px 40px 40px; background: linear-gradient(150deg, #2f7f63, #1f5e4f 70%); position: relative; overflow: hidden; }
+  .guide::after { content: ''; position: absolute; right: -120px; top: -140px; width: 380px; height: 380px; border-radius: 50%; background: rgba(255,255,255,.07); }
+  .guide .t { font-size: 32px; opacity: .92; }
+  .guide .sum { font-size: 132px; font-weight: 800; letter-spacing: -4px; margin: 6px 0 2px; }
+  .guide .sum .tenge { font-size: 80px; }
+  .guide .meta { font-size: 30px; opacity: .92; }
+  .chips2 { display: flex; gap: 14px; margin: 26px 0 26px; }
+  .chips2 span { padding: 12px 30px; border-radius: 30px; border: 2px solid rgba(255,255,255,.45); font-size: 28px; font-weight: 700; }
+  .chips2 span:first-child { background: rgba(255,255,255,.22); }
+  .bar { height: 18px; border-radius: 10px; background: rgba(0,0,0,.25); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--gold); border-radius: 10px; animation: fill .8s ease-in-out 15.2s both; }
+  @keyframes fill { from { width: 0; } to { width: 32%; } }
+  .sec { font-size: 40px; font-weight: 800; margin: 44px 6px 22px; }
+  .tiles { display: flex; gap: 20px; }
+  .tile { flex: 1; border-radius: 34px; background: var(--card); padding: 26px 24px; position: relative; }
+  .tile .e { font-size: 50px; }
+  .tile .n { font-size: 32px; font-weight: 700; margin-top: 10px; }
+  .tile .a { font-size: 28px; color: var(--text2); margin-top: 2px; }
+  .tap { animation: tap .5s ease 14.9s both; }
+  @keyframes tap { 0%,100% { transform: scale(1); } 40% { transform: scale(.92); background: #1e2a26; } }
+  .ripple { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 4px solid var(--mint); opacity: 0;
+    animation: ripple .9s ease-out 14.95s both; }
+  @keyframes ripple { 0% { opacity: 0; transform: scale(.4); } 10% { opacity: .9; } 100% { opacity: 0; transform: scale(7); } }
+  .toast { position: absolute; left: 40px; right: 40px; bottom: 60px; padding: 30px 36px; border-radius: 30px; background: #222a33; font-size: 32px; font-weight: 600;
+    display: flex; justify-content: space-between; opacity: 0; animation: toastIn .5s ease 15.3s both, blockOut .5s ease 16.6s forwards; }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+  .row { display: flex; align-items: center; gap: 24px; padding: 20px 6px; border-bottom: 2px solid #1c232b; font-size: 32px; }
+  .row .ic { width: 76px; height: 76px; border-radius: 24px; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 40px; }
+  .row .x { flex: 1; } .row .x small { display: block; font-size: 26px; color: var(--text2); }
+  .row b { color: #ff9a9a; }
+  .cap { position: absolute; left: 70px; right: 70px; top: 150px; text-align: center; font-size: 60px; font-weight: 800; letter-spacing: -1px; }
+</style>
+</head>
+<body>
+<div class="stage"><div class="cam">
+  <div class="glow g1"></div><div class="glow g2"></div>
+
+  <!-- 1. Зарплата пришла -->
+  <div class="line big" style="top:520px" data-words data-in="0.3" data-out="6">Зарплата пришла.</div>
+  <div class="counter money"><span data-keys="0:0,0.7:0,2.3:350000,3.4:350000,5.8:12400" data-sign="1">0</span><span class="tenge">₸</span></div>
+  <div class="line sub" style="top:960px" data-words data-in="3.1" data-out="6">Через две недели…</div>
+  <div class="chip" style="left:80px;top:1090px;--r0:-6deg;--r1:-12deg;animation-delay:3.6s">−1 590 ₸ · кофе</div>
+  <div class="chip" style="right:80px;top:1170px;--r0:5deg;--r1:12deg;animation-delay:3.9s">−3 400 ₸ · такси</div>
+  <div class="chip" style="left:80px;top:1270px;--r0:3deg;--r1:-8deg;animation-delay:4.2s">−8 900 ₸ · доставка</div>
+  <div class="chip" style="right:80px;top:1350px;--r0:-4deg;--r1:10deg;animation-delay:4.5s">−15 000 ₸ · подписки</div>
+  <div class="chip" style="left:80px;top:1450px;--r0:6deg;--r1:12deg;animation-delay:4.8s">−2 200 ₸ · перекус</div>
+  <div class="chip" style="right:80px;top:1530px;--r0:-5deg;--r1:-10deg;animation-delay:5.1s">−24 000 ₸ · «просто так»</div>
+
+  <!-- 2. И куда всё ушло -->
+  <div class="line mid" style="top:820px" data-words data-in="6.3" data-out="8.5">…и куда всё ушло?</div>
+
+  <!-- 3. Дело не в сумме -->
+  <div class="line big" style="top:690px" data-words data-in="8.7" data-out="11.4">Дело не в сумме.</div>
+  <div class="line mid accent" style="top:930px" data-words data-in="9.7" data-out="11.4" data-stagger="0.11">Деньги утекают по мелочи.</div>
+
+  <!-- 4. Одна цифра -->
+  <div class="cap" data-words data-in="12.3" data-out="17" data-stagger="0.08" data-accent="сегодня">Сколько можно потратить сегодня</div>
+  <div class="persp"><div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="head"><h2>Главная</h2><span class="pro">Pro</span></div>
+    <div class="guide">
+      <div class="t">Осталось на сегодня</div>
+      <div class="sum money"><span data-keys="0:0,12.6:0,13.9:5000,15.15:5000,16.0:3410">0</span><span class="tenge">₸</span></div>
+      <div class="meta">5 000 ₸ в день · потрачено <span data-keys="0:0,15.15:0,16.0:1590">0</span> ₸</div>
+      <div class="chips2"><span>В день</span><span>Всего</span></div>
+      <div class="bar"><i></i></div>
+    </div>
+    <div class="sec">Быстрые операции</div>
+    <div class="tiles">
+      <div class="tile tap"><div class="e">☕️</div><div class="n">Кофе</div><div class="a">1 590 ₸</div><div class="ripple"></div></div>
+      <div class="tile"><div class="e">🚕</div><div class="n">Такси</div><div class="a">2 000 ₸</div></div>
+      <div class="tile"><div class="e">🥐</div><div class="n">Перекус</div><div class="a">900 ₸</div></div>
+    </div>
+    <div class="sec">Последние операции</div>
+    <div class="row"><div class="ic">🛒</div><div class="x">Продукты<small>Kaspi Gold · вчера</small></div><b>−6 240 ₸</b></div>
+    <div class="row"><div class="ic">🚌</div><div class="x">Автобус<small>Kaspi Gold · вчера</small></div><b>−80 ₸</b></div>
+    <div class="toast"><span>Кофе · 1 590 ₸</span><span style="color:var(--mint)">Отменить</span></div>
+  </div></div>
+
+  <!-- 5. Финал -->
+  <div class="end" data-show="17.3">
+    <img src="../../app/web/icons/Icon-512.png" alt="">
+    <div class="name">FamCoin</div>
+    <div class="tag">Семейные деньги под контролем</div>
+    <div class="pill">coin.edudev.kz</div>
+    <div class="tg">Telegram: @Famcoin01_bot</div>
+  </div>
+
+  <div class="vignette"></div><div class="grain"></div>
+</div></div>
+<script src="engine.js"></script>
+</body>
+</html>

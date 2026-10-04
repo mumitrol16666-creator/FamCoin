@@ -34,3 +34,6 @@ dist/
 
 # Локальные артефакты браузерной автоматизации
 .playwright-cli/
+
+# Готовые ролики сторис — тяжёлые, собираются из design/stories/*.html
+design/stories/out/
