@@ -71,8 +71,12 @@ class CategoriesScreen extends StatelessWidget {
                       Chip(avatar: CategoryGlyph(c, size: 16), label: Text(categoryName(l, c.id)))
                     else
                       FilterChip(
-                        avatar: CategoryGlyph(c, size: 16, color: state.hiddenCategories.contains(c.id) ? fam.text2 : null),
-                        label: Text(categoryName(l, c.id), style: state.hiddenCategories.contains(c.id) ? TextStyle(color: fam.text2, decoration: TextDecoration.lineThrough) : null),
+                        avatar: CategoryGlyph(c, size: 16, color: state.hiddenCategories.contains(c.id) ? fam.text2 : context.scheme.onPrimary),
+                        label: Text(categoryName(l, c.id)),
+                        labelStyle: TextStyle(
+                          color: state.hiddenCategories.contains(c.id) ? fam.text2 : context.scheme.onPrimary,
+                          decoration: state.hiddenCategories.contains(c.id) ? TextDecoration.lineThrough : null,
+                        ),
                         selected: !state.hiddenCategories.contains(c.id),
                         onSelected: (visible) => runAction(context, () => state.setCategoryHidden(c.id, !visible)),
                       ),
