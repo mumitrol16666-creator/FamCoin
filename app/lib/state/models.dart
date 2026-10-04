@@ -49,6 +49,29 @@ const customIcons = <IconData>[
   Icons.attach_money, Icons.work_history_outlined, Icons.storefront_outlined, Icons.more_horiz,
 ];
 
+/// Смайлик в начале названия («☕️ Кофе» → «☕️»), если он там есть (D107):
+/// раньше смайлики писали в название, форма предлагает перенести его в поле.
+String? leadingEmoji(String text) {
+  final t = text.trim();
+  if (t.isEmpty) return null;
+  final first = t.characters.first;
+  return _isEmoji(first.runes.first) ? first : null;
+}
+
+/// Блоки смайликов и пиктограмм Юникода; буквы, цифры и знаки препинания —
+/// нет. Без `\p{Extended_Pictographic}`: анализатор его не знает (валит CI).
+bool _isEmoji(int rune) =>
+    rune >= 0x1F000 || // эмодзи, пиктограммы, флаги, транспорт, символы
+    (rune >= 0x2300 && rune <= 0x2BFF) || // ☕ ⚡ ✅ ➡ и прочие «разные символы»
+    const {0x00A9, 0x00AE, 0x2122, 0x2139, 0x3030, 0x303D, 0x3297, 0x3299}.contains(rune);
+
+/// Название без смайлика в начале и пробелов после него.
+String stripLeadingEmoji(String text) {
+  final e = leadingEmoji(text);
+  if (e == null) return text.trim();
+  return text.trim().substring(e.length).trimLeft();
+}
+
 /// Свои категории пользователя (id → описание); заполняется из данных сервера.
 final Map<String, CategoryDef> customCategories = {};
 

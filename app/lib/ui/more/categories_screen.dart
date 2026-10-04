@@ -107,7 +107,7 @@ Future<String?> showCategorySheet(BuildContext context, {CategoryDef? initial, b
     title: initial == null ? l.ownCategory : l.editCategory,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextField(controller: name, autofocus: initial == null, maxLength: 30, decoration: InputDecoration(labelText: l.categoryNameLabel, hintText: l.categoryNameHint, counterText: '')),
+        TextField(controller: name, autofocus: initial == null, maxLength: 30, onChanged: (_) => set(() {}), decoration: InputDecoration(labelText: l.categoryNameLabel, hintText: l.categoryNameHint, counterText: '')),
         const SizedBox(height: 8),
         if (initial == null)
           SegmentedButton<bool>(
@@ -145,6 +145,22 @@ Future<String?> showCategorySheet(BuildContext context, {CategoryDef? initial, b
           CategoryAvatar(customIcons[icon], emoji: emoji.text.trim().isEmpty ? null : emoji.text.trim(), color: ctx.scheme.primary),
         ]),
         Text(l.categoryEmojiNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+        // Смайлик уже стоит в названии — переносим одной кнопкой (D107).
+        if (emoji.text.trim().isEmpty && leadingEmoji(name.text) != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: ActionChip(
+                avatar: Text(leadingEmoji(name.text)!),
+                label: Text(l.categoryEmojiFromName),
+                onPressed: () => set(() {
+                  emoji.text = leadingEmoji(name.text)!;
+                  name.text = stripLeadingEmoji(name.text);
+                }),
+              ),
+            ),
+          ),
         const SizedBox(height: 12),
         Text(l.categoryIcon, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
         const SizedBox(height: 6),
