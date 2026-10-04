@@ -31,7 +31,9 @@ RUN cd app && V=$(date +%s) \
   && sed -i "s#flutter_bootstrap.js#flutter_bootstrap.js?v=$V#" index.html \
   && sed -i "s#\"mainJsPath\":\"main.dart.js\"#\"mainJsPath\":\"main.dart.js?v=$V\"#" flutter_bootstrap.js \
   && sed -i "s#\"mainWasmPath\":\"main.dart.wasm\"#\"mainWasmPath\":\"main.dart.wasm?v=$V\"#" flutter_bootstrap.js \
-  && grep -q "main.dart.js?v=$V" flutter_bootstrap.js && grep -q "main.dart.wasm?v=$V" flutter_bootstrap.js
+  && sed -i "s#\"jsSupportRuntimePath\":\"main.dart.mjs\"#\"jsSupportRuntimePath\":\"main.dart.mjs?v=$V\"#" flutter_bootstrap.js \
+  && grep -q "main.dart.js?v=$V" flutter_bootstrap.js && grep -q "main.dart.wasm?v=$V" flutter_bootstrap.js \
+  && grep -q "main.dart.mjs?v=$V" flutter_bootstrap.js
 
 FROM nginx:1.27-alpine
 COPY app/nginx.conf /etc/nginx/conf.d/default.conf

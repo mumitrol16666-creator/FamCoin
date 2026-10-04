@@ -57,44 +57,74 @@
     html, body { background: #F1F7EC; margin: 0; }
     @media (prefers-color-scheme: dark) { html, body { background: #101F19; } }
     #famcoin-splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 18px; background: inherit; z-index: 9999; transition: opacity .25s;
+      justify-content: center; gap: 18px; background: #F1F7EC; z-index: 9999; padding: 24px; text-align: center;
       font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; color: #0D7050; }
-    @media (prefers-color-scheme: dark) { #famcoin-splash { color: #88E4B6; } }
+    @media (prefers-color-scheme: dark) { #famcoin-splash { color: #88E4B6; background: #101F19; } }
     #famcoin-splash .logo { width: 72px; height: 72px; border-radius: 20px; background: #0D7050; color: #D6F584;
       display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 700; }
     #famcoin-splash .ring { width: 26px; height: 26px; border-radius: 50%; border: 3px solid currentColor;
       border-right-color: transparent; animation: famcoin-spin .9s linear infinite; opacity: .8; }
     @keyframes famcoin-spin { to { transform: rotate(360deg); } }
-    #famcoin-splash.hidden { opacity: 0; pointer-events: none; }
+    #famcoin-splash[hidden], #famcoin-splash [hidden] { display: none; }
+    #famcoin-startup-status { margin: 0; max-width: 320px; line-height: 1.5; }
+    #famcoin-startup-retry { font: inherit; font-weight: 600; border: 0; border-radius: 14px;
+      padding: 14px 22px; min-height: 48px; background: #0D7050; color: white; cursor: pointer; }
+    #famcoin-startup-retry:focus-visible { outline: 3px solid currentColor; outline-offset: 4px; }
+    @media (prefers-color-scheme: dark) { #famcoin-startup-retry { background: #88E4B6; color: #101F19; } }
+    @media (prefers-reduced-motion: reduce) { #famcoin-splash .ring { animation: none; } }
   </style>
 </head>
 <body>
-  <div id="famcoin-splash" aria-hidden="true">
-    <div class="logo">₸</div>
-    <div class="ring"></div>
+  <div id="famcoin-splash">
+    <div class="logo" aria-hidden="true">₸</div>
+    <div id="famcoin-startup-ring" class="ring" aria-hidden="true"></div>
+    <p id="famcoin-startup-status" role="status" aria-live="polite">Открываем FamCoin…</p>
+    <button id="famcoin-startup-retry" type="button" hidden>Открыть снова</button>
+    <noscript>Для работы FamCoin включите JavaScript в настройках браузера.</noscript>
   </div>
   <script>
-    // Первый кадр Flutter — заставка уходит. Сторож (D104): если через 3 секунды
-    // после возврата на экран приложения на странице нет (iOS выгрузила вкладку
-    // или загрузчик не отработал), страница перезагружается сама — один раз на
-    // каждое возвращение, чтобы не зациклиться.
+    // Этот экран работает даже при сбое загрузчика, движка или настроек Dart.
+    // Заставку сохраняем в DOM: если iOS выгрузит слой приложения, можно
+    // показать восстановление без Flutter и без бесконечных перезагрузок.
     (function () {
       var splash = document.getElementById('famcoin-splash');
+      var status = document.getElementById('famcoin-startup-status');
+      var ring = document.getElementById('famcoin-startup-ring');
+      var retry = document.getElementById('famcoin-startup-retry');
+      var kk = false;
+      try { kk = JSON.parse(localStorage.getItem('flutter.lang')) === 'kk'; } catch (_) {}
+      status.textContent = kk ? 'FamCoin ашылуда…' : 'Открываем FamCoin…';
+      retry.textContent = kk ? 'Қайта ашу' : 'Открыть снова';
       var ready = false;
+      var timer = setTimeout(function () { if (!ready) fail(true); }, 25000);
+      function fail(slow) {
+        clearTimeout(timer);
+        splash.hidden = false;
+        ring.hidden = true;
+        retry.hidden = false;
+        status.textContent = slow
+          ? (kk ? 'Жүктеу ұзаққа созылды. Интернетті тексеріңіз немесе қайта ашыңыз.' : 'Загрузка затянулась. Проверьте интернет или откройте приложение снова.')
+          : (kk ? 'FamCoin ашылмады. Интернетті тексеріп, қайталап көріңіз.' : 'Не удалось открыть FamCoin. Проверьте интернет и попробуйте снова.');
+      }
+      window.famcoinStartup = { fail: function () { if (!ready) fail(false); } };
+      retry.addEventListener('click', function () { window.location.reload(); });
       window.addEventListener('flutter-first-frame', function () {
         ready = true;
-        if (splash) { splash.classList.add('hidden'); setTimeout(function () { splash.remove(); }, 400); }
+        clearTimeout(timer);
+        splash.hidden = true;
       });
-      var started = Date.now();
-      function alive() { return !!document.querySelector('flutter-view'); }
-      var armed = false;
+      // В режиме JS ошибка загрузки main.dart.js не отклоняет Promise
+      // FlutterLoader с callback. Перехватываем и сетевую ошибку тега script.
+      window.addEventListener('error', function (event) {
+        if (!ready && (event.error || (event.target && event.target.tagName === 'SCRIPT'))) fail(false);
+      }, true);
+      window.addEventListener('unhandledrejection', function () { if (!ready) fail(false); });
+      var resumeTimer;
       document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState !== 'visible' || armed) return;
-        armed = true;
-        setTimeout(function () {
-          armed = false;
-          // Свежая загрузка ещё идёт — не трогаем; старая страница без приложения — перезагрузка.
-          if (!alive() && (ready || Date.now() - started > 20000)) window.location.reload();
+        clearTimeout(resumeTimer);
+        if (document.visibilityState !== 'visible' || !ready) return;
+        resumeTimer = setTimeout(function () {
+          if (!document.querySelector('flutter-view')) fail(false);
         }, 3000);
       });
     })();
