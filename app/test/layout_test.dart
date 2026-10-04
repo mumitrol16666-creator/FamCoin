@@ -5,6 +5,8 @@
 /// дни графика подписаны для экранного диктора.
 library;
 
+import 'dart:async';
+
 import 'package:famcoin/l10n/app_localizations.dart';
 import 'package:famcoin/state/app_scope.dart';
 import 'package:famcoin/state/models.dart';
@@ -24,6 +26,7 @@ import 'package:famcoin/ui/ops/add_transaction_sheet.dart';
 import 'package:famcoin/ui/shell.dart';
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -457,6 +460,41 @@ void main() {
 
     expect(s.onboarded, isTrue);
     expect(f.notif, {'morning': true, 'evening': false, 'month': true}, reason: 'выбор из анкеты сохранён на сервере');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Telegram: повторное нажатие не создаёт второй вход; ожидание и код готовы до перехода', (tester) async {
+    final f = await pumpApp(tester, home: const LoginScreen(), size: const Size(390, 844));
+    final settings = AppScope.of(tester.element(find.byType(LoginScreen))).settings;
+    final gate = Completer<void>();
+    f.tgStartGate = gate.future;
+    var launches = 0;
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'launch') {
+        launches++;
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(find.textContaining('Start'), findsOneWidget);
+        expect(settings.pendingTelegramLogin?.code, 'logincode1234');
+        expect(call.arguments['url'], 'https://t.me/famcoin_test_bot?start=login_logincode1234');
+      }
+      return true;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+
+    await tester.tap(find.text('Войти через Telegram'));
+    await tester.tap(find.text('Войти через Telegram'));
+    await tester.pump();
+    expect(f.tgStarts, 1);
+    expect(launches, 0);
+    gate.complete();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(launches, 1);
+    await tester.tap(find.text('Отмена'));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(settings.pendingTelegramLogin, isNull);
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 

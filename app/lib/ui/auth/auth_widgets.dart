@@ -1,28 +1,46 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../state/api_client.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
+import 'telegram_launch.dart';
 
 /// Кнопка «Войти через Telegram» (D49): одна и та же на входе и регистрации —
 /// аккаунт создаётся сам, если чата ещё нет.
-class TelegramButton extends StatelessWidget {
+class TelegramButton extends StatefulWidget {
   const TelegramButton({super.key, this.enabled = true, this.primary = false});
   final bool enabled;
   final bool primary;
 
   @override
+  State<TelegramButton> createState() => _TelegramButtonState();
+}
+
+class _TelegramButtonState extends State<TelegramButton> {
+  bool _opening = false;
+
+  Future<void> _signIn() async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    try {
+      await telegramSignIn(context);
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final onPressed = enabled ? () => telegramSignIn(context) : null;
-    final icon = const Icon(Icons.send_outlined, size: 18);
+    final onPressed = widget.enabled && !_opening ? _signIn : null;
+    final icon = _opening
+        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+        : const Icon(Icons.send_outlined, size: 18);
     final label = Text(l.tgSignIn);
-    if (primary) return FilledButton.icon(icon: icon, label: label, onPressed: onPressed);
+    if (widget.primary) return FilledButton.icon(icon: icon, label: label, onPressed: onPressed);
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
       icon: icon,
@@ -57,19 +75,12 @@ Future<void> telegramSignIn(BuildContext context, {bool resume = false}) async {
   }
   if (!context.mounted) return;
   final login = pending;
-  // В браузере Telegram открывается сразу, как и раньше: новую вкладку
-  // браузеры разрешают только вплотную к нажатию, а вкладка сайта в фоне не
-  // засыпает. В приложении — после того, как окно ожидания нарисовано.
-  if (!resume && kIsWeb) {
-    try {
-      await launchUrl(Uri.parse(login.url), mode: LaunchMode.externalApplication);
-    } catch (_) {}
-    if (!context.mounted) return;
-  }
+  // Сначала сохраняем код и рисуем ожидание, затем передаём ссылку Telegram.
+  // При возврате FamCoin уже готов продолжить вход, даже после перезапуска.
   final outcome = await showDialog<_TgOutcome>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => _TelegramWaitDialog(code: login.code, url: Uri.parse(login.url), openTelegram: !resume && !kIsWeb),
+    builder: (_) => _TelegramWaitDialog(code: login.code, url: Uri.parse(login.url), openTelegram: !resume),
   );
   // Окно закрылось — вход состоялся, отменён или код устарел: хранить его незачем.
   await settings.clearPendingTelegramLogin();
@@ -143,9 +154,9 @@ class _TelegramWaitDialogState extends State<_TelegramWaitDialog> with WidgetsBi
     if (state == AppLifecycleState.resumed) _check();
   }
 
-  Future<void> _open() async {
+  Future<void> _open({bool browserFallback = false}) async {
     try {
-      await launchUrl(widget.url, mode: LaunchMode.externalApplication);
+      await launchTelegram(widget.url, browserFallback: browserFallback);
     } catch (_) {
       // Telegram не открылся — в окне есть кнопка «Открыть Telegram».
     }
@@ -193,6 +204,8 @@ class _TelegramWaitDialogState extends State<_TelegramWaitDialog> with WidgetsBi
         ]),
         actions: [
           TextButton(onPressed: _open, child: Text(l.tgOpenAgain)),
+          if (isIosTelegramWeb)
+            TextButton(onPressed: () => _open(browserFallback: true), child: Text(l.tgOpenInBrowser)),
           TextButton(onPressed: () => _finish(const _TgOutcome.cancelled()), child: Text(l.cancel)),
         ],
       ),

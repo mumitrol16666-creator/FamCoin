@@ -40,6 +40,8 @@ class FakeServer {
   /// Вход через Telegram (D77): бот «подтвердил» код, когда флаг поднят.
   bool tgConfirmed = false;
   int tgChecks = 0;
+  int tgStarts = 0;
+  Future<void>? tgStartGate;
 
   /// ИИ-консультант (D82): что прислало приложение и что «ответила модель».
   final aiRequests = <Map<String, dynamic>>[];
@@ -98,6 +100,8 @@ class FakeServer {
       return http.Response(jsonEncode(pushSubscribeFails ? {'error': 'unavailable'} : {'ok': true}), pushSubscribeFails ? 503 : 200);
     }
     if (req.url.path == '/auth/telegram/start') {
+      tgStarts++;
+      await tgStartGate;
       return http.Response(jsonEncode({'code': 'logincode1234', 'url': 'https://t.me/famcoin_test_bot?start=login_logincode1234'}), 200);
     }
     if (req.url.path == '/auth/telegram/check') {
