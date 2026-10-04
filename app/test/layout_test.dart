@@ -283,21 +283,33 @@ void main() {
     await enter('6000');
     expect(find.text('Крупная покупка'), findsOneWidget);
     expect(find.textContaining('60%'), findsOneWidget);
-    expect(tester.takeException(), isNull, reason: 'диалог с тремя кнопками не должен переполняться');
+    expect(tester.takeException(), isNull, reason: 'диалог с четырьмя кнопками не должен переполняться');
     await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Отмена')));
     await tester.pumpAndSettle();
     expect(find.text('Записать операцию'), findsOneWidget);
     expect(s.ledger.balance('cash'), kzt(96000));
 
-    // «Да, запланированная» — сохранено, но в лимит не входит.
+    // «Запланированная» — сохранено, но в лимит не входит.
     await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Да, запланированная'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Запланированная'));
     await tester.pumpAndSettle();
     expect(find.text('Записать операцию'), findsNothing);
     expect(s.ledger.balance('cash'), kzt(90000));
     expect(s.spentToday(), kzt(4000), reason: 'запланированная покупка в лимит не вошла');
     expect(s.userTransactions.first.meta['plannedPurchase'], isTrue);
+
+    // «Непредвиденная» (D101) — тоже вне лимита, но со своей отметкой; копилок
+    // нет, поэтому покрыть из копилки не предлагается.
+    await enter('7000');
+    await tester.tap(find.text('Непредвиденная'));
+    await tester.pumpAndSettle();
+    expect(find.text('Покрыть из копилки?'), findsNothing);
+    expect(s.ledger.balance('cash'), kzt(83000));
+    expect(s.spentToday(), kzt(4000), reason: 'непредвиденная трата в лимит не вошла');
+    expect(s.spentUnexpectedBetween(s.today, s.today), kzt(7000));
+    expect(s.userTransactions.first.meta['unexpected'], isTrue);
+    expect(s.userTransactions.first.meta.containsKey('plannedPurchase'), isFalse);
     await tester.pumpWidget(const SizedBox());
   });
 

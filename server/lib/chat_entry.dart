@@ -502,11 +502,12 @@ String todayText(LedgerView v, DateTime now) {
   final top = s.byCategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   return [
     '<b>${kk ? 'Бүгін' : 'Сегодня'}, ${_two(now.day)}.${_two(now.month)}</b>',
-    s.everyday == 0 && s.planned == 0
+    s.everyday == 0 && s.outside == 0
         ? (kk ? 'Шығыс жазылмады.' : 'Расходов не записано.')
         : (kk ? 'Жұмсалды: <b>${formatMoney(s.everyday)}</b>' : 'Потрачено: <b>${formatMoney(s.everyday)}</b>'),
     for (final e in top.take(5)) '• ${escapeHtml(categoryName(e.key, v))} — ${formatMoney(e.value)}',
     if (s.planned > 0) kk ? 'Лимиттен тыс (жоспарланған): ${formatMoney(s.planned)}' : 'Вне лимита (запланированное): ${formatMoney(s.planned)}',
+    if (s.unexpected > 0) kk ? 'Лимиттен тыс (күтпеген): ${formatMoney(s.unexpected)}' : 'Вне лимита (непредвиденное): ${formatMoney(s.unexpected)}',
     if (limit.limit != null) ...[
       kk ? 'Күндік лимит: ${formatMoney(limit.limit!)}' : 'Лимит на день: ${formatMoney(limit.limit!)}',
       [

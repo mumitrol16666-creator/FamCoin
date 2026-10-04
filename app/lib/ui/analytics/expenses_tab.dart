@@ -28,6 +28,7 @@ class ExpensesTab extends StatelessWidget {
     final totalCats = cats.fold<int>(0, (s, e) => s + (e.value > 0 ? e.value : 0));
     final byWho = state.expenseByWho(month);
     final split = state.expenseTypeSplit(month);
+    final unexpected = state.unexpectedFor(month);
 
     String delta(int now, int before) {
       if (before == 0) return '';
@@ -88,6 +89,19 @@ class ExpensesTab extends StatelessWidget {
                 ),
             ]),
           ),
+
+        // Непредвиденные траты месяца (D101): сколько ушло на внезапное —
+        // ориентир для резерва.
+        if (unexpected > 0) ...[
+          SectionHeader(l.unexpectedTitle),
+          AppCard(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              MoneyText(unexpected, style: const TextStyle(fontSize: 20)),
+              const SizedBox(height: 4),
+              Text(l.unexpectedNote, style: TextStyle(fontSize: 12, color: fam.text2)),
+            ]),
+          ),
+        ],
 
         if (state.familyMode && byWho.isNotEmpty) ...[
           SectionHeader(l.family),

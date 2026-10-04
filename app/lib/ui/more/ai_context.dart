@@ -98,7 +98,7 @@ Map<String, Object?> _operations(AppState s, AppLocalizations l) {
       'category': categories.join(', '),
       if (account != null) 'account': account.name,
       if (note.isNotEmpty) 'note': note.length > _noteLength ? '${note.substring(0, _noteLength)}…' : note,
-      if (t.meta['planned'] != null || t.meta['plannedPurchase'] == true) 'planned': true,
+      if (t.meta['unexpected'] == true) 'unexpected': true else if (t.meta['planned'] != null || t.meta['plannedPurchase'] == true) 'planned': true,
     };
   }
 
@@ -180,6 +180,8 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'income': _t(r.income),
       // Расходы — всё, что ушло, включая кредиты и долги (D98).
       'expense': _t(r.total),
+      // Сколько из них владелец отметил непредвиденными (D101).
+      'unexpected': _t(s.unexpectedFor(month)),
       'ofWhichDebtPayments': _t(r.debtPayments),
       'expenseNote': 'expense включает платежи по кредитам и долгам (ofWhichDebtPayments); в expenseByCategory они строкой «Кредиты и долги»',
       'incomeMinusExpense': _t(r.result),
@@ -296,7 +298,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'looksIncomplete': s.recurringMonthly > avgIncome,
     },
     ..._operations(s, l),
-    'operationsNote': 'operationsToday, operationsYesterday, operationsDayBeforeYesterday, operationsEarlier — только траты (расходы) по дням; incomes — только доходы, с датой. Из операций этого и прошлого месяца взяты последние $_recentOperations и $_largestOperations самых крупных. Пустой список — за этот день трат нет. Заметки написал сам человек.',
+    'operationsNote': 'operationsToday, operationsYesterday, operationsDayBeforeYesterday, operationsEarlier — только траты (расходы) по дням; incomes — только доходы, с датой. У траты с полем unexpected: true человек отметил её непредвиденной, с planned: true — запланированной; обе не входят в дневной лимит. Из операций этого и прошлого месяца взяты последние $_recentOperations и $_largestOperations самых крупных. Пустой список — за этот день трат нет. Заметки написал сам человек.',
     'familyMode': s.familyMode,
   };
 }

@@ -88,13 +88,14 @@ class QuickActionsRow extends StatelessWidget {
     if (accounts.isEmpty) return addAccountFlow(context);
     final account = (accounts.where((a) => a.liquid).firstOrNull ?? accounts.first).id;
     // Крупная покупка (D74): спрашиваем, запланирована ли — тогда вне лимита.
-    final planned = await askPlannedPurchase(context, state, q.amount);
-    if (planned == null || !context.mounted) return;
+    final kind = await askPlannedPurchase(context, state, q.amount);
+    if (kind == null || !context.mounted) return;
     final ok = await runAction(
       context,
-      () => state.addExpense(amount: q.amount, category: q.category, account: account, date: state.today, note: q.name, time: timeToField(TimeOfDay.now()), plannedPurchase: planned),
+      () => state.addExpense(amount: q.amount, category: q.category, account: account, date: state.today, note: q.name, time: timeToField(TimeOfDay.now()), plannedPurchase: kind.planned_, unexpected: kind.unexpected_),
     );
     if (!ok) return;
+    if (kind.unexpected_ && context.mounted && await offerCoverFromGoal(context, state, amount: q.amount, account: account)) return;
     // Свежая запись — первая в журнале; «Отменить» проводит отмену, история остаётся.
     final tx = state.userTransactions.firstOrNull;
     // Плашка живёт несколько секунд и не остаётся навсегда даже при

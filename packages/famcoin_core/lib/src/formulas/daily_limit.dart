@@ -22,27 +22,42 @@ DateTime? spendDay(Ledger l, Transaction t) {
   return t.date;
 }
 
-/// Запланированная трата — вне дневного лимита: оплата планового платежа
-/// (раздел 9.3, T33) или покупка, которую владелец отметил как запланированную
-/// (D74). То же для возврата по такой покупке. Деньги со счёта такая трата
-/// тратит как обычно — она не входит только в дневной лимит и в разборы привычек.
-bool isPlannedSpend(Ledger l, Transaction t) {
-  bool planned(Transaction x) => x.meta['planned'] != null || x.meta['plannedPurchase'] == true;
-  if (planned(t)) return true;
+/// Трата вне дневного лимита: оплата планового платежа (раздел 9.3, T33),
+/// покупка, которую владелец отметил как запланированную (D74), или
+/// непредвиденная трата (D101). То же для возврата по такой покупке. Деньги со
+/// счёта такая трата тратит как обычно — она не входит только в дневной лимит
+/// и в разборы привычек. Имя функции историческое: «запланированная» здесь
+/// значит «не из дневных мелочей».
+bool isPlannedSpend(Ledger l, Transaction t) => _flagged(l, t, (m) => m['planned'] != null || m['plannedPurchase'] == true || m['unexpected'] == true);
+
+/// Непредвиденная трата (D101): владелец отметил её так в диалоге «Крупная
+/// покупка» или в карточке операции. Вне дневного лимита, как запланированная,
+/// но считается отдельно — чтобы было видно, сколько за месяц ушло на внезапное.
+bool isUnexpectedSpend(Ledger l, Transaction t) => _flagged(l, t, (m) => m['unexpected'] == true);
+
+bool _flagged(Ledger l, Transaction t, bool Function(Map<String, dynamic>) test) {
+  if (test(t.meta)) return true;
   final of = t.meta['refundOf'];
   if (t.type != EventType.refund || of is! String) return false;
   final original = l.currentVersion(of) ?? l.byId(of);
-  return original != null && planned(original);
+  return original != null && test(original.meta);
 }
 
 class DaySpend {
-  const DaySpend(this.everyday, this.planned, this.byCategory);
+  const DaySpend(this.everyday, this.planned, this.byCategory, {this.unexpected = 0});
 
   /// Повседневные траты — те, что идут в дневной лимит. Не меньше нуля.
   final int everyday;
 
   /// Запланированные траты — вне лимита. Не меньше нуля.
   final int planned;
+
+  /// Непредвиденные траты (D101) — тоже вне лимита, отдельно от
+  /// запланированных. Не меньше нуля.
+  final int unexpected;
+
+  /// Всё, что не вошло в дневной лимит.
+  int get outside => planned + unexpected;
 
   /// Повседневные траты по категориям (id категории → сумма больше нуля).
   final Map<String, int> byCategory;
@@ -53,15 +68,19 @@ class DaySpend {
 DaySpend spendBetween(Ledger l, DateTime from, DateTime to) {
   var everyday = 0;
   var planned = 0;
+  var unexpected = 0;
   final byCategory = <String, int>{};
   for (final tx in l.transactions) {
     if ((tx.type != EventType.expense && tx.type != EventType.refund) || l.isReversed(tx.id)) continue;
     final day = spendDay(l, tx); // возврат по удалённой покупке даёт null и сюда не попадает
     if (day == null || day.isBefore(from) || day.isAfter(to)) continue;
-    final outside = isPlannedSpend(l, tx);
+    final sudden = isUnexpectedSpend(l, tx);
+    final outside = sudden || isPlannedSpend(l, tx);
     for (final p in tx.postings) {
       if (l.account(p.accountId).kind != LedgerKind.expense) continue;
-      if (outside) {
+      if (sudden) {
+        unexpected += p.amount;
+      } else if (outside) {
         planned += p.amount;
       } else {
         everyday += p.amount;
@@ -69,7 +88,7 @@ DaySpend spendBetween(Ledger l, DateTime from, DateTime to) {
       }
     }
   }
-  return DaySpend(everyday < 0 ? 0 : everyday, planned < 0 ? 0 : planned, byCategory..removeWhere((_, s) => s <= 0));
+  return DaySpend(everyday < 0 ? 0 : everyday, planned < 0 ? 0 : planned, byCategory..removeWhere((_, s) => s <= 0), unexpected: unexpected < 0 ? 0 : unexpected);
 }
 
 /// Сумма лимита, действующая с даты [from] до следующей записи.
@@ -136,7 +155,7 @@ class DailyLimitState {
   /// Сегодняшние повседневные траты.
   final int spentToday;
 
-  /// Сегодняшние запланированные траты — в лимит не вошли (D74).
+  /// Сегодняшние запланированные и непредвиденные траты — в лимит не вошли (D74, D101).
   final int outsideToday;
 
   /// Доступно по лимиту и переносу, без оглядки на деньги. За каждый день с
@@ -186,7 +205,7 @@ DailyLimitState dailyLimitState(Ledger l, Map<String, dynamic> profile, DateTime
     carryOn: carryOn,
     since: since,
     spentToday: day.everyday,
-    outsideToday: day.planned,
+    outsideToday: day.outside,
     planned: planned,
     available: available,
   );

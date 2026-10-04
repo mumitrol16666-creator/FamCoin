@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../budget/sheets.dart';
 import '../more/categories_screen.dart';
 import '../widgets/common.dart';
+import 'big_purchase.dart';
 
 class _Part {
   _Part(this.category, int amount) : amount = TextEditingController(text: amount == 0 ? '' : amountToField(amount));
@@ -41,7 +42,7 @@ class _EditSheetState extends State<_EditSheet> {
   late String _account;
   late DateTime _date = widget.tx.date;
   late String _who = widget.tx.meta['who'] as String? ?? 'me';
-  late bool _planned = widget.tx.meta['plannedPurchase'] == true;
+  late PurchaseKind _purchase = PurchaseKind.ofMeta(widget.tx.meta);
   late TimeOfDay _time = timeFromField(widget.tx.meta['time']) ?? TimeOfDay.now();
 
   @override
@@ -87,7 +88,8 @@ class _EditSheetState extends State<_EditSheet> {
         who: _who,
         note: _note.text.trim(),
         time: timeToField(_time),
-        plannedPurchase: _planned,
+        plannedPurchase: _purchase.planned_,
+        unexpected: _purchase.unexpected_,
       );
     });
   }
@@ -200,16 +202,23 @@ class _EditSheetState extends State<_EditSheet> {
               for (final m in state.members) ChoiceChip(label: Text(m.name), selected: _who == m.id, onSelected: (_) => setState(() => _who = m.id)),
             ]),
           ],
-          // Запланированная покупка не входит в дневной лимит (D74). Оплата
-          // планового платежа и так вне лимита — переключатель ей не нужен.
-          if (!_isIncome && widget.tx.meta['planned'] == null && (state.dailyLimit != null || _planned))
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l.plannedPurchaseSwitch),
-              subtitle: Text(l.plannedPurchaseSwitchNote, style: TextStyle(fontSize: 12, color: fam.text2)),
-              value: _planned,
-              onChanged: (v) => setState(() => _planned = v),
-            ),
+          // Запланированная и непредвиденная не входят в дневной лимит (D74,
+          // D101). Оплата планового платежа и так вне лимита — выбор ей не нужен.
+          if (!_isIncome && widget.tx.meta['planned'] == null && (state.dailyLimit != null || _purchase != PurchaseKind.regular)) ...[
+            const SizedBox(height: 12),
+            Text(l.purchaseKindTitle, style: TextStyle(fontSize: 12, color: fam.text2)),
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, runSpacing: 4, children: [
+              for (final k in PurchaseKind.values)
+                ChoiceChip(
+                  label: Text(switch (k) { PurchaseKind.regular => l.purchaseKindRegular, PurchaseKind.planned => l.purchaseKindPlanned, PurchaseKind.unexpected => l.purchaseKindUnexpected }),
+                  selected: _purchase == k,
+                  onSelected: (_) => setState(() => _purchase = k),
+                ),
+            ]),
+            const SizedBox(height: 4),
+            Text(l.purchaseKindNote, style: TextStyle(fontSize: 12, color: fam.text2)),
+          ],
           const SizedBox(height: 12),
           TextField(controller: _note, maxLength: 120, decoration: InputDecoration(labelText: l.note, counterText: '')),
           const SizedBox(height: 8),

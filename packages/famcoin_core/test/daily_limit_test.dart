@@ -32,10 +32,17 @@ void main() {
       {'type': 'refund', 'id': 'r1', 'date': '2026-10-03', 'category': 'food', 'amount': '${kzt(1000)}', 'toAccount': 'card', 'meta': {'refundOf': 'e4'}},
       _expense('e5', '2026-10-03', 700, 'fun'),
       {'type': 'reverse', 'txId': 'e5', 'id': 'x5'},
+      // Непредвиденная (D101): вне лимита, но не «запланированная».
+      _expense('e6', '2026-10-03', 50000, 'gifts', meta: {'unexpected': true}),
+      {'type': 'refund', 'id': 'r6', 'date': '2026-10-03', 'category': 'gifts', 'amount': '${kzt(10000)}', 'toAccount': 'card', 'meta': {'refundOf': 'e6'}},
     ]);
     final day = spendBetween(l, _today, _today);
     expect(day.everyday, kzt(4500));
     expect(day.planned, kzt(90000));
+    expect(day.unexpected, kzt(40000), reason: 'возврат по непредвиденной уменьшает её, а не повседневные');
+    expect(day.outside, kzt(130000));
+    expect(dailyLimitState(l, {'dailyLimit': '${kzt(5000)}'}, _today).outsideToday, kzt(130000));
+    expect(dailyLimitState(l, {'dailyLimit': '${kzt(5000)}'}, _today).spentToday, kzt(4500));
     expect(day.byCategory, {'cafe': kzt(1500), 'food': kzt(3000)});
     expect(spendBetween(l, DateTime(2026, 10, 2), DateTime(2026, 10, 2)).everyday, kzt(3000));
     expect(spendBetween(l, DateTime(2026, 10, 2), _today).everyday, kzt(7500));

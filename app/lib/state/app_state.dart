@@ -528,6 +528,13 @@ class AppState extends ChangeNotifier {
   /// вошло в лимит», в расчёт доступного не идут.
   int spentPlannedBetween(DateTime from, DateTime to) => spendBetween(ledger, from, to).planned;
 
+  /// Непредвиденные траты (D101) за те же дни — вне лимита, отдельной строкой
+  /// в аналитике, сверке и у консультанта.
+  int spentUnexpectedBetween(DateTime from, DateTime to) => spendBetween(ledger, from, to).unexpected;
+
+  /// Непредвиденные траты за месяц [monthStart].
+  int unexpectedFor(DateTime monthStart) => spentUnexpectedBetween(monthStart, DateTime(monthStart.year, monthStart.month + 1, 0));
+
   /// Крупная покупка (D74): от половины дневного лимита. Такую покупку
   /// программа предлагает отметить запланированной — дневной лимит нужен для
   /// потребительских мелочей, а не для крупных трат.
@@ -848,6 +855,16 @@ class AppState extends ChangeNotifier {
         if (ledger.account(p.accountId).kind == LedgerKind.expense) out[day.day - 1] += p.amount;
       }
     }
+    // Та же база, что у report.total и categoriesFor: проценты уже попали
+    // через расходные проводки. Добавляем только тело учтённых платежей;
+    // рассрочки с записанной покупкой ядро исключает во избежание дубля.
+    for (final tx in ledger.debtPaymentsIn(monthStart, end)) {
+      for (final posting in tx.postings) {
+        if (ledger.account(posting.accountId).kind == LedgerKind.liability) {
+          out[tx.date.day - 1] -= posting.amount;
+        }
+      }
+    }
     return out;
   }
 
@@ -931,8 +948,10 @@ class AppState extends ChangeNotifier {
   /// на дневной бюджет и отчёты не влияет, только показывается и правится.
   /// [id] и [commandId] форма создаёт один раз на попытку сохранения и
   /// повторяет при ошибке сети — повтор не создаёт вторую запись.
-  Future<void> addExpense({required int amount, required String category, required String account, required DateTime date, String who = 'me', String note = '', String? time, bool plannedPurchase = false, String? id, String? commandId}) =>
-      send({'type': 'expense', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'splits': {category: amount.toString()}, 'meta': {'who': who, if (note.isNotEmpty) 'note': note, if (time != null) 'time': time, if (plannedPurchase) 'plannedPurchase': true}}, commandId: commandId);
+  /// [plannedPurchase] и [unexpected] (D74, D101) — трата вне дневного лимита;
+  /// одновременно оба не ставятся.
+  Future<void> addExpense({required int amount, required String category, required String account, required DateTime date, String who = 'me', String note = '', String? time, bool plannedPurchase = false, bool unexpected = false, String? id, String? commandId}) =>
+      send({'type': 'expense', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'splits': {category: amount.toString()}, 'meta': {'who': who, if (note.isNotEmpty) 'note': note, if (time != null) 'time': time, if (plannedPurchase && !unexpected) 'plannedPurchase': true, if (unexpected) 'unexpected': true}}, commandId: commandId);
 
   Future<void> addIncome({required int amount, required String source, required String account, required DateTime date, String note = '', String? time, String? id, String? commandId}) =>
       send({'type': 'income', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'source': source, 'amount': amount.toString(), 'meta': {if (note.isNotEmpty) 'note': note, if (time != null) 'time': time}}, commandId: commandId);
@@ -979,7 +998,7 @@ class AppState extends ChangeNotifier {
 
   /// Исправление покупки: старая версия отменяется, новая проводится —
   /// одной командой, история сохраняется (F032).
-  Future<void> editExpense(Transaction old, {required Map<String, int> splits, required String account, required DateTime date, required String who, required String note, String? time, bool? plannedPurchase}) =>
+  Future<void> editExpense(Transaction old, {required Map<String, int> splits, required String account, required DateTime date, required String who, required String note, String? time, bool? plannedPurchase, bool? unexpected}) =>
       sendBatch([
         {'type': 'reverse', 'txId': old.id, 'id': newId()},
         {
@@ -995,6 +1014,7 @@ class AppState extends ChangeNotifier {
             if (time != null) 'time': time,
             'edited': old.id,
             if (plannedPurchase != null) 'plannedPurchase': plannedPurchase ? true : null,
+            if (unexpected != null) 'unexpected': unexpected ? true : null,
           }..removeWhere((k, v) => v == null || v == ''),
         },
       ]);
@@ -1107,6 +1127,7 @@ class AppState extends ChangeNotifier {
       prevExpense: pr.total,
       top: categoriesFor(start).take(3).toList(),
       adjustments: adjustmentsFor(start),
+      unexpected: unexpectedFor(start),
       paymentsPaid: paid,
       paymentsTotal: total,
       days: days,

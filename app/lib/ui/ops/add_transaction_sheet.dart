@@ -143,7 +143,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
 
   /// Ответ на «запланированная ли покупка» (D74) — спрашиваем один раз на сумму,
   /// повтор сохранения после ошибки сети не переспрашивает.
-  bool _planned = false;
+  PurchaseKind _purchase = PurchaseKind.regular;
   int? _plannedFor;
   bool _asking = false;
 
@@ -238,7 +238,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
       final answer = await askPlannedPurchase(context, state, amount);
       _asking = false;
       if (answer == null || !mounted) return;
-      _planned = answer;
+      _purchase = answer;
       _plannedFor = amount;
     }
     setState(() {
@@ -248,7 +248,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
     try {
       switch (_kind) {
         case FieldsKind.expense:
-          await state.addExpense(amount: amount, category: _category, account: account, date: _date, who: state.familyMode ? _who : 'me', note: note, time: time, plannedPurchase: _planned, id: _txId, commandId: _commandId);
+          await state.addExpense(amount: amount, category: _category, account: account, date: _date, who: state.familyMode ? _who : 'me', note: note, time: time, plannedPurchase: _purchase.planned_, unexpected: _purchase.unexpected_, id: _txId, commandId: _commandId);
         case FieldsKind.income:
           await state.addIncome(amount: amount, source: _source, account: account, date: _date, note: note, time: time, id: _txId, commandId: _commandId);
         case FieldsKind.transfer:
@@ -272,6 +272,8 @@ class _TransactionFieldsState extends State<TransactionFields> {
     // говорит, что доход записан, поэтому «Операция записана» не дублируем.
     if (_kind == FieldsKind.income && await offerIncomeToGoals(nav.context, amount: amount, account: account, source: _source, date: _date)) return;
     messenger.showSnackBar(SnackBar(content: Text(l.saved)));
+    // Непредвиденную трату можно покрыть из копилки (D101).
+    if (_kind == FieldsKind.expense && _purchase.unexpected_) await offerCoverFromGoal(nav.context, state, amount: amount, account: account);
   }
 
   bool get _valid {

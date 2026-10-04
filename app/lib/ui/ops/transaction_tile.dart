@@ -68,7 +68,7 @@ class TxView {
         return TxView(
           title: cats.map((c) => categoryName(l, c)).join(' + '),
           // Отметка первой: подпись в одну строку обрезается с конца, а отметка важнее счёта.
-          subtitle: [if (tx.meta['plannedPurchase'] == true) l.plannedPurchaseTag, if (note.isNotEmpty) note, ?accountName, ?whoName],
+          subtitle: [if (tx.meta['unexpected'] == true) l.unexpectedTag else if (tx.meta['plannedPurchase'] == true) l.plannedPurchaseTag, if (note.isNotEmpty) note, ?accountName, ?whoName],
           amount: -expense,
           icon: categoryById(cats.first).icon,
           kind: 'expense',

@@ -257,8 +257,16 @@ class _SummaryCard extends StatelessWidget {
               ]),
             ),
         ],
-        if (sum.paymentsTotal > 0 || sum.adjustments != 0) const Divider(height: 20),
+        if (sum.paymentsTotal > 0 || sum.adjustments != 0 || sum.unexpected > 0) const Divider(height: 20),
         if (sum.paymentsTotal > 0) Text(l.monthPaymentsLine(sum.paymentsPaid, sum.paymentsTotal), style: TextStyle(fontSize: 13, color: fam.text2)),
+        if (sum.unexpected > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(children: [
+              Expanded(child: Text(l.unexpectedTitle, style: TextStyle(fontSize: 13, color: fam.text2))),
+              MoneyText(sum.unexpected, style: const TextStyle(fontSize: 13)),
+            ]),
+          ),
         if (sum.adjustments != 0)
           Padding(
             padding: const EdgeInsets.only(top: 4),

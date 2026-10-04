@@ -887,7 +887,7 @@
   },
   "explainNoteOk": "Свободных денег хватает на весь период при вашем лимите.",
   "bigPurchaseTitle": "Крупная покупка",
-  "bigPurchaseBody": "{amount} — это {percent}% дневного лимита ({limit}). Это запланированная покупка?",
+  "bigPurchaseBody": "{amount} — это {percent}% дневного лимита ({limit}). Что это за трата?",
   "@bigPurchaseBody": {
     "placeholders": {
       "amount": {
@@ -901,12 +901,50 @@
       }
     }
   },
-  "bigPurchaseNote": "Запланированная покупка не входит в дневной лимит: он для мелочей на каждый день. Деньги со счёта спишутся в любом случае.",
-  "bigPurchaseYes": "Да, запланированная",
-  "bigPurchaseNo": "Нет, обычная трата",
+  "bigPurchaseNote": "Запланированная и непредвиденная не входят в дневной лимит: он для мелочей на каждый день. Деньги со счёта спишутся в любом случае.",
+  "bigPurchaseYes": "Запланированная",
+  "bigPurchaseNo": "Обычная трата",
+  "bigPurchaseUnexpected": "Непредвиденная",
   "plannedPurchaseTag": "запланированная",
-  "plannedPurchaseSwitch": "Запланированная покупка",
-  "plannedPurchaseSwitchNote": "Не входит в дневной лимит",
+  "unexpectedTag": "непредвиденная",
+  "purchaseKindTitle": "Дневной лимит",
+  "purchaseKindRegular": "Обычная трата",
+  "purchaseKindPlanned": "Запланированная",
+  "purchaseKindUnexpected": "Непредвиденная",
+  "purchaseKindNote": "Запланированная и непредвиденная не входят в дневной лимит.",
+  "unexpectedTitle": "Непредвиденные траты",
+  "unexpectedNote": "Траты, которые вы отметили непредвиденными. По ним видно, какой резерв нужен на месяц.",
+  "coverFromGoalTitle": "Покрыть из копилки?",
+  "coverFromGoalBody": "В копилке «{goal}» {saved}. Забрать {amount} на счёт «{account}»?",
+  "@coverFromGoalBody": {
+    "placeholders": {
+      "goal": {
+        "type": "String"
+      },
+      "saved": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "coverFromGoalYes": "Забрать из копилки",
+  "coverFromGoalNo": "Не сейчас",
+  "coveredFromGoal": "Из копилки «{goal}» взято {amount}",
+  "@coveredFromGoal": {
+    "placeholders": {
+      "goal": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "monthCloseTitle": "Сверка месяца",
   "monthCloseIntro": "Пять минут раз в месяц — и в деньгах порядок. Любой шаг можно пропустить.",
   "monthPartial": "Месяц ещё идёт — итоги промежуточные.",

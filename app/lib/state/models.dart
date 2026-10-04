@@ -354,12 +354,16 @@ class MonthSummary {
     required this.days,
     required this.avgDaily,
     this.debtPayments = 0,
+    this.unexpected = 0,
   });
 
   final DateTime month;
 
   /// Сколько из [expense] — платежи по кредитам и долгам (D98).
   final int debtPayments;
+
+  /// Сколько из [expense] владелец отметил непредвиденным (D101).
+  final int unexpected;
 
   /// Месяц ещё идёт — итоги промежуточные.
   final bool current;
