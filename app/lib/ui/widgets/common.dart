@@ -604,7 +604,7 @@ Future<bool> confirm(BuildContext context, {required String title, String? messa
 Future<bool> confirmReconciliationRecalculation(BuildContext context, DateTime month) => confirm(
   context,
   title: context.l10n.monthRecalculateTitle,
-  message: context.l10n.monthRecalculateBody(DateFormat.yMMMM(Localizations.localeOf(context).toString()).format(month)),
+  message: context.l10n.monthRecalculateBody(DateFormat('LLLL y', Localizations.localeOf(context).toString()).format(month)),
   action: context.l10n.monthRecalculateAction,
 );
 
