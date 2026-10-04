@@ -98,8 +98,13 @@ class UpdateCheck extends ChangeNotifier {
   /// Показывать ли плашку: обновление есть и человек его не откладывал.
   bool get show => _available != null && _available!.id != _dismissed;
 
+  /// Без зашитой метки (отладка, тесты) сравнивать не с чем: ни таймеров, ни
+  /// запросов — виджет-тесты проверяют, что после них не осталось таймеров.
+  bool get _enabled => _web ? _build.isNotEmpty : _version.isNotEmpty;
+
   /// Первая проверка через [firstDelay], дальше раз в [interval].
   void start() {
+    if (!_enabled) return;
     _timer?.cancel();
     Timer(firstDelay, check);
     _timer = Timer.periodic(interval, (_) => check());
@@ -107,9 +112,7 @@ class UpdateCheck extends ChangeNotifier {
 
   /// Одна проверка; ошибки сети молча пропускаются — это не повод беспокоить.
   Future<void> check() async {
-    if (_checking) return;
-    // Без зашитой метки (отладка, тесты) сравнивать не с чем.
-    if (_web ? _build.isEmpty : _version.isEmpty) return;
+    if (_checking || !_enabled) return;
     _checking = true;
     try {
       _dismissed ??= (await SharedPreferences.getInstance()).getString(_dismissedKey) ?? '';
