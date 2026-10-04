@@ -4,19 +4,19 @@ library;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Сезон меняет только атмосферу: свечение фона, частицы и цвет акцента.
-/// Цифры, карточки и логика от него не зависят.
-enum Season { none, autumn, winter }
+/// Сезон меняет палитру и фон. Финансовые данные и поведение не зависят от него.
+enum Season { none, spring, autumn, winter }
 
-/// `pref`: auto | autumn | winter | none. Авто — по календарю: сентябрь–ноябрь
-/// осень, декабрь–февраль зима, остальное пока без темы.
+/// `pref`: auto | spring | autumn | winter | none. Авто — по календарю.
 Season resolveSeason(String pref, DateTime now) => switch (pref) {
+      'spring' => Season.spring,
       'autumn' => Season.autumn,
       'winter' => Season.winter,
       'none' => Season.none,
       _ => switch (now.month) {
           9 || 10 || 11 => Season.autumn,
           12 || 1 || 2 => Season.winter,
+          3 || 4 || 5 => Season.spring,
           _ => Season.none,
         },
     };
@@ -100,10 +100,50 @@ class FamColors extends ThemeExtension<FamColors> {
     guideBad: Color(0xFF8C3A2C),
   );
 
+  static const springLight = FamColors(
+    income: Color(0xFF13704B),
+    expense: Color(0xFFBC3B55),
+    debt: Color(0xFF7850BC),
+    accent: Color(0xFFD6F584),
+    onAccent: Color(0xFF173F30),
+    text2: Color(0xFF4D685D),
+    warn: Color(0xFF936019),
+    warnBg: Color(0xFFFFECCA),
+    incomeBg: Color(0xFFDDF3E5),
+    expenseBg: Color(0xFFFCE4E9),
+    line: Color(0xFFD3E4D9),
+    guideBg: Color(0xFF096649),
+    guideBad: Color(0xFFAA3650),
+    season: Season.spring,
+    glowA: Color(0x557DDEAF),
+    glowB: Color(0x40FFBCA8),
+  );
+
+  static const springDark = FamColors(
+    income: Color(0xFF88E4B6),
+    expense: Color(0xFFFF99AF),
+    debt: Color(0xFFC8B0FF),
+    accent: Color(0xFFD6F584),
+    onAccent: Color(0xFF173F30),
+    text2: Color(0xFFB1C9BB),
+    warn: Color(0xFFF3CE83),
+    warnBg: Color(0xFF403721),
+    incomeBg: Color(0xFF203E30),
+    expenseBg: Color(0xFF492C39),
+    line: Color(0xFF355445),
+    guideBg: Color(0xFF126247),
+    guideBad: Color(0xFF8F3048),
+    season: Season.spring,
+    glowA: Color(0x401FAE78),
+    glowB: Color(0x267D587D),
+  );
+
   FamColors withSeason(Season s, {required bool isDark}) {
     switch (s) {
       case Season.none:
         return this;
+      case Season.spring:
+        return isDark ? springDark : springLight;
       case Season.autumn:
         return _copy(
           season: s,
@@ -153,12 +193,14 @@ extension FamTheme on BuildContext {
   ColorScheme get scheme => Theme.of(this).colorScheme;
 }
 
-ThemeData buildTheme(Brightness brightness, {Season season = Season.none}) {
+ThemeData buildTheme(Brightness brightness, {Season season = Season.spring}) {
   final isDark = brightness == Brightness.dark;
+  final isSpring = season == Season.spring;
   final fam = (isDark ? FamColors.dark : FamColors.light).withSeason(season, isDark: isDark);
 
   // Зимой основной цвет холоднее; осенью остаётся фирменный зелёный.
   final primary = switch (season) {
+    Season.spring => isDark ? const Color(0xFF88E4B6) : const Color(0xFF0D7050),
     Season.winter => isDark ? const Color(0xFF4F9FC0) : const Color(0xFF236A85),
     _ => isDark ? const Color(0xFF4FB39A) : const Color(0xFF1F5E4F),
   };
@@ -171,12 +213,18 @@ ThemeData buildTheme(Brightness brightness, {Season season = Season.none}) {
     onSecondary: fam.onAccent,
     error: fam.expense,
     onError: Colors.white,
-    surface: isDark ? const Color(0xFF1B2028) : Colors.white,
-    onSurface: isDark ? const Color(0xFFECEEF1) : const Color(0xFF1A1D21),
-    surfaceContainerHighest: isDark ? const Color(0xFF232A34) : const Color(0xFFEEEBE4),
+    surface: isDark ? (isSpring ? const Color(0xFF1B3028) : const Color(0xFF1B2028)) : Colors.white,
+    onSurface: isSpring
+        ? (isDark ? const Color(0xFFF1F7EC) : const Color(0xFF193C2D))
+        : (isDark ? const Color(0xFFECEEF1) : const Color(0xFF1A1D21)),
+    surfaceContainerHighest: isSpring
+        ? (isDark ? const Color(0xFF294638) : const Color(0xFFE4F0DF))
+        : (isDark ? const Color(0xFF232A34) : const Color(0xFFEEEBE4)),
     outline: fam.line,
   );
-  final background = isDark ? const Color(0xFF12151A) : const Color(0xFFF5F3EE);
+  final background = isSpring
+      ? (isDark ? const Color(0xFF101F19) : const Color(0xFFF1F7EC))
+      : (isDark ? const Color(0xFF12151A) : const Color(0xFFF5F3EE));
 
   final base = ThemeData(brightness: brightness, colorScheme: scheme, useMaterial3: true);
   final body = GoogleFonts.notoSansTextTheme(base.textTheme).apply(
@@ -202,7 +250,9 @@ ThemeData buildTheme(Brightness brightness, {Season season = Season.none}) {
     ),
     cardTheme: CardThemeData(
       color: scheme.surface,
-      elevation: 0,
+      elevation: isSpring && !isDark ? 1 : 0,
+      shadowColor: isSpring ? const Color(0x18116A46) : null,
+      surfaceTintColor: Colors.transparent,
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
     ),

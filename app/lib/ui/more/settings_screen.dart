@@ -90,17 +90,22 @@ class SettingsScreen extends StatelessWidget {
                 l.seasonTheme,
                 tip: l.tipSeason,
                 Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  SegmentedButton<String>(
-                    showSelectedIcon: false,
-                    segments: [
-                      ButtonSegment(value: 'auto', label: Text(l.seasonAuto)),
-                      ButtonSegment(value: 'autumn', label: Text(l.seasonAutumn)),
-                      ButtonSegment(value: 'winter', label: Text(l.seasonWinter)),
-                      ButtonSegment(value: 'none', label: Text(l.seasonNone)),
-                    ],
-                    selected: {settings.season},
-                    onSelectionChanged: (s) => settings.season = s.first,
-                  ),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final (value, label, icon) in [
+                      ('spring', l.seasonSpring, Icons.local_florist_outlined),
+                      ('auto', l.seasonAuto, Icons.auto_awesome_outlined),
+                      ('autumn', l.seasonAutumn, Icons.eco_outlined),
+                      ('winter', l.seasonWinter, Icons.ac_unit),
+                      ('none', l.seasonNone, Icons.block_outlined),
+                    ])
+                      ChoiceChip(
+                        avatar: Icon(icon, size: 17, color: settings.season == value ? context.scheme.onPrimary : fam.text2),
+                        label: Text(label),
+                        labelStyle: TextStyle(color: settings.season == value ? context.scheme.onPrimary : context.scheme.onSurface),
+                        selected: settings.season == value,
+                        onSelected: (_) => settings.season = value,
+                      ),
+                  ]),
                   const SizedBox(height: 6),
                   Text(l.seasonNote, style: TextStyle(fontSize: 12, color: fam.text2)),
                 ]),

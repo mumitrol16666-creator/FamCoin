@@ -46,6 +46,7 @@ class QuickActionsRow extends StatelessWidget {
               SizedBox(
                 width: 118,
                 child: Card(
+                  color: fam.season == Season.spring ? fam.incomeBg : null,
                   margin: const EdgeInsets.only(right: 10, bottom: 4),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
@@ -54,7 +55,7 @@ class QuickActionsRow extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Icon(categoryById(q.category).icon, size: 20, color: fam.accent),
+                        Icon(categoryById(q.category).icon, size: 20, color: context.scheme.primary),
                         const SizedBox(height: 6),
                         Text(q.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                         MoneyText(q.amount, style: TextStyle(fontSize: 12, color: fam.text2)),

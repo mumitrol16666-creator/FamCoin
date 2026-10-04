@@ -71,7 +71,15 @@ class _ShellState extends State<Shell> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, color: on ? scheme.primary : fam.text2),
+              Container(
+                width: 54,
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                decoration: BoxDecoration(
+                  color: on && fam.season == Season.spring ? scheme.primary.withValues(alpha: .12) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: on ? scheme.primary : fam.text2),
+              ),
               const SizedBox(height: 2),
               Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, color: on ? scheme.primary : fam.text2, fontWeight: on ? FontWeight.w600 : FontWeight.w400)),
             ]),
@@ -128,7 +136,7 @@ class _ShellState extends State<Shell> {
                 builder: (_, __) => AnimatedOpacity(
                   opacity: state.busy ? 1 : 0,
                   duration: const Duration(milliseconds: 150),
-                  child: LinearProgressIndicator(minHeight: 2, backgroundColor: Colors.transparent, color: fam.accent),
+                  child: LinearProgressIndicator(minHeight: 2, backgroundColor: Colors.transparent, color: scheme.primary),
                 ),
               ),
             ),

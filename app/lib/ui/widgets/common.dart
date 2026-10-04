@@ -313,21 +313,27 @@ class _FadeInState extends State<FadeIn> with SingleTickerProviderStateMixin {
 }
 
 class AppCard extends StatelessWidget {
-  const AppCard({super.key, required this.child, this.onTap, this.color, this.padding = const EdgeInsets.fromLTRB(16, 14, 16, 14)});
+  const AppCard({super.key, required this.child, this.onTap, this.color, this.background, this.padding = const EdgeInsets.fromLTRB(16, 14, 16, 14)});
   final Widget child;
   final VoidCallback? onTap;
   final Color? color;
+  final Widget? background;
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
+    final content = InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(padding: padding, child: child),
+    );
     return Card(
       color: color,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(padding: padding, child: child),
-      ),
+      clipBehavior: Clip.antiAlias,
+      child: background == null ? content : Stack(children: [
+        Positioned.fill(child: IgnorePointer(child: ExcludeSemantics(child: background!))),
+        content,
+      ]),
     );
   }
 }

@@ -5,9 +5,10 @@ import 'package:flutter/scheduler.dart';
 
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
+import 'spring_art.dart';
 
 /// Сезонный фон под основными вкладками (D46): два пятна света в углах и
-/// немного частиц — осенью листья, зимой снег. Рисуется кодом, весит ничего,
+/// растительные формы весной, осенью листья, зимой снег. Рисуется кодом,
 /// одинаково работает в обеих темах. При «уменьшить движение» — статичен.
 class SeasonBackground extends StatelessWidget {
   const SeasonBackground({super.key, required this.child});
@@ -25,7 +26,11 @@ class SeasonBackground extends StatelessWidget {
           ),
         ),
       ),
-      Positioned.fill(child: IgnorePointer(child: RepaintBoundary(child: _Particles(season: fam.season)))),
+      Positioned.fill(child: IgnorePointer(child: ExcludeSemantics(child: RepaintBoundary(
+        child: fam.season == Season.spring
+            ? CustomPaint(painter: SpringBackdropPainter(dark: Theme.of(context).brightness == Brightness.dark))
+            : _Particles(season: fam.season),
+      )))),
       child,
     ]);
   }

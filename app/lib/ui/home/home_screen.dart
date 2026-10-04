@@ -19,6 +19,7 @@ import '../ops/transaction_tile.dart';
 import '../ops/voice_sheet.dart';
 import '../../state/push.dart';
 import '../widgets/common.dart';
+import '../widgets/spring_art.dart';
 import '../widgets/push_enable.dart';
 import 'quick_actions.dart';
 import 'tips.dart';
@@ -387,6 +388,7 @@ class _GuideCard extends StatelessWidget {
 
     return AppCard(
       color: negative ? fam.guideBad : fam.guideBg,
+      background: !negative && fam.season == Season.spring ? const CustomPaint(painter: SpringGuidePainter()) : null,
       onTap: showTotal ? null : onSetLimit,
       child: DefaultTextStyle(
         style: const TextStyle(color: FamColors.onGuide),
@@ -606,7 +608,7 @@ class _TipCard extends StatelessWidget {
         return AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Icon(urgent != null ? Icons.lightbulb : Icons.lightbulb_outline, size: 20, color: fam.accent),
+              Icon(urgent != null ? Icons.lightbulb : Icons.lightbulb_outline, size: 20, color: context.scheme.primary),
               const SizedBox(width: 10),
               Expanded(child: Text(urgent != null ? l.adviceDataTitle : l.adviceTitle, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fam.text2))),
             ]),

@@ -62,8 +62,8 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Сезонная тема: auto | autumn | winter | none (см. `resolveSeason`).
-  String get season => _prefs.getString('season') ?? 'auto';
+  /// Сезонная тема: auto | spring | autumn | winter | none (см. `resolveSeason`).
+  String get season => _prefs.getString('season') ?? 'spring';
   set season(String value) {
     _prefs.setString('season', value);
     notifyListeners();

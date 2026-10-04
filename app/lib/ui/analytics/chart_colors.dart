@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_theme.dart';
+
 /// Цвет привязан к категории, а не к её месту в рейтинге месяца.
 Color categoryChartColor(BuildContext context, String id) {
   const known = {
@@ -62,11 +64,24 @@ Color categoryChartColor(BuildContext context, String id) {
     0xFF81B8B2,
     0xFFB2BFC9,
   ];
+  const spring = [
+    0xFF209869, 0xFF548BE2, 0xFFF4B947, 0xFFAB7DDE,
+    0xFFED8D68, 0xFF24ABA4, 0xFF7E69D6, 0xFFCB8196,
+    0xFFDE709C, 0xFFB58D38, 0xFF82A93D, 0xFF45A7CA,
+    0xFFEBA3AF, 0xFF607AD7, 0xFFB367BE, 0xFFE69F62,
+    0xFF51B395, 0xFF849D8D,
+  ];
   var hash = 0;
   for (final code in id.codeUnits) {
     hash = (hash * 31 + code) & 0x7fffffff;
   }
   final isDark = Theme.of(context).brightness == Brightness.dark;
+  final isSpring = context.fam.season == Season.spring;
   final index = known[id];
-  return index == null ? HSLColor.fromAHSL(1, (hash % 360).toDouble(), .42, isDark ? .7 : .43).toColor() : Color((isDark ? dark : light)[index]);
+  if (index == null) return HSLColor.fromAHSL(1, (hash % 360).toDouble(), isSpring ? .6 : .42, isDark ? .7 : .43).toColor();
+  if (isSpring) {
+    final color = Color(spring[index]);
+    return isDark ? Color.lerp(color, Colors.white, .2)! : color;
+  }
+  return Color((isDark ? dark : light)[index]);
 }
