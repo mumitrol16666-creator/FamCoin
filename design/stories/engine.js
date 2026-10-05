@@ -46,7 +46,15 @@
         if (t >= tb) v = vb;
         else if (t > ta) { v = va + (vb - va) * ease((t - ta) / (tb - ta)); break; }
       }
-      el.textContent = (el.dataset.sign && v > 0 ? '+' : '') + fmt(v);
+      // data-dec — знаки после запятой (2,4 млн); data-plural="год|года|лет" — слово после числа.
+      const dec = parseInt(el.dataset.dec || '0', 10);
+      let txt = dec ? v.toFixed(dec).replace('.', ',') : fmt(v);
+      if (el.dataset.plural) {
+        const [one, few, many] = el.dataset.plural.split('|');
+        const n = Math.round(v), m10 = n % 10, m100 = n % 100;
+        txt += '\u00a0' + (m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many);
+      }
+      el.textContent = (el.dataset.sign && v > 0 ? '+' : '') + txt;
     });
   }
 

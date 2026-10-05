@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>FamCoin — Деньги за 15 секунд: время работает на вас</title>
+<link rel="stylesheet" href="story.css">
+<style>
+  :root { --dur: 17s; }
+  .cols { position: absolute; left: 150px; right: 150px; top: 760px; height: 760px; display: flex; gap: 90px; align-items: flex-end; }
+  .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .col .v { font-size: 66px; font-weight: 800; letter-spacing: -2px; margin-bottom: 18px; }
+  .col .b { width: 100%; border-radius: 30px 30px 10px 10px; animation: growH 4.6s cubic-bezier(.5,0,.3,1) 1.4s both; }
+  .col .l { font-size: 38px; color: var(--text2); font-weight: 700; margin-top: 18px; }
+  .yr { position: absolute; left: 0; right: 0; top: 640px; text-align: center; font-size: 46px; font-weight: 700; color: var(--text2); }
+  .note { position: absolute; left: 90px; right: 90px; top: 1640px; text-align: center; font-size: 34px; color: var(--text2); }
+</style>
+</head>
+<body>
+<div class="stage"><div class="cam">
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <div class="rubric" data-show="0.15,14.55"><span>Деньги за <b>15 секунд</b></span></div>
+
+  <div class="line big" style="top:430px" data-words data-in="0.3" data-out="7.6">20&nbsp;000&nbsp;₸ в&nbsp;месяц</div>
+  <div class="yr" data-show="1.2,7.6">через 10&nbsp;лет</div>
+  <div class="cols" data-show="1.0,7.6">
+    <div class="col"><div class="v money"><span data-keys="0:0,1.4:0,6.0:2.4" data-dec="1">0</span>&nbsp;млн</div><div class="b" style="height:52%;background:rgba(255,255,255,.18)"></div><div class="l">вложено</div></div>
+    <div class="col"><div class="v money" style="color:var(--gold)">≈&nbsp;<span data-keys="0:0,1.4:0,6.0:4.6" data-dec="1">0</span>&nbsp;млн</div><div class="b" style="height:100%;background:linear-gradient(180deg,#f0c060,#a8741c)"></div><div class="l">стало</div></div>
+  </div>
+  <div class="note" data-show="6.3,7.6">Пример расчёта под 12% годовых, не&nbsp;инвестиционный совет</div>
+  <div class="line mid" style="top:700px" data-words data-in="7.8" data-out="10.8" data-accent="оставались">Всё начинается с&nbsp;того, чтобы деньги оставались</div>
+
+  <div class="cap" data-words data-in="11.25" data-out="14.6" data-stagger="0.08" data-accent="учёт">Для этого и нужен учёт</div>
+  <div class="persp"><div class="phone" data-show="11.0,14.6" data-anim="phoneIn">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <h2>Главная</h2>
+    <div class="pcard green">
+      <div class="t">Осталось на сегодня</div>
+      <div class="s money"><span data-keys="0:0,12.0:0,13.0:3410">0</span><span class="tenge">₸</span></div>
+      <div class="m">5 000 ₸ в день · потрачено 1 590 ₸</div>
+      <div class="pbar" style="background:rgba(0,0,0,.25)"><i style="width:32%;animation:grow 1s ease 12.2s both"></i></div>
+    </div>
+    <div class="pcard" style="margin-top:26px"><div class="t">Отложено в этом месяце</div><div class="s money" style="font-size:80px;color:var(--gold)">20&nbsp;000<span class="tenge">₸</span></div></div>
+  </div></div>
+  <div class="end" data-show="14.8">
+    <img src="../../app/web/icons/Icon-512.png" alt="">
+    <div class="name">FamCoin</div>
+    <div class="tag">Деньги под контролем</div>
+    <div class="pill">coin.edudev.kz</div>
+    <div class="tg">Telegram: @Famcoin01_bot</div>
+  </div>
+  <div class="vignette"></div><div class="grain"></div>
+</div></div>
+
+<script type="application/json" id="sfx">
+[
+ {
+  "t": 0,
+  "type": "pad",
+  "gain": 0.3,
+  "dur": 17
+ },
+ {
+  "t": 0.1,
+  "type": "whoosh",
+  "gain": 0.18,
+  "dur": 0.4
+ },
+ {
+  "t": 0.3,
+  "type": "whoosh",
+  "gain": 0.32
+ },
+ {
+  "t": 1.4,
+  "type": "riser",
+  "gain": 0.25,
+  "dur": 4.6
+ },
+ {
+  "t": 1.4,
+  "type": "ticks",
+  "gain": 0.25,
+  "dur": 4.6,
+  "count": 30,
+  "ease": "in"
+ },
+ {
+  "t": 6.0,
+  "type": "impact",
+  "gain": 0.65
+ },
+ {
+  "t": 6.05,
+  "type": "coin",
+  "gain": 0.5
+ },
+ {
+  "t": 7.75,
+  "type": "whoosh",
+  "gain": 0.32,
+  "dur": 0.6
+ },
+ {
+  "t": 12.0,
+  "type": "ticks",
+  "gain": 0.2,
+  "dur": 1.0,
+  "count": 10
+ },
+ {
+  "t": 9.95,
+  "type": "riser",
+  "gain": 0.36,
+  "dur": 1.05
+ },
+ {
+  "t": 11.0,
+  "type": "whoosh",
+  "gain": 0.5,
+  "dur": 0.9,
+  "lo": 120,
+  "hi": 3500
+ },
+ {
+  "t": 14.5,
+  "type": "whoosh",
+  "gain": 0.35,
+  "dur": 0.7
+ },
+ {
+  "t": 14.8,
+  "type": "chime",
+  "gain": 0.55
+ }
+]
+</script>
+<script src="engine.js"></script>
+</body>
+</html>

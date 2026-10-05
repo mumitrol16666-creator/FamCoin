@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>FamCoin — Деньги за 15 секунд: подушка безопасности</title>
+<link rel="stylesheet" href="story.css">
+<style>
+  :root { --dur: 15s; }
+  .months { position: absolute; left: 120px; right: 120px; top: 1000px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+  .mo { height: 190px; border-radius: 32px; border: 3px solid rgba(127,216,180,.45); position: relative; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 18px; font-size: 34px; font-weight: 700; color: var(--text2); }
+  .mo::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 100%; background: linear-gradient(180deg, #2f9a72, #1f5e4f); z-index: -1; animation: growH .7s cubic-bezier(.2,.7,.2,1) both; animation-delay: var(--d); }
+  .mo.opt::before { background: rgba(127,216,180,.18); }
+  .mo span { position: relative; color: #fff; }
+  .one { animation: pulse 1.4s ease-in-out 5.2s 2 both; }
+  @keyframes pulse { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 60px rgba(230,170,60,.7); border-color: var(--gold); } }
+</style>
+</head>
+<body>
+<div class="stage"><div class="cam">
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <div class="rubric" data-show="0.15,12.35"><span>Деньги за <b>15 секунд</b></span></div>
+
+  <div class="line big" style="top:560px" data-words data-in="0.3" data-out="4.6">Запас на&nbsp;3–6 месяцев расходов</div>
+  <div class="months" data-show="0.9,7.6"><div class="mo one" style="--d:1.0s"><span>1 мес</span></div><div class="mo" style="--d:1.45s"><span>2 мес</span></div><div class="mo" style="--d:1.9s"><span>3 мес</span></div><div class="mo opt" style="--d:2.35s"><span>4 мес</span></div><div class="mo opt" style="--d:2.8s"><span>5 мес</span></div><div class="mo opt" style="--d:3.25s"><span>6 мес</span></div></div>
+  <div class="line mid accent" style="top:760px" data-words data-in="4.9" data-out="7.6">Начните с&nbsp;одного месяца</div>
+
+  <div class="cap" data-words data-in="8.05" data-out="12.4" data-stagger="0.08" data-accent="сама">Цель-копилка посчитает сама</div>
+  <div class="persp"><div class="phone" data-show="7.8,12.4" data-anim="phoneIn">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <h2>Цели</h2>
+    <div class="pcard green">
+      <div class="t">Подушка безопасности</div>
+      <div class="s money"><span data-keys="0:0,9.0:0,10.4:96000">0</span><span class="tenge">₸</span></div>
+      <div class="m">из 300 000 ₸ · к марту</div>
+      <div class="pbar" style="background:rgba(0,0,0,.25)"><i style="width:32%;animation:grow 1.4s ease 9.0s both"></i></div>
+    </div>
+    <div class="pcard" style="margin-top:26px"><div class="t">Нужно в месяц</div><div class="s money" style="font-size:80px">40&nbsp;800<span class="tenge">₸</span></div></div>
+  </div></div>
+  <div class="end" data-show="12.6">
+    <img src="../../app/web/icons/Icon-512.png" alt="">
+    <div class="name">FamCoin</div>
+    <div class="tag">Деньги под контролем</div>
+    <div class="pill">coin.edudev.kz</div>
+    <div class="tg">Telegram: @Famcoin01_bot</div>
+  </div>
+  <div class="vignette"></div><div class="grain"></div>
+</div></div>
+
+<script type="application/json" id="sfx">
+[
+ {
+  "t": 0,
+  "type": "pad",
+  "gain": 0.3,
+  "dur": 15
+ },
+ {
+  "t": 0.1,
+  "type": "whoosh",
+  "gain": 0.18,
+  "dur": 0.4
+ },
+ {
+  "t": 0.3,
+  "type": "whoosh",
+  "gain": 0.32
+ },
+ {
+  "t": 1.0,
+  "type": "thud",
+  "gain": 0.35,
+  "pitch": 220
+ },
+ {
+  "t": 1.45,
+  "type": "thud",
+  "gain": 0.35,
+  "pitch": 200
+ },
+ {
+  "t": 1.9,
+  "type": "thud",
+  "gain": 0.35,
+  "pitch": 180
+ },
+ {
+  "t": 2.35,
+  "type": "thud",
+  "gain": 0.3,
+  "pitch": 160
+ },
+ {
+  "t": 2.8,
+  "type": "thud",
+  "gain": 0.3,
+  "pitch": 150
+ },
+ {
+  "t": 3.25,
+  "type": "thud",
+  "gain": 0.3,
+  "pitch": 140
+ },
+ {
+  "t": 4.85,
+  "type": "whoosh",
+  "gain": 0.32,
+  "dur": 0.6
+ },
+ {
+  "t": 5.2,
+  "type": "coin",
+  "gain": 0.4
+ },
+ {
+  "t": 9.0,
+  "type": "ticks",
+  "gain": 0.25,
+  "dur": 1.4,
+  "count": 14
+ },
+ {
+  "t": 10.4,
+  "type": "coin",
+  "gain": 0.35
+ },
+ {
+  "t": 6.75,
+  "type": "riser",
+  "gain": 0.36,
+  "dur": 1.05
+ },
+ {
+  "t": 7.8,
+  "type": "whoosh",
+  "gain": 0.5,
+  "dur": 0.9,
+  "lo": 120,
+  "hi": 3500
+ },
+ {
+  "t": 12.299999999999999,
+  "type": "whoosh",
+  "gain": 0.35,
+  "dur": 0.7
+ },
+ {
+  "t": 12.6,
+  "type": "chime",
+  "gain": 0.55
+ }
+]
+</script>
+<script src="engine.js"></script>
+</body>
+</html>

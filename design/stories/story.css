@@ -46,3 +46,28 @@ html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--
 .end .tag { font-size: 46px; color: var(--text2); font-weight: 600; }
 .end .pill { margin-top: 26px; padding: 26px 54px; border-radius: 60px; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.14); font-size: 52px; font-weight: 700; }
 .end .tg { font-size: 42px; color: var(--mint); font-weight: 600; }
+
+/* ---- Общие элементы серии «Деньги за 15 секунд» ---- */
+.rubric { position: absolute; left: 0; right: 0; top: 110px; display: flex; justify-content: center; }
+.rubric span { padding: 16px 34px; border-radius: 40px; background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.14); font-size: 34px; font-weight: 700; color: var(--text2); }
+.rubric span b { color: var(--gold); }
+.cap { position: absolute; left: 60px; right: 60px; top: 210px; text-align: center; font-size: 58px; font-weight: 800; letter-spacing: -1px; }
+.persp { position: absolute; left: 0; right: 0; top: 390px; display: flex; justify-content: center; perspective: 2200px; }
+@keyframes phoneIn { from { opacity: 0; transform: translateY(760px) rotateX(26deg) scale(.86); } to { opacity: 1; transform: none; } }
+.phone { width: 740px; height: 1440px; border-radius: 94px; background: #10141a; border: 14px solid #050607; position: relative; overflow: hidden; padding: 44px 38px;
+  box-shadow: 0 0 0 3px #2a3038, 0 60px 160px rgba(0,0,0,.7), 0 0 120px rgba(46,160,120,.18); }
+.phone .status { display: flex; justify-content: space-between; font-size: 28px; font-weight: 700; color: #e9edf1; padding: 0 24px 26px; }
+.phone h2 { font-size: 56px; font-weight: 800; letter-spacing: -1px; margin: 10px 6px 26px; }
+.phone .sec { font-size: 38px; font-weight: 800; margin: 30px 6px 20px; }
+.pcard { border-radius: 40px; padding: 38px 36px; background: var(--card); }
+.pcard.green { background: linear-gradient(150deg, #2f7f63, #1f5e4f 70%); }
+.pcard .t { font-size: 30px; opacity: .9; } .pcard .s { font-size: 96px; font-weight: 800; letter-spacing: -3px; margin: 4px 0; } .pcard .m { font-size: 28px; opacity: .9; }
+.pbar { height: 18px; border-radius: 10px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 18px; }
+.pbar i { display: block; height: 100%; border-radius: 10px; background: var(--gold); }
+.prow { display: flex; align-items: center; gap: 18px; font-size: 32px; margin: 22px 0 8px; } .prow span { flex: 1; } .prow b { font-weight: 700; }
+.btn { margin-top: 30px; padding: 30px; border-radius: 30px; background: var(--mint); color: #0c2a21; font-size: 34px; font-weight: 800; text-align: center; position: relative; }
+.ripple { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 4px solid #fff; opacity: 0; animation: ripple .9s ease-out both; }
+@keyframes ripple { 0% { opacity: 0; transform: scale(.4); } 10% { opacity: .9; } 100% { opacity: 0; transform: scale(9); } }
+@keyframes tap { 0%,100% { transform: scale(1); } 40% { transform: scale(.94); } }
+@keyframes grow { from { width: 0; } }
+@keyframes growH { from { height: 0; } }
