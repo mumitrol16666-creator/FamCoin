@@ -77,7 +77,7 @@ void main() {
       expect(shownTip(tester), ru.adviceDataGap(4));
       expect(find.text(ru.adviceDataTitle), findsOneWidget);
       expect(find.byIcon(Icons.lightbulb), findsOneWidget);
-      expect(find.text('${ru.adviceActAdd} ›'), findsOneWidget);
+      expect(find.text('${ru.adviceActCatchUp} ›'), findsOneWidget, reason: 'перерыв закрывается сверкой остатка (Ж4)');
 
       await tester.ensureVisible(find.text(ru.adviceNext));
       await tester.pump();

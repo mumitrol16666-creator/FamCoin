@@ -1,15 +1,18 @@
-import 'package:famcoin_core/famcoin_core.dart' show VoiceDraft, VoiceKind;
+import 'package:famcoin_core/famcoin_core.dart' show VoiceDraft, VoiceKind, formatMoney;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../state/api_client.dart' show ApiException;
 import '../../state/app_scope.dart';
 import '../../state/app_state.dart' show ReconciliationEditCancelled;
-import '../../state/models.dart' show newId;
+import '../../state/app_state.dart' show AppState;
+import '../../state/models.dart' show AccountInfo, DebtInfo, newId;
 import '../../theme/app_theme.dart';
 import '../budget/sheets.dart';
 import '../more/categories_screen.dart';
+import '../onboarding/onboarding_screen.dart' show DayPicker;
 import 'voice_sheet.dart';
 import '../widgets/common.dart';
 import 'big_purchase.dart';
@@ -132,6 +135,18 @@ class _TransactionFieldsState extends State<TransactionFields> {
   /// Старый долг (D102): денег на счёте уже нет — записывается только остаток
   /// долга, счёт не нужен.
   bool _oldDebt = false;
+
+  /// Покупка в рассрочку (Ж1): расход сейчас, долг на остаток, график в
+  /// календаре — одной пачкой команд.
+  bool _installment = false;
+  final _months = TextEditingController(text: '12');
+  final _downPayment = TextEditingController();
+  int _dueDay = 25;
+  bool _firstDueNextMonth = true;
+
+  /// Похожий кредит уже предложен (Ж2) — при повторе «Сохранить» после
+  /// ошибки сети не переспрашиваем.
+  bool _loanChecked = false;
   bool get _isNewDebt => _kind == FieldsKind.debt && (_debtKind == 'lendOut' || _debtKind == 'borrow');
   DateTime? _dateOverride;
   TimeOfDay _time = TimeOfDay.now();
@@ -221,7 +236,111 @@ class _TransactionFieldsState extends State<TransactionFields> {
     _amount.dispose();
     _note.dispose();
     _person.dispose();
+    _months.dispose();
+    _downPayment.dispose();
     super.dispose();
+  }
+
+  /// Кредиты, на которые похож этот расход (Ж2): категория «Кредиты и долги»,
+  /// название кредита в заметке или слово «кредит / рассрочка / ипотека».
+  List<DebtInfo> _loanCandidates(AppState state, String note) {
+    final active = state.bankDebts.where((d) => state.debtBalance(d.id) > 0).toList();
+    if (active.isEmpty) return const [];
+    final text = note.toLowerCase();
+    final byName = [
+      for (final d in active)
+        if (d.name.trim().length >= 3 && text.contains(d.name.trim().toLowerCase())) d,
+    ];
+    if (byName.isNotEmpty) return byName;
+    const words = ['кредит', 'рассрочк', 'ипотек', 'займ', 'заем', 'несие', 'бөліп төле', 'ипотека'];
+    if (_category == 'debts' || words.any(text.contains)) return active;
+    return const [];
+  }
+
+  /// «Это платёж по кредиту?» — да (какой), нет (обычный расход) или отмена.
+  Future<(bool, DebtInfo?)?> _askLoanPayment(List<DebtInfo> candidates, int amount) async {
+    final l = context.l10n;
+    final state = AppScope.of(context).state;
+    var chosen = candidates.first;
+    return showDialog<(bool, DebtInfo?)>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: Text(l.loanPaymentAskTitle),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (candidates.length == 1)
+              Text(l.loanPaymentAskBody(chosen.name, formatMoney(state.debtBalance(chosen.id))))
+            else ...[
+              Text(l.loanPaymentAskPick),
+              for (final d in candidates)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: Icon(chosen.id == d.id ? Icons.radio_button_checked : Icons.radio_button_off, color: chosen.id == d.id ? ctx.scheme.primary : ctx.fam.text2),
+                  title: Text(d.name),
+                  subtitle: Text(formatMoney(state.debtBalance(d.id))),
+                  onTap: () => set(() => chosen = d),
+                ),
+            ],
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.cancel)),
+            TextButton(onPressed: () => Navigator.pop(ctx, (false, null)), child: Text(l.loanPaymentNo)),
+            FilledButton(onPressed: () => Navigator.pop(ctx, (true, chosen)), child: Text(l.loanPaymentYes)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveInstallment(int amount) async {
+    final l = context.l10n;
+    final state = AppScope.of(context).state;
+    final messenger = ScaffoldMessenger.of(context);
+    final months = int.tryParse(_months.text.trim()) ?? 0;
+    final down = parseAmount(_downPayment.text, allowZero: true) ?? 0;
+    final name = _note.text.trim();
+    if (name.isEmpty || months <= 0 || down >= amount) {
+      setState(() => _error = l.enterAmount);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await state.sendBatch(
+        state.installmentPurchaseCommands(
+          name: name,
+          amount: amount,
+          category: _category,
+          months: months,
+          day: _dueDay,
+          date: _date,
+          downPayment: down,
+          downPaymentAccount: down > 0 ? _account : null,
+          firstDueNextMonth: _firstDueNextMonth,
+          time: timeToField(_time),
+          who: state.familyMode ? _who : 'me',
+          id: _txId,
+        ),
+        commandId: _commandId,
+      );
+    } on ReconciliationEditCancelled {
+      if (mounted) setState(() => _busy = false);
+      return;
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e is ApiException && e.isNetwork ? l.retrySave : errorText(l, e);
+      });
+      return;
+    }
+    if (!mounted) return;
+    widget.dirty?.value = false;
+    Navigator.of(context).pop();
+    messenger.showSnackBar(SnackBar(content: Text(l.installmentSaved)));
   }
 
   Future<void> _save() async {
@@ -239,6 +358,26 @@ class _TransactionFieldsState extends State<TransactionFields> {
     final account = _account ?? '';
     final note = _note.text.trim();
     final time = timeToField(_time);
+    if (_kind == FieldsKind.expense && _installment) return _saveInstallment(amount);
+    // Платёж по кредиту, записанный расходом, не уменьшил бы долг и не закрыл
+    // срок в календаре (Ж2) — предлагаем провести его как платёж.
+    if (_kind == FieldsKind.expense && !_loanChecked) {
+      final candidates = _loanCandidates(state, note);
+      if (candidates.isNotEmpty) {
+        _asking = true;
+        final answer = await _askLoanPayment(candidates, amount);
+        _asking = false;
+        if (answer == null || !mounted) return;
+        if (answer.$1) {
+          widget.dirty?.value = false;
+          final nav = Navigator.of(context);
+          nav.pop();
+          await showBankPaySheet(nav.context, answer.$2!, principal: amount);
+          return;
+        }
+        _loanChecked = true;
+      }
+    }
     // Крупная покупка (D74): дневной лимит — на мелочи, поэтому спрашиваем,
     // не запланирована ли она; запланированная в лимит не входит.
     if (_kind == FieldsKind.expense && _plannedFor != amount) {
@@ -296,7 +435,13 @@ class _TransactionFieldsState extends State<TransactionFields> {
   }
 
   bool get _valid {
-    if (parseAmount(_amount.text) == null) return false;
+    final amount = parseAmount(_amount.text);
+    if (amount == null) return false;
+    if (_kind == FieldsKind.expense && _installment) {
+      final months = int.tryParse(_months.text.trim()) ?? 0;
+      final down = parseAmount(_downPayment.text, allowZero: true) ?? 0;
+      return _note.text.trim().isNotEmpty && months > 0 && down < amount && (down == 0 || _account != null);
+    }
     if (_isNewDebt && _oldDebt) return _person.text.trim().isNotEmpty; // старый долг — без счёта (D102)
     if (_account == null) return false;
     if (_kind == FieldsKind.transfer) return _to != null && _to != _account;
@@ -351,7 +496,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
         listenable: _amount,
         builder: (context, _) => MinusWarning(
           accountId: _kind == FieldsKind.expense || _kind == FieldsKind.transfer || (_kind == FieldsKind.debt && !_oldDebt && (_debtKind == 'lendOut' || _debtKind == 'repaymentMade')) ? _account : null,
-          amount: parseAmount(_amount.text),
+          amount: _kind == FieldsKind.expense && _installment ? parseAmount(_downPayment.text, allowZero: true) : parseAmount(_amount.text),
         ),
       ),
       const SizedBox(height: 14),
@@ -374,19 +519,79 @@ class _TransactionFieldsState extends State<TransactionFields> {
           Text('KZT · ${_date == state.today ? l.today : DateFormat.yMMMd(locale).format(_date)}', style: TextStyle(fontSize: 12, color: fam.text2)),
         ]),
       ),
-      if (_kind == FieldsKind.expense && widget.showVoiceChip)
+      if (_kind == FieldsKind.expense)
         Wrap(spacing: 8, runSpacing: 4, children: [
-          ActionChip(
-            avatar: const Icon(Icons.mic_none, size: 16),
-            label: Text(l.voice),
-            onPressed: () {
-              widget.dirty?.value = false;
-              Navigator.pop(context);
-              showVoiceSheet(context);
-            },
+          if (widget.showVoiceChip)
+            ActionChip(
+              avatar: const Icon(Icons.mic_none, size: 16),
+              label: Text(l.voice),
+              onPressed: () {
+                widget.dirty?.value = false;
+                Navigator.pop(context);
+                showVoiceSheet(context);
+              },
+            ),
+          // Покупка в рассрочку (Ж1): самая частая крупная покупка в Казахстане
+          // раньше не имела пути в приложении.
+          FilterChip(
+            avatar: _installment ? null : const Icon(Icons.credit_card_outlined, size: 16),
+            label: Text(l.installmentChip),
+            selected: _installment,
+            onSelected: (v) => setState(() => _installment = v),
           ),
         ]),
+      if (_kind == FieldsKind.expense && _installment) ...[
+        const SizedBox(height: 10),
+        InfoBanner(l.installmentNote),
+        label(l.installmentName),
+        TextField(controller: _note, maxLength: 120, onChanged: (_) => setState(_markDirty), decoration: InputDecoration(hintText: l.installmentNameHint, counterText: '')),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              label(l.installmentMonths),
+              TextField(
+                key: const ValueKey('installment-months'),
+                controller: _months,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
+                onChanged: (_) => setState(() {}),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              label(l.installmentDown),
+              AmountField(key: const ValueKey('installment-down'), controller: _downPayment, hint: '0', onChanged: (_) => setState(() {})),
+            ]),
+          ),
+        ]),
+        if ((parseAmount(_amount.text) ?? 0) > (parseAmount(_downPayment.text, allowZero: true) ?? 0) && (int.tryParse(_months.text.trim()) ?? 0) > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              l.installmentPerMonth(formatMoney(AppState.installmentPayment(parseAmount(_amount.text)! - (parseAmount(_downPayment.text, allowZero: true) ?? 0), int.parse(_months.text.trim())))),
+              style: TextStyle(fontSize: 12, color: fam.text2),
+            ),
+          ),
+        const SizedBox(height: 8),
+        DayPicker(value: _dueDay, label: l.dayOfMonth, onChanged: (d) => setState(() => _dueDay = d)),
+        label(l.installmentFirstDue),
+        Wrap(spacing: 8, children: [
+          ChoiceChip(label: Text(l.installmentNextMonth), selected: _firstDueNextMonth, onSelected: (_) => setState(() => _firstDueNextMonth = true)),
+          ChoiceChip(label: Text(l.installmentThisMonth), selected: !_firstDueNextMonth, onSelected: (_) => setState(() => _firstDueNextMonth = false)),
+        ]),
+      ],
       if (_kind == FieldsKind.transfer) ...[
+        // Частые переводы (Ж3): снял наличные, положил на карту, в копилку —
+        // люди ищут их в «Расходе», а это переводы.
+        if (_transferShortcuts(l, state, accounts).isNotEmpty) ...[
+          label(l.transferQuick),
+          Wrap(spacing: 8, runSpacing: 4, children: [
+            for (final (text, from, to) in _transferShortcuts(l, state, accounts))
+              ActionChip(label: Text(text), onPressed: () => setState(() { _account = from; _to = to; })),
+          ]),
+        ],
         const SizedBox(height: 14),
         AccountPicker(key: ValueKey('from$_account'), accounts: accounts, value: _account, label: l.fromAccount, onChanged: (v) => setState(() => _account = v)),
         const SizedBox(height: 12),
@@ -485,8 +690,10 @@ class _TransactionFieldsState extends State<TransactionFields> {
               if (id != null && mounted) setState(() => _source = id);
             },
           ),
-        const SizedBox(height: 14),
-        AccountPicker(accounts: accounts, value: _account, onChanged: (v) => setState(() { _selectAccount(v); _accountMissing = false; })),
+        if (!(_kind == FieldsKind.expense && _installment) || (parseAmount(_downPayment.text, allowZero: true) ?? 0) > 0) ...[
+          const SizedBox(height: 14),
+          AccountPicker(accounts: accounts, value: _account, label: _kind == FieldsKind.expense && _installment ? l.installmentDownAccount : null, onChanged: (v) => setState(() { _selectAccount(v); _accountMissing = false; })),
+        ],
         if (state.familyMode && _kind == FieldsKind.expense) ...[
           label(l.forWhom),
           Wrap(spacing: 8, runSpacing: 4, children: [
@@ -522,7 +729,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
           },
         ),
       ]),
-      if (_kind == FieldsKind.expense || _kind == FieldsKind.income) ...[
+      if ((_kind == FieldsKind.expense && !_installment) || _kind == FieldsKind.income) ...[
         label(l.note),
         TextField(controller: _note, maxLength: 120, onChanged: (_) => _markDirty(), decoration: InputDecoration(hintText: l.noteHint, counterText: '')),
       ],
@@ -549,4 +756,17 @@ class _TransactionFieldsState extends State<TransactionFields> {
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...children, const SizedBox(height: 12), footer]);
   }
+}
+
+/// Подсказки переводов (Ж3): (подпись, откуда, куда). Только те, для которых
+/// есть оба счёта.
+List<(String, String, String)> _transferShortcuts(AppLocalizations l, AppState state, List<AccountInfo> accounts) {
+  final cash = accounts.where((a) => a.type == 'cash').firstOrNull;
+  final card = accounts.where((a) => a.type != 'cash' && a.liquid).firstOrNull;
+  final piggy = state.piggyAccounts.firstOrNull;
+  return [
+    if (cash != null && card != null) (l.transferCashOut, card.id, cash.id),
+    if (cash != null && card != null) (l.transferCashIn, cash.id, card.id),
+    if (piggy != null && card != null) (l.transferToPiggy, card.id, piggy.id),
+  ];
 }

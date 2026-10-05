@@ -578,6 +578,9 @@ class _TipCard extends StatelessWidget {
         onAdd();
       case TipAction.openBudget:
         onOpenBudget();
+      case TipAction.catchUp:
+        final account = state.activeAccounts.where((a) => a.liquid).firstOrNull ?? state.activeAccounts.firstOrNull;
+        if (account != null) showAdjustBalanceSheet(context, account.id);
     }
   }
 

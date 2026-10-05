@@ -50,6 +50,7 @@ const ledgerCommandTypes = {
   'restore',
   'reserve',
   'release',
+  'writeOff',
 };
 
 /// Применяет команду к журналу. Бросает [LedgerException], если команда
@@ -113,7 +114,9 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
     case 'loanPayment':
       l.loanPayment(id: s('id'), date: date(), account: s('account'), debtId: s('debtId'), principal: m('principal'), interest: mo('interest'), fees: mo('fees'), meta: meta());
     case 'creditPurchase':
-      l.creditPurchase(id: s('id'), date: date(), debtId: s('debtId'), splits: splits(), downPaymentAccount: so('downPaymentAccount'), downPayment: mo('downPayment'));
+      l.creditPurchase(id: s('id'), date: date(), debtId: s('debtId'), splits: splits(), downPaymentAccount: so('downPaymentAccount'), downPayment: mo('downPayment'), meta: meta());
+    case 'writeOff':
+      l.writeOff(id: s('id'), date: date(), person: s('person'), amount: m('amount'), receivable: c['side'] != 'liability', meta: meta());
     case 'restore':
       l.restore(s('txId'), newId: s('id'));
     case 'refund':

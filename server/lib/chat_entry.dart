@@ -316,7 +316,7 @@ String _stem(String name) {
           ...a.name.split(RegExp(r'\s+')),
           if (a.type == 'cash') ...['наличные', 'қолма-қол'],
           if (a.type == 'deposit') 'депозит',
-        ]),
+        ], isCash: a.type == 'cash'),
     ],
     people: chatPeople(v),
     // Свои категории узнаются по названию: «собака 3000» → «Собака».

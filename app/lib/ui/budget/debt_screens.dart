@@ -2,6 +2,8 @@ import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
+import '../../state/app_state.dart';
+import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../ops/transaction_tile.dart';
 import '../widgets/common.dart';
@@ -123,6 +125,19 @@ class PersonDebtScreen extends StatelessWidget {
   const PersonDebtScreen({super.key, required this.person});
   final String person;
 
+  Future<void> _writeOff(BuildContext context, AppState state, PersonDebt d) async {
+    final l = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await confirm(
+      context,
+      title: l.writeOffTitle(d.person),
+      message: d.oweMe ? l.writeOffReceivableBody(formatMoney(d.amount)) : l.writeOffLiabilityBody(formatMoney(d.amount)),
+      action: l.writeOffAction,
+    );
+    if (!ok || !context.mounted) return;
+    if (await runAction(context, () => state.writeOffDebt(d))) messenger.showSnackBar(SnackBar(content: Text(l.writeOffDone)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
@@ -149,6 +164,10 @@ class PersonDebtScreen extends StatelessWidget {
                     BigMoney(d.amount, color: d.oweMe ? fam.income : fam.expense),
                     const SizedBox(height: 8),
                     FilledButton(onPressed: () => showPersonRepaySheet(context, d), child: Text(d.oweMe ? l.returnedToMe : l.iReturned)),
+                    const SizedBox(height: 8),
+                    // Списание (Ж6): долг, который не вернут или простили,
+                    // раньше было нечем закрыть — только оплатой.
+                    OutlinedButton(onPressed: () => _writeOff(context, state, d), child: Text(l.writeOffDebt)),
                   ]),
                 ),
               SectionHeader(l.history),

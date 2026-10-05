@@ -601,7 +601,9 @@ Future<PlannedResult?> showPlannedSheet(BuildContext context) {
   );
 }
 
-Future<BankDebtDraft?> showBankDebtSheet(BuildContext context) {
+/// [hintNewPurchase] — вне анкеты: покупку, которую делают прямо сейчас,
+/// лучше записать через «＋» → «В рассрочку» (Ж1), а не как готовый долг.
+Future<BankDebtDraft?> showBankDebtSheet(BuildContext context, {bool hintNewPurchase = false}) {
   final l = context.l10n;
   final name = TextEditingController();
   final balance = TextEditingController();
@@ -639,6 +641,10 @@ Future<BankDebtDraft?> showBankDebtSheet(BuildContext context) {
         ],
         const SizedBox(height: 8),
         Text(l.debtNoIncome, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+        if (hintNewPurchase && kind == 'installment') ...[
+          const SizedBox(height: 8),
+          InfoBanner(l.installmentNewHint),
+        ],
         const SizedBox(height: 20),
         FilledButton(
           onPressed: () {

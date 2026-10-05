@@ -133,6 +133,17 @@ class TxView {
         );
       case EventType.opening:
         return TxView(title: l.openingBalance, subtitle: [?accountName], amount: moneyDelta, icon: Icons.flag_outlined, kind: 'neutral');
+      case EventType.writeOff:
+        // Списание долга (Ж6): «не вернут» — расход, «простили» — доход; счёт не назван, денег не было.
+        final forgiven = tx.meta['side'] == 'liability';
+        final person = tx.meta['person'] as String? ?? other ?? '';
+        return TxView(
+          title: '${forgiven ? l.debtForgiven : l.debtWrittenOff} · $person',
+          subtitle: [if (note.isNotEmpty) note],
+          amount: forgiven ? income : -expense,
+          icon: Icons.handshake_outlined,
+          kind: forgiven ? 'income' : 'expense',
+        );
       case EventType.creditPurchase:
         return TxView(
           title: cats.map((c) => categoryName(l, c)).join(' + '),

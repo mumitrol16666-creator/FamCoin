@@ -22,6 +22,11 @@ const categoryFees = 'fees';
 const sourceCashback = 'cashback';
 const sourceInterest = 'interest';
 
+/// Категория и источник «прочее» — для списания долгов (Ж6) и записей
+/// «догнать учёт» (Ж4), у которых нет своей категории.
+const categoryOther = 'other';
+const sourceOther = 'otherIncome';
+
 extension LedgerEvents on Ledger {
   String _exp(String category) {
     ensure(expenseAccount(category), LedgerKind.expense);
@@ -433,6 +438,7 @@ extension LedgerEvents on Ledger {
     required Map<String, int> splits,
     String? downPaymentAccount,
     int downPayment = 0,
+    Map<String, Object?> meta = const {},
   }) {
     _checkSplits(splits);
     final total = splits.values.fold(0, (a, b) => a + b);
@@ -451,6 +457,39 @@ extension LedgerEvents on Ledger {
         if (total - downPayment > 0) Posting(_liab(debtId), total - downPayment),
         if (downPayment > 0) Posting(_money(downPaymentAccount!), -downPayment),
       ],
+      meta: meta,
+    ));
+  }
+
+  // ------------------------------------------------------------ списание
+
+  /// Списание личного долга (Ж6). Деньги не вернутся — остаток «мне должны»
+  /// уходит в расход категории [categoryOther]; долг, который мне простили, —
+  /// в доход источника [sourceOther]. Денежные счета не трогаются: это
+  /// признание потери (или подарка), а не движение денег. Списать можно не
+  /// больше текущего остатка долга.
+  Transaction writeOff({
+    required String id,
+    required DateTime date,
+    required String person,
+    required int amount,
+    required bool receivable,
+    Map<String, Object?> meta = const {},
+  }) {
+    _positive(amount, 'Сумма списания');
+    final debtAccount = receivable ? _recv(person) : _liab(person);
+    final left = balance(debtAccount);
+    if (amount > left) {
+      throw LedgerException('Списать можно не больше остатка долга', code: 'writeOffExceeds');
+    }
+    return _post(Transaction(
+      id: id,
+      date: date,
+      type: EventType.writeOff,
+      postings: receivable
+          ? [Posting(_exp(categoryOther), amount), Posting(debtAccount, -amount)]
+          : [Posting(debtAccount, -amount), Posting(_inc(sourceOther), amount)],
+      meta: {...meta, 'person': person, 'side': receivable ? 'receivable' : 'liability'},
     ));
   }
 

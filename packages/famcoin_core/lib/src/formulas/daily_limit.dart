@@ -28,7 +28,7 @@ DateTime? spendDay(Ledger l, Transaction t) {
 /// счёта такая трата тратит как обычно — она не входит только в дневной лимит
 /// и в разборы привычек. Имя функции историческое: «запланированная» здесь
 /// значит «не из дневных мелочей».
-bool isPlannedSpend(Ledger l, Transaction t) => _flagged(l, t, (m) => m['planned'] != null || m['plannedPurchase'] == true || m['unexpected'] == true);
+bool isPlannedSpend(Ledger l, Transaction t) => _flagged(l, t, (m) => m['planned'] != null || m['plannedPurchase'] == true || m['unexpected'] == true || m['catchUp'] == true);
 
 /// Непредвиденная трата (D101): владелец отметил её так в диалоге «Крупная
 /// покупка» или в карточке операции. Вне дневного лимита, как запланированная,

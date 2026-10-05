@@ -23,7 +23,7 @@ import '../../state/app_state.dart';
 import '../widgets/common.dart';
 
 /// Куда ведёт совет; обработчики — в карточке на главной.
-enum TipAction { setLimit, addGoal, openCalendar, openLimits, addQuick, voice, telegram, add, openBudget }
+enum TipAction { setLimit, addGoal, openCalendar, openLimits, addQuick, voice, telegram, add, openBudget, catchUp }
 
 class Tip {
   const Tip(this.id, this.text, {this.actionLabel, this.action});
@@ -50,7 +50,9 @@ List<Tip> dataTipsFor(AppState s, AppLocalizations l) {
   if (records.isNotEmpty) {
     final last = records.first.date; // список отсортирован от новых к старым
     final gap = today.difference(last).inDays;
-    if (gap >= 3) out.add(Tip('dataGap:${dateToJson(last)}', l.adviceDataGap(gap), actionLabel: l.adviceActAdd, action: TipAction.add));
+    // Перерыв закрывается сверкой остатка (Ж4): разница запишется тратами,
+    // а не пропадёт из отчёта.
+    if (gap >= 3) out.add(Tip('dataGap:${dateToJson(last)}', l.adviceDataGap(gap), actionLabel: l.adviceActCatchUp, action: TipAction.catchUp));
   }
 
   // Категория без лимита, где к этому дню потрачено больше, чем за весь

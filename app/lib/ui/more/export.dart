@@ -46,6 +46,7 @@ Future<void> exportData(BuildContext context, {required String format}) async {
     'type:creditPurchase': l.typeCreditPurchase,
     'type:refund': l.refund,
     'type:adjustment': l.adjustment,
+    'type:writeOff': l.typeWriteOff,
     'type:reversal': l.cancelled,
     'who:me': l.me,
     'who:shared': l.shared,

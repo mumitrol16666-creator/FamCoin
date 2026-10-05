@@ -512,7 +512,7 @@ Future<void> addPurchaseFlow(BuildContext context) async {
 /// Новый кредит, рассрочка или кредитка с текущим остатком.
 Future<void> addBankDebtFlow(BuildContext context) async {
   final state = AppScope.of(context).state;
-  final d = await showBankDebtSheet(context);
+  final d = await showBankDebtSheet(context, hintNewPurchase: true);
   if (d == null || !context.mounted) return;
   await runAction(context, () => state.sendBatch(state.newBankDebtCommands(name: d.name, kind: d.kind, balance: d.balance, payment: d.payment, day: d.day, rate: d.rate, paidThisMonth: d.paidThisMonth)));
 }
@@ -540,6 +540,10 @@ Future<bool> showAdjustBalanceSheet(BuildContext context, String accountId, {Dat
   final actual = TextEditingController(text: amountToField(current));
   final reason = TextEditingController();
   var saved = false;
+  // Откуда разница (Ж4): чаще всего — незаписанные траты, и тогда уточнение
+  // занизило бы расходы месяца. В сверке месяца по умолчанию — уточнение,
+  // как и раньше; в обычной жизни — «забыл записать».
+  var forgot = asOf == null;
   await showFormSheet<void>(
     context,
     title: l.adjustBalance,
@@ -547,6 +551,15 @@ Future<bool> showAdjustBalanceSheet(BuildContext context, String accountId, {Dat
       builder: (ctx, set) {
         final target = parseAmount(actual.text, allowZero: true, allowNegative: true);
         final delta = target == null ? null : target - current;
+        final spent = delta != null && delta < 0;
+        Widget option(bool value, String title, String note) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(forgot == value ? Icons.radio_button_checked : Icons.radio_button_off, color: forgot == value ? ctx.scheme.primary : ctx.fam.text2),
+              title: Text(title),
+              subtitle: Text(note, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+              onTap: () => set(() => forgot = value),
+            );
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           if (asOf != null) Text(l.monthAdjustmentAsOf(DateFormat('d MMMM y', Localizations.localeOf(context).toString()).format(asOf))),
           Text('${l.inApp}: ${formatMoney(current)}', style: TextStyle(color: ctx.fam.text2)),
@@ -558,15 +571,40 @@ Future<bool> showAdjustBalanceSheet(BuildContext context, String accountId, {Dat
               delta == 0 ? l.noDifference : '${l.difference}: ${delta > 0 ? '+' : ''}${formatMoney(delta)}',
               style: TextStyle(fontWeight: FontWeight.w600, color: delta == 0 ? ctx.fam.text2 : delta > 0 ? ctx.fam.income : ctx.fam.expense),
             ),
+          if (delta != null && delta != 0) ...[
+            const SizedBox(height: 8),
+            Text(l.adjustWhy, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+            option(true, spent ? l.adjustForgotExpense : l.adjustForgotIncome, spent ? l.adjustForgotExpenseNote : l.adjustForgotIncomeNote),
+            option(false, l.adjustOther, l.adjustOtherNote),
+          ],
           const SizedBox(height: 12),
-          TextField(controller: reason, maxLength: 200, decoration: InputDecoration(labelText: l.reason, hintText: l.reasonHint, counterText: ''), onChanged: (_) => set(() {})),
-          const SizedBox(height: 4),
-          Text(l.adjustmentNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+          TextField(
+            controller: reason,
+            maxLength: 200,
+            decoration: InputDecoration(labelText: forgot ? l.noteOptional : l.reason, hintText: forgot ? (spent ? l.catchUpExpenseNote : l.catchUpIncomeNote) : l.reasonHint, counterText: ''),
+            onChanged: (_) => set(() {}),
+          ),
+          if (!forgot) ...[
+            const SizedBox(height: 4),
+            Text(l.adjustmentNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+          ],
           const SizedBox(height: 20),
           SubmitButton(
             label: l.save,
             onSubmit: () async {
-              if (target == null || delta == 0 || reason.text.trim().isEmpty) return false;
+              if (target == null || delta == null || delta == 0) return false;
+              if (forgot) {
+                final note = reason.text.trim().isEmpty ? (spent ? l.catchUpExpenseNote : l.catchUpIncomeNote) : reason.text.trim();
+                final date = asOf ?? state.today;
+                saved = await runAction(
+                  ctx,
+                  () => spent
+                      ? state.addExpense(amount: -delta, category: 'other', account: accountId, date: date, note: note, catchUp: true)
+                      : state.addIncome(amount: delta, source: 'otherIncome', account: accountId, date: date, note: note, catchUp: true),
+                );
+                return saved;
+              }
+              if (reason.text.trim().isEmpty) return false;
               saved = await runAction(ctx, () => state.adjustBalance(account: accountId, actualBalance: target, reason: reason.text.trim(), date: asOf));
               return saved;
             },

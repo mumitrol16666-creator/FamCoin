@@ -45,9 +45,12 @@ class VoiceDraft {
 
 /// Известный пользователю счёт: id и слова, по которым его узнают.
 class VoiceAccount {
-  const VoiceAccount(this.id, this.aliases);
+  const VoiceAccount(this.id, this.aliases, {this.isCash = false});
   final String id;
   final List<String> aliases;
+
+  /// Наличные: вторая сторона «снял» и «положил», когда она не названа.
+  final bool isCash;
 }
 
 // ----------------------------------------------------------- словари
@@ -99,6 +102,13 @@ const Map<String, String> _incomeWords = {
 
 const _incomeVerbs = ['получил', 'получила', 'пришл', 'зачисл', 'доход', 'кіріс', 'түсті', 'алдым'];
 const _transferVerbs = ['перевел', 'перевёл', 'перевела', 'перекинул', 'перекинула', 'перевод', 'аудардым', 'аударым'];
+
+/// Снятие наличных и пополнение карты — перевод между своими счетами, а не
+/// расход и не доход (Ж3). Глагол считается денежным только рядом со словом
+/// о деньгах или названием счёта: «снял квартиру» остаётся расходом.
+const _cashOutVerbs = ['снял', 'сняла', 'обналичил', 'обналичила', 'шешіп алдым', 'шештім'];
+const _cashInVerbs = ['положил', 'положила', 'закинул', 'закинула', 'пополнил', 'пополнила', 'внес', 'внесла', 'салдым', 'толықтырдым'];
+const _cashWords = ['налич', 'банкомат', 'деньг', 'денег', 'на карту', 'на счет', 'со счет', 'с карты', 'ақша', 'қолма', 'картаға', 'банкоматтан'];
 const _lendVerbs = ['дал в долг', 'дала в долг', 'одолжил', 'одолжила', 'занял ему', 'қарыз бердім'];
 const _borrowVerbs = ['взял в долг', 'взяла в долг', 'занял у', 'заняла у', 'занял', 'қарыз алдым'];
 const _repayReceivedVerbs = ['вернул мне', 'вернула мне', 'мне вернул', 'мне вернула', 'отдал мне', 'отдала мне', 'қайтарды'];
@@ -223,6 +233,10 @@ String _stripDate(String text) => text.replaceAll(_word('позавчера|вч
 
 bool _hasAny(String text, List<String> phrases) => phrases.any((p) => text.contains(p));
 
+/// Во фразе названо хотя бы одно название счёта.
+bool _mentionsAccount(String text, List<VoiceAccount> accounts) =>
+    accounts.any((a) => a.aliases.expand(_aliasPatterns).any((p) => RegExp(p, unicode: true).hasMatch(text)));
+
 // ------------------------------------------------------- названия счетов
 
 /// Слова, которые встречаются в названиях счетов, но счёт не называют:
@@ -335,12 +349,19 @@ VoiceDraft parseVoice(
     kind = VoiceKind.income;
   }
 
+  // «Снял 20 тысяч с каспи», «положил 50 000 на карту» (Ж3): перевод, если
+  // рядом с глаголом названы деньги, банкомат или счёт.
+  final cashOut = kind == VoiceKind.expense && _hasAny(text, _cashOutVerbs) && (_hasAny(text, _cashWords) || _mentionsAccount(text, accounts));
+  final cashIn = kind == VoiceKind.expense && !cashOut && _hasAny(text, _cashInVerbs) && (_hasAny(text, _cashWords) || _mentionsAccount(text, accounts));
+  if (cashOut || cashIn) kind = VoiceKind.transfer;
+
   final date = _extractDate(text);
   var rest = _stripDate(text);
 
   // Счета: «с каспи», «на халык», «наличными».
   String? account;
   String? toAccount;
+  final mentioned = <String>[];
   for (final a in accounts) {
     String? pattern;
     RegExpMatch? match;
@@ -352,6 +373,7 @@ VoiceDraft parseVoice(
       }
     }
     if (match == null || pattern == null) continue;
+    mentioned.add(a.id);
     final before = rest.substring(0, match.start).trimRight();
     final isTarget = before.endsWith(' на') || before.endsWith(' в') || before == 'на' || before == 'в' || before.endsWith('-ға') || before.endsWith('-ге');
     if (kind == VoiceKind.transfer && isTarget) {
@@ -367,6 +389,13 @@ VoiceDraft parseVoice(
       toAccount = account;
       account = null;
     }
+  }
+  if (cashOut || cashIn) {
+    // Наличные — одна сторона, названный счёт (или ничего) — другая.
+    final cash = accounts.where((a) => a.isCash).firstOrNull?.id;
+    final other = mentioned.where((id) => id != cash).firstOrNull;
+    account = cashOut ? other : cash;
+    toAccount = cashOut ? cash : other;
   }
 
   // Несколько позиций: «молоко 800 хлеб 250 яйца 120».

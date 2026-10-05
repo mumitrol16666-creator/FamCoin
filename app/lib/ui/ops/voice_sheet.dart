@@ -150,7 +150,7 @@ class _VoiceSheetState extends State<_VoiceSheet> {
     final l = context.l10n;
     final accounts = [
       for (final a in state.activeAccounts)
-        VoiceAccount(a.id, [a.name, ...a.name.split(RegExp(r'\s+')), if (a.type == 'cash') l.typeCash, if (a.type == 'deposit') l.typeDeposit]),
+        VoiceAccount(a.id, [a.name, ...a.name.split(RegExp(r'\s+')), if (a.type == 'cash') l.typeCash, if (a.type == 'deposit') l.typeDeposit], isCash: a.type == 'cash'),
     ];
     setState(() {
       _draft = parseVoice(phrase, accounts: accounts, people: state.knownPeople);

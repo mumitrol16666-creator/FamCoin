@@ -1009,11 +1009,68 @@ class AppState extends ChangeNotifier {
   /// повторяет при ошибке сети — повтор не создаёт вторую запись.
   /// [plannedPurchase] и [unexpected] (D74, D101) — трата вне дневного лимита;
   /// одновременно оба не ставятся.
-  Future<void> addExpense({required int amount, required String category, required String account, required DateTime date, String who = 'me', String note = '', String? time, bool plannedPurchase = false, bool unexpected = false, String? id, String? commandId}) =>
-      send({'type': 'expense', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'splits': {category: amount.toString()}, 'meta': {'who': who, if (note.isNotEmpty) 'note': note, if (time != null) 'time': time, if (plannedPurchase && !unexpected) 'plannedPurchase': true, if (unexpected) 'unexpected': true}}, commandId: commandId);
+  /// [catchUp] (Ж4) — «догнать учёт»: разница при уточнении остатка,
+  /// записанная расходом; в отчёт месяца входит, дневной лимит не трогает.
+  Future<void> addExpense({required int amount, required String category, required String account, required DateTime date, String who = 'me', String note = '', String? time, bool plannedPurchase = false, bool unexpected = false, bool catchUp = false, String? id, String? commandId}) =>
+      send({'type': 'expense', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'splits': {category: amount.toString()}, 'meta': {'who': who, if (note.isNotEmpty) 'note': note, if (time != null) 'time': time, if (plannedPurchase && !unexpected) 'plannedPurchase': true, if (unexpected) 'unexpected': true, if (catchUp) 'catchUp': true}}, commandId: commandId);
 
-  Future<void> addIncome({required int amount, required String source, required String account, required DateTime date, String note = '', String? time, String? id, String? commandId}) =>
-      send({'type': 'income', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'source': source, 'amount': amount.toString(), 'meta': {if (note.isNotEmpty) 'note': note, if (time != null) 'time': time}}, commandId: commandId);
+  Future<void> addIncome({required int amount, required String source, required String account, required DateTime date, String note = '', String? time, bool catchUp = false, String? id, String? commandId}) =>
+      send({'type': 'income', 'id': id ?? newId(), 'date': _date(date), 'account': account, 'source': source, 'amount': amount.toString(), 'meta': {if (note.isNotEmpty) 'note': note, if (time != null) 'time': time, if (catchUp) 'catchUp': true}}, commandId: commandId);
+
+  /// Списание личного долга (Ж6): «не вернут» уходит в расход «Прочее»,
+  /// «простили» — в доход «Прочий доход»; деньги на счетах не меняются.
+  Future<void> writeOffDebt(PersonDebt d, {String note = '', String? commandId}) => send({
+        'type': 'writeOff',
+        'id': newId(),
+        'date': _date(today),
+        'person': d.person,
+        'amount': d.amount.toString(),
+        'side': d.oweMe ? 'receivable' : 'liability',
+        if (note.isNotEmpty) 'meta': {'note': note},
+      }, commandId: commandId);
+
+  /// Взнос по рассрочке: остаток делится на месяцы и округляется вверх до
+  /// целого тенге — последний платёж выходит чуть меньше.
+  static int installmentPayment(int rest, int months) => months <= 0 ? rest : ((rest / months) / minorPerUnit).ceil() * minorPerUnit;
+
+  /// Покупка в рассрочку (Ж1) одной пачкой: справочник долга, сама покупка
+  /// (расход сейчас, долг на остаток, взнос со счёта) и плановый платёж в
+  /// календарь. [firstDueNextMonth] — первый срок в следующем месяце, как у
+  /// рассрочки Kaspi; иначе — в этом, если число ещё не прошло.
+  List<Map<String, dynamic>> installmentPurchaseCommands({
+    required String name,
+    required int amount,
+    required String category,
+    required int months,
+    required int day,
+    required DateTime date,
+    int downPayment = 0,
+    String? downPaymentAccount,
+    bool firstDueNextMonth = true,
+    String? time,
+    String who = 'me',
+    String? id,
+  }) {
+    final debtId = newId();
+    final rest = amount - downPayment;
+    final payment = installmentPayment(rest, months);
+    final start = firstDueNextMonth ? DateTime(today.year, today.month + 1, 1) : plannedStart(day, paidThisMonth: false);
+    return [
+      {'type': 'upsertEntity', 'kind': 'debt', 'entityId': debtId, 'data': DebtInfo(debtId, name, 'installment', 0).toJson()},
+      {
+        'type': 'creditPurchase',
+        'id': id ?? newId(),
+        'date': _date(date),
+        'debtId': debtId,
+        'splits': {category: amount.toString()},
+        if (downPayment > 0) 'downPaymentAccount': downPaymentAccount,
+        if (downPayment > 0) 'downPayment': downPayment.toString(),
+        'meta': {'who': who, 'note': name, if (time != null) 'time': time, 'months': months},
+      },
+      if (rest > 0 && months > 0)
+        {'type': 'upsertEntity', 'kind': 'planned', 'entityId': newId(), 'data': PlannedInfo('', name, payment, day, 'other', debtId, const {}, start: start).toJson()},
+    ];
+  }
 
   Future<void> addTransfer({required int amount, required String from, required String to, required DateTime date, String? time, String? id, String? commandId}) =>
       send({'type': 'transfer', 'id': id ?? newId(), 'date': _date(date), 'from': from, 'to': to, 'amount': amount.toString(), if (time != null) 'meta': {'time': time}}, commandId: commandId);
