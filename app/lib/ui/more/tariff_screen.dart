@@ -9,6 +9,7 @@ import '../../state/api_client.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
+import 'pro_celebration.dart';
 
 /// Сборка для App Store: покупка внутри приложения скрыта, Pro оформляется
 /// на сайте (правила магазина о цифровых покупках). `--dart-define=STORE_BUILD=true`.
@@ -120,8 +121,8 @@ class _TariffScreenState extends State<TariffScreen> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (paid) {
-      messenger.showSnackBar(SnackBar(content: Text(l.proPaid)));
       _loadBilling();
+      await showProCelebration(context, until: state.proUntil); // сцена «Pro включён» (D110)
     } else {
       // Могли закрыть окно раньше, чем пришло подтверждение — проверим ещё раз.
       try {
@@ -133,8 +134,8 @@ class _TariffScreenState extends State<TariffScreen> {
         // «Отмена» — молча; истёкшее ожидание — подсказка, что делать.
         if (!cancelled) messenger.showSnackBar(SnackBar(content: Text(l.proTimeout)));
       } else if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(l.proPaid)));
         _loadBilling();
+        await showProCelebration(context, until: state.proUntil);
       }
     }
   }
