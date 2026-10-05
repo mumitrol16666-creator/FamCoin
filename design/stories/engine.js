@@ -10,7 +10,8 @@
     document.querySelectorAll('[data-words]').forEach((el) => {
       const t0 = parseFloat(el.dataset.in || '0');
       const st = parseFloat(el.dataset.stagger || '0.09');
-      const words = el.textContent.trim().split(/\s+/);
+      // Делим только по обычным пробелам: неразрывный (&nbsp;) держит «1 590 ₸» одним словом.
+      const words = el.textContent.trim().split(/[ \t\n]+/);
       const accent = (el.dataset.accent || '').split('|').filter(Boolean);
       el.textContent = '';
       words.forEach((w, i) => {

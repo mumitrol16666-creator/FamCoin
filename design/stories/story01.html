@@ -2,142 +2,160 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>FamCoin — сторис 1: куда уходят деньги</title>
+<title>FamCoin — Деньги за 15 секунд: эффект кофе</title>
 <link rel="stylesheet" href="story.css">
 <style>
-  :root { --dur: 20s; }
-  .counter { position: absolute; left: 0; right: 0; top: 700px; text-align: center; font-size: 150px; font-weight: 800; letter-spacing: -4px;
-    animation: blockIn .9s cubic-bezier(.2,.7,.2,1) .5s both, drain 2.4s ease-in-out 3.4s both, blockOut .7s cubic-bezier(.4,0,.2,1) 6s forwards; }
-  @keyframes drain { from { color: var(--mint); } to { color: var(--red); } }
-  .chip { position: absolute; padding: 18px 30px; border-radius: 40px; background: rgba(230,98,98,.14); border: 2px solid rgba(230,98,98,.35);
-    color: #ffb4b4; font-size: 40px; font-weight: 700; white-space: nowrap; opacity: 0; animation: fall 2s cubic-bezier(.45,0,.6,1) both; }
-  @keyframes fall { 0% { opacity: 0; transform: translateY(-50px) rotate(var(--r0)); } 18% { opacity: 1; } 75% { opacity: .9; } 100% { opacity: 0; transform: translateY(140px) rotate(var(--r1)); } }
+  :root { --dur: 17.5s; }
+  /* Рубрика серии — видна весь ролик до финала */
+  .rubric { position: absolute; left: 0; right: 0; top: 110px; display: flex; justify-content: center; }
+  .rubric span { padding: 16px 34px; border-radius: 40px; background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.14);
+    font-size: 34px; font-weight: 700; letter-spacing: .5px; color: var(--text2); }
+  .rubric span b { color: var(--gold); }
 
-  .persp { position: absolute; left: 0; right: 0; top: 330px; display: flex; justify-content: center; perspective: 2200px; }
-  .phone { width: 760px; height: 1480px; border-radius: 96px; background: #10141a; border: 14px solid #050607;
+  /* 1. Кофе */
+  .cup { position: absolute; left: 0; right: 0; top: 400px; text-align: center; font-size: 230px; line-height: 1;
+    filter: drop-shadow(0 30px 80px rgba(230,170,60,.35));
+    animation: popIn .9s cubic-bezier(.2,.8,.2,1) .3s both, blockOut .7s cubic-bezier(.4,0,.2,1) 3.6s forwards; }
+
+  /* 2. Год */
+  .calc { position: absolute; left: 0; right: 0; top: 600px; text-align: center; font-size: 46px; font-weight: 700; color: var(--text2); }
+  .year { position: absolute; left: 0; right: 0; top: 700px; text-align: center; font-size: 168px; font-weight: 800; letter-spacing: -5px; color: var(--gold);
+    animation: blockIn .9s cubic-bezier(.2,.7,.2,1) 3.75s both, flash 1.2s ease-out 6.35s both, blockOut .7s cubic-bezier(.4,0,.2,1) 7.8s forwards; }
+  @keyframes flash { 0% { text-shadow: 0 0 0 rgba(230,170,60,0); transform: scale(1); } 15% { text-shadow: 0 0 90px rgba(230,170,60,.75); transform: scale(1.06); } 100% { text-shadow: 0 0 30px rgba(230,170,60,.2); transform: scale(1); } }
+  .dots { position: absolute; left: 115px; top: 1110px; width: 850px; display: grid; grid-template-columns: repeat(25, 24px); gap: 10px; }
+  .dot { width: 24px; height: 24px; border-radius: 50%; background: var(--gold); opacity: 0; animation: dotIn .3s ease both; }
+  @keyframes dotIn { from { opacity: 0; transform: scale(.2); } to { opacity: .85; transform: scale(1); } }
+
+  /* 3. Мелочи */
+  .chip { position: absolute; padding: 18px 30px; border-radius: 40px; background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.14);
+    color: var(--text2); font-size: 40px; font-weight: 700; white-space: nowrap; opacity: 0; animation: rise 3s cubic-bezier(.3,0,.5,1) both; }
+  @keyframes rise { 0% { opacity: 0; transform: translateY(90px); } 20% { opacity: 1; } 75% { opacity: .85; } 100% { opacity: 0; transform: translateY(-170px); } }
+
+  /* 4. Телефон */
+  .cap { position: absolute; left: 60px; right: 60px; top: 210px; text-align: center; font-size: 58px; font-weight: 800; letter-spacing: -1px; }
+  .persp { position: absolute; left: 0; right: 0; top: 390px; display: flex; justify-content: center; perspective: 2200px; }
+  .phone { width: 740px; height: 1440px; border-radius: 94px; background: #10141a; border: 14px solid #050607;
     box-shadow: 0 0 0 3px #2a3038, 0 60px 160px rgba(0,0,0,.7), 0 0 120px rgba(46,160,120,.18);
-    padding: 46px 40px; overflow: hidden; position: relative;
-    animation: phoneIn 1.4s cubic-bezier(.16,.84,.24,1) 11.7s both, blockOut .7s cubic-bezier(.4,0,.2,1) 17s forwards; }
+    padding: 44px 38px; overflow: hidden; position: relative;
+    animation: phoneIn 1.3s cubic-bezier(.16,.84,.24,1) 10.75s both, blockOut .7s cubic-bezier(.4,0,.2,1) 14.6s forwards; }
   @keyframes phoneIn { from { opacity: 0; transform: translateY(760px) rotateX(26deg) scale(.86); } to { opacity: 1; transform: none; } }
   .status { display: flex; justify-content: space-between; font-size: 28px; font-weight: 700; color: #e9edf1; padding: 0 24px 26px; }
-  .head { display: flex; align-items: center; justify-content: space-between; margin: 10px 6px 30px; }
-  .head h2 { font-size: 58px; font-weight: 800; letter-spacing: -1px; }
-  .pro { padding: 12px 26px; border-radius: 30px; background: var(--gold); color: #1b1406; font-size: 28px; font-weight: 800; }
-  .guide { border-radius: 46px; padding: 42px 40px 40px; background: linear-gradient(150deg, #2f7f63, #1f5e4f 70%); position: relative; overflow: hidden; }
-  .guide::after { content: ''; position: absolute; right: -120px; top: -140px; width: 380px; height: 380px; border-radius: 50%; background: rgba(255,255,255,.07); }
-  .guide .t { font-size: 32px; opacity: .92; }
-  .guide .sum { font-size: 132px; font-weight: 800; letter-spacing: -4px; margin: 6px 0 2px; }
-  .guide .sum .tenge { font-size: 80px; }
-  .guide .meta { font-size: 30px; opacity: .92; }
-  .chips2 { display: flex; gap: 14px; margin: 26px 0 26px; }
-  .chips2 span { padding: 12px 30px; border-radius: 30px; border: 2px solid rgba(255,255,255,.45); font-size: 28px; font-weight: 700; }
-  .chips2 span:first-child { background: rgba(255,255,255,.22); }
-  .bar { height: 18px; border-radius: 10px; background: rgba(0,0,0,.25); overflow: hidden; }
-  .bar i { display: block; height: 100%; width: 0; background: var(--gold); border-radius: 10px; animation: fill .8s ease-in-out 15.2s both; }
-  @keyframes fill { from { width: 0; } to { width: 32%; } }
-  .sec { font-size: 40px; font-weight: 800; margin: 44px 6px 22px; }
-  .tiles { display: flex; gap: 20px; }
-  .tile { flex: 1; border-radius: 34px; background: var(--card); padding: 26px 24px; position: relative; }
-  .tile .e { font-size: 50px; }
-  .tile .n { font-size: 32px; font-weight: 700; margin-top: 10px; }
-  .tile .a { font-size: 28px; color: var(--text2); margin-top: 2px; }
-  .tap { animation: tap .5s ease 14.9s both; }
+  .head h2 { font-size: 56px; font-weight: 800; letter-spacing: -1px; margin: 10px 6px 26px; }
+  .sec { font-size: 38px; font-weight: 800; margin: 10px 6px 20px; }
+  .tiles { display: flex; gap: 18px; }
+  .tile { flex: 1; border-radius: 34px; background: var(--card); padding: 26px 22px; position: relative; }
+  .tile .e { font-size: 50px; } .tile .n { font-size: 31px; font-weight: 700; margin-top: 10px; } .tile .a { font-size: 27px; color: var(--text2); margin-top: 2px; }
+  .tap { animation: tap .5s ease 12s both; }
   @keyframes tap { 0%,100% { transform: scale(1); } 40% { transform: scale(.92); background: #1e2a26; } }
-  .ripple { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 4px solid var(--mint); opacity: 0;
-    animation: ripple .9s ease-out 14.95s both; }
+  .ripple { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 4px solid var(--mint); opacity: 0; animation: ripple .9s ease-out 12.05s both; }
   @keyframes ripple { 0% { opacity: 0; transform: scale(.4); } 10% { opacity: .9; } 100% { opacity: 0; transform: scale(7); } }
-  .toast { position: absolute; left: 40px; right: 40px; bottom: 60px; padding: 30px 36px; border-radius: 30px; background: #222a33; font-size: 32px; font-weight: 600;
-    display: flex; justify-content: space-between; opacity: 0; animation: toastIn .5s ease 15.3s both, blockOut .5s ease 16.6s forwards; }
-  @keyframes toastIn { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
-  .row { display: flex; align-items: center; gap: 24px; padding: 20px 6px; border-bottom: 2px solid #1c232b; font-size: 32px; }
-  .row .ic { width: 76px; height: 76px; border-radius: 24px; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 40px; }
-  .row .x { flex: 1; } .row .x small { display: block; font-size: 26px; color: var(--text2); }
-  .row b { color: #ff9a9a; }
-  .cap { position: absolute; left: 70px; right: 70px; top: 150px; text-align: center; font-size: 60px; font-weight: 800; letter-spacing: -1px; }
+  .month { margin-top: 40px; border-radius: 40px; padding: 38px 36px; background: linear-gradient(150deg, #2f7f63, #1f5e4f 70%);
+    animation: popIn .8s cubic-bezier(.2,.8,.2,1) 13.15s both; }
+  .month .t { font-size: 30px; opacity: .9; }
+  .month .s { font-size: 96px; font-weight: 800; letter-spacing: -3px; margin: 4px 0; }
+  .month .m { font-size: 28px; opacity: .9; }
+  .row { display: flex; align-items: center; gap: 22px; padding: 22px 6px; border-bottom: 2px solid #1c232b; font-size: 31px; }
+  .row .ic { width: 74px; height: 74px; border-radius: 24px; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 38px; }
+  .row .x { flex: 1; } .row .x small { display: block; font-size: 25px; color: var(--text2); } .row b { color: #ff9a9a; }
+  .newrow { animation: blockIn .6s cubic-bezier(.2,.7,.2,1) 12.3s both; }
 </style>
 </head>
 <body>
 <div class="stage"><div class="cam">
   <div class="glow g1"></div><div class="glow g2"></div>
 
-  <!-- 1. Зарплата пришла -->
-  <div class="line big" style="top:520px" data-words data-in="0.3" data-out="6">Зарплата пришла</div>
-  <div class="counter money"><span data-keys="0:0,0.7:0,2.3:350000,3.4:350000,5.8:12400" data-sign="1">0</span><span class="tenge">₸</span></div>
-  <div class="line sub" style="top:960px" data-words data-in="3.1" data-out="6">Через две недели</div>
-  <div class="chip" style="left:80px;top:1090px;--r0:-6deg;--r1:-12deg;animation-delay:3.6s">−1 590 ₸ · кофе</div>
-  <div class="chip" style="right:80px;top:1170px;--r0:5deg;--r1:12deg;animation-delay:3.9s">−3 400 ₸ · такси</div>
-  <div class="chip" style="left:80px;top:1270px;--r0:3deg;--r1:-8deg;animation-delay:4.2s">−8 900 ₸ · доставка</div>
-  <div class="chip" style="right:80px;top:1350px;--r0:-4deg;--r1:10deg;animation-delay:4.5s">−15 000 ₸ · подписки</div>
-  <div class="chip" style="left:80px;top:1450px;--r0:6deg;--r1:12deg;animation-delay:4.8s">−2 200 ₸ · перекус</div>
-  <div class="chip" style="right:80px;top:1530px;--r0:-5deg;--r1:-10deg;animation-delay:5.1s">−24 000 ₸ · «просто так»</div>
+  <div class="rubric" data-show="0.15,14.6"><span>Деньги за <b>15 секунд</b></span></div>
 
-  <!-- 2. И куда всё ушло -->
-  <div class="line mid" style="top:820px" data-words data-in="6.3" data-out="8.5">И куда всё ушло?</div>
+  <!-- 1. Кофе за 1 590 в день. Кажется, мелочь -->
+  <div class="cup">☕️</div>
+  <div class="line big" style="top:700px" data-words data-in="0.6" data-out="3.6">Кофе&nbsp;за 1&nbsp;590&nbsp;₸ в&nbsp;день</div>
+  <div class="line sub" style="top:960px" data-words data-in="1.8" data-out="3.6">Кажется, мелочь</div>
 
-  <!-- 3. Дело не в сумме -->
-  <div class="line big" style="top:690px" data-words data-in="8.7" data-out="11.4">Дело не в сумме</div>
-  <div class="line mid accent" style="top:930px" data-words data-in="9.7" data-out="11.4" data-stagger="0.11">Деньги утекают по мелочи</div>
+  <!-- 2. Но за год это 580 тысяч -->
+  <div class="calc" data-show="3.7,7.8">1&nbsp;590&nbsp;₸ × 365 дней</div>
+  <div class="year money"><span data-keys="0:1590,3.85:1590,6.35:580350">1 590</span><span class="tenge">₸</span></div>
+  <div class="line sub" style="top:920px" data-words data-in="6.45" data-out="7.8" data-accent="год">это за год</div>
+  <div class="dots" id="dots" data-show="3.7,7.8"></div>
 
-  <!-- 4. Одна цифра -->
-  <div class="cap" data-words data-in="12.3" data-out="17" data-stagger="0.08" data-accent="сегодня">Сколько можно потратить сегодня</div>
+  <!-- 3. Мелкие траты почти никто не считает -->
+  <div class="line mid" style="top:700px" data-words data-in="7.95" data-out="10.6" data-accent="никто">Мелкие траты почти никто не&nbsp;считает</div>
+  <div class="chip" style="left:90px;top:1180px;animation-delay:8.1s">☕️ 1 590 ₸</div>
+  <div class="chip" style="right:90px;top:1260px;animation-delay:8.4s">🚌 80 ₸</div>
+  <div class="chip" style="left:150px;top:1380px;animation-delay:8.7s">🥐 900 ₸</div>
+  <div class="chip" style="right:130px;top:1460px;animation-delay:9.0s">💧 350 ₸</div>
+  <div class="chip" style="left:100px;top:1560px;animation-delay:9.3s">🍫 650 ₸</div>
+  <div class="chip" style="right:110px;top:1620px;animation-delay:9.6s">🚕 1 800 ₸</div>
+
+  <!-- 4. Записывать одним касанием и видеть итог за месяц -->
+  <div class="cap" data-words data-in="11.0" data-out="14.6" data-stagger="0.08" data-accent="касанием">Записывать одним касанием</div>
   <div class="persp"><div class="phone">
     <div class="status"><span>9:41</span><span>●●● ▮</span></div>
-    <div class="head"><h2>Главная</h2><span class="pro">Pro</span></div>
-    <div class="guide">
-      <div class="t">Осталось на сегодня</div>
-      <div class="sum money"><span data-keys="0:0,12.6:0,13.9:5000,15.15:5000,16.0:3410">0</span><span class="tenge">₸</span></div>
-      <div class="meta">5 000 ₸ в день · потрачено <span data-keys="0:0,15.15:0,16.0:1590">0</span> ₸</div>
-      <div class="chips2"><span>В день</span><span>Всего</span></div>
-      <div class="bar"><i></i></div>
-    </div>
+    <div class="head"><h2>Главная</h2></div>
     <div class="sec">Быстрые операции</div>
     <div class="tiles">
       <div class="tile tap"><div class="e">☕️</div><div class="n">Кофе</div><div class="a">1 590 ₸</div><div class="ripple"></div></div>
-      <div class="tile"><div class="e">🚕</div><div class="n">Такси</div><div class="a">2 000 ₸</div></div>
+      <div class="tile"><div class="e">🚕</div><div class="n">Такси</div><div class="a">1 800 ₸</div></div>
       <div class="tile"><div class="e">🥐</div><div class="n">Перекус</div><div class="a">900 ₸</div></div>
     </div>
-    <div class="sec">Последние операции</div>
-    <div class="row"><div class="ic">🛒</div><div class="x">Продукты<small>Kaspi Gold · вчера</small></div><b>−6 240 ₸</b></div>
-    <div class="row"><div class="ic">🚌</div><div class="x">Автобус<small>Kaspi Gold · вчера</small></div><b>−80 ₸</b></div>
-    <div class="toast"><span>Кофе · 1 590 ₸</span><span style="color:var(--mint)">Отменить</span></div>
+    <div class="month">
+      <div class="t">Кофе в этом месяце</div>
+      <div class="s money"><span data-keys="0:46110,13.3:46110,14.1:47700">46 110</span><span class="tenge">₸</span></div>
+      <div class="m">30 раз · ≈ 580 000 ₸ за год</div>
+    </div>
+    <div class="sec" style="margin-top:40px">Последние операции</div>
+    <div class="row newrow"><div class="ic">☕️</div><div class="x">Кофе<small>Kaspi Gold · сейчас</small></div><b>−1 590 ₸</b></div>
+    <div class="row"><div class="ic">🚌</div><div class="x">Автобус<small>Kaspi Gold · утром</small></div><b>−80 ₸</b></div>
   </div></div>
 
   <!-- 5. Финал -->
-  <div class="end" data-show="17.3">
+  <div class="end" data-show="14.85">
     <img src="../../app/web/icons/Icon-512.png" alt="">
     <div class="name">FamCoin</div>
-    <div class="tag">Семейные деньги под контролем</div>
+    <div class="tag">Деньги под контролем</div>
     <div class="pill">coin.edudev.kz</div>
     <div class="tg">Telegram: @Famcoin01_bot</div>
   </div>
 
   <div class="vignette"></div><div class="grain"></div>
 </div></div>
+<script>
+  // 365 точек — по одной на день года; заполняются вместе со счётчиком.
+  (function () {
+    const box = document.getElementById('dots');
+    for (let i = 0; i < 365; i++) {
+      const d = document.createElement('i');
+      d.className = 'dot';
+      d.style.animationDelay = (3.85 + 2.5 * Math.pow(i / 364, 1.4)) + 's';
+      box.appendChild(d);
+    }
+  })();
+</script>
 <script type="application/json" id="sfx">
 [
-  {"t": 0,     "type": "pad",     "gain": 0.3,  "dur": 20},
-  {"t": 0.15,  "type": "whoosh",  "gain": 0.35, "pan": -0.2},
-  {"t": 0.75,  "type": "ticks",   "gain": 0.35, "dur": 1.5, "count": 18},
-  {"t": 2.25,  "type": "coin",    "gain": 0.6},
-  {"t": 3.0,   "type": "whoosh",  "gain": 0.22, "pan": 0.2, "dur": 0.45},
-  {"t": 3.4,   "type": "drain",   "gain": 0.3},
-  {"t": 3.75,  "type": "thud",    "gain": 0.45, "pitch": 180, "pan": -0.4},
-  {"t": 4.05,  "type": "thud",    "gain": 0.45, "pitch": 160, "pan": 0.4},
-  {"t": 4.35,  "type": "thud",    "gain": 0.45, "pitch": 150, "pan": -0.4},
-  {"t": 4.65,  "type": "thud",    "gain": 0.45, "pitch": 140, "pan": 0.4},
-  {"t": 4.95,  "type": "thud",    "gain": 0.45, "pitch": 130, "pan": -0.4},
-  {"t": 5.25,  "type": "thud",    "gain": 0.5,  "pitch": 115, "pan": 0.4},
-  {"t": 6.15,  "type": "whoosh",  "gain": 0.32, "dur": 0.6},
-  {"t": 8.6,   "type": "impact",  "gain": 0.75},
-  {"t": 9.55,  "type": "whoosh",  "gain": 0.28, "pan": 0.15},
-  {"t": 10.6,  "type": "riser",   "gain": 0.4,  "dur": 1.1},
-  {"t": 11.65, "type": "whoosh",  "gain": 0.5,  "dur": 0.9, "lo": 120, "hi": 3500},
-  {"t": 12.6,  "type": "ticks",   "gain": 0.25, "dur": 1.25, "count": 14},
-  {"t": 14.92, "type": "tap",     "gain": 0.6},
-  {"t": 15.15, "type": "ticks",   "gain": 0.2,  "dur": 0.8,  "count": 8, "freq": 2100},
-  {"t": 15.3,  "type": "success", "gain": 0.45},
-  {"t": 16.95, "type": "whoosh",  "gain": 0.35, "dur": 0.7},
-  {"t": 17.3,  "type": "chime",   "gain": 0.55}
+  {"t": 0,     "type": "pad",     "gain": 0.3,  "dur": 17.5},
+  {"t": 0.1,   "type": "whoosh",  "gain": 0.18, "dur": 0.4},
+  {"t": 0.3,   "type": "whoosh",  "gain": 0.32, "pan": -0.2},
+  {"t": 0.55,  "type": "thud",    "gain": 0.45, "pitch": 240},
+  {"t": 1.7,   "type": "whoosh",  "gain": 0.2,  "pan": 0.2, "dur": 0.45},
+  {"t": 3.6,   "type": "whoosh",  "gain": 0.3,  "dur": 0.55},
+  {"t": 3.85,  "type": "ticks",   "gain": 0.32, "dur": 2.45, "count": 28, "ease": "in"},
+  {"t": 6.3,   "type": "impact",  "gain": 0.7},
+  {"t": 6.38,  "type": "coin",    "gain": 0.5},
+  {"t": 7.8,   "type": "whoosh",  "gain": 0.34, "dur": 0.6},
+  {"t": 8.25,  "type": "tick",    "gain": 0.18, "freq": 1700, "pan": -0.5},
+  {"t": 8.55,  "type": "tick",    "gain": 0.18, "freq": 1800, "pan": 0.5},
+  {"t": 8.85,  "type": "tick",    "gain": 0.18, "freq": 1900, "pan": -0.5},
+  {"t": 9.15,  "type": "tick",    "gain": 0.18, "freq": 2000, "pan": 0.5},
+  {"t": 9.45,  "type": "tick",    "gain": 0.18, "freq": 2100, "pan": -0.5},
+  {"t": 9.75,  "type": "tick",    "gain": 0.18, "freq": 2200, "pan": 0.5},
+  {"t": 9.7,   "type": "riser",   "gain": 0.38, "dur": 1.05},
+  {"t": 10.72, "type": "whoosh",  "gain": 0.5,  "dur": 0.9, "lo": 120, "hi": 3500},
+  {"t": 12.0,  "type": "tap",     "gain": 0.6},
+  {"t": 12.3,  "type": "success", "gain": 0.42},
+  {"t": 13.15, "type": "coin",    "gain": 0.35},
+  {"t": 13.3,  "type": "ticks",   "gain": 0.2,  "dur": 0.8, "count": 8, "freq": 2300},
+  {"t": 14.55, "type": "whoosh",  "gain": 0.35, "dur": 0.7},
+  {"t": 14.85, "type": "chime",   "gain": 0.55}
 ]
 </script>
 <script src="engine.js"></script>
