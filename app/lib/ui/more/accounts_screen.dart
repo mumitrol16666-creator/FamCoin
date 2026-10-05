@@ -32,7 +32,10 @@ class AccountsScreen extends StatelessWidget {
             children: [
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(l.capital, style: TextStyle(fontSize: 12, color: fam.text2)),
+                  Row(children: [
+                    Expanded(child: Text(l.capital, style: TextStyle(fontSize: 12, color: fam.text2))),
+                    InfoTip(l.capitalHelpBody, title: l.capitalHelpTitle),
+                  ]),
                   BigMoney(nw.capital),
                   const SizedBox(height: 6),
                   Text('${l.money} ${formatMoney(nw.money)} · ${l.oweMe} ${formatMoney(nw.receivables)} · ${l.liabilities} ${formatMoney(nw.liabilities)}',

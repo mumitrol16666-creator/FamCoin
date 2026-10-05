@@ -150,7 +150,7 @@ class LedgerService {
         // Старый алгоритм снимал подтверждение по одной лишь дате правки.
         // Восстанавливаем его, если все подтверждённые суммы совпадают.
         // FOR SHARE на users не даёт команде изменить журнал в это время.
-        if (invalidatedAt != null && reconciliationChanges(r[1] as Map, reconciliationSnapshot(ledger, month)).isEmpty) {
+        if (invalidatedAt != null && reconciliationChanges(r[1] as Map, reconciliationSnapshot(ledger, month, version: reconciliationVersion(r[1] as Map))).isEmpty) {
           await s.execute(Sql.named('UPDATE month_reconciliations SET invalidated_at = NULL WHERE user_id = @u AND month = @m::date'),
             parameters: {'u': userId, 'm': dateToJson(month)});
           invalidatedAt = null;
@@ -396,7 +396,7 @@ class LedgerService {
     final closed = {...((ctx.profile['closedMonths'] as List?) ?? const []).cast<String>()};
     for (final row in rows) {
       final month = row[0] as DateTime;
-      final changed = !reconciliationChanges(row[1] as Map, reconciliationSnapshot(ctx.ledger, month)).isEmpty;
+      final changed = !reconciliationChanges(row[1] as Map, reconciliationSnapshot(ctx.ledger, month, version: reconciliationVersion(row[1] as Map))).isEmpty;
       if (changed != (row[2] != null)) {
         await ctx.s.execute(
           Sql.named('UPDATE month_reconciliations SET invalidated_at = ${changed ? 'now()' : 'NULL'} WHERE user_id = @u AND month = @m::date'),

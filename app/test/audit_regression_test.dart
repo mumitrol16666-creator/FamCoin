@@ -217,7 +217,7 @@ void main() {
     final r = s.reportFor(s.monthStart);
     expect(r.borrowed, kzt(50000));
     expect(r.earned, 0);
-    expect(r.income, kzt(50000), reason: 'деньги пришли — доход месяца (D105)');
+    expect(r.income, 0, reason: 'заём не является доходом');
     expect(s.monthSummary(s.monthStart).borrowed, kzt(50000));
   });
 

@@ -55,11 +55,11 @@ class OverviewTab extends StatelessWidget {
               Expanded(child: _kv(context, l.reportIncome, report.income, fam.income)),
               Expanded(child: _kv(context, l.reportExpense, -report.total, fam.expense)),
             ]),
-            if (report.debtPayments > 0) Text(l.reportIncludesDebts(moneyInText(report.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
-            if (report.borrowed > 0) Text(l.reportBorrowed(moneyInText(report.borrowed)), style: TextStyle(fontSize: 12, color: fam.text2)),
             const Divider(height: 20),
-            _row(context, l.incomeMinusExpense, report.result, sign: true, bold: true),
+            _row(context, l.incomeMinusExpense, report.result, sign: true, bold: true, help: true),
             _row(context, l.cashFlow, report.cashFlow, sign: true),
+            if (report.borrowed > 0) Text(l.reportBorrowed(moneyInText(report.borrowed)), style: TextStyle(fontSize: 12, color: fam.text2)),
+            if (report.debtPayments > 0) Text(l.reportIncludesDebts(moneyInText(report.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
             if (adjustments != 0) _row(context, l.adjustments, adjustments, sign: true),
             if (report.income > 0) _text(context, l.savingsRate, '${(report.result * 100 / report.income).round()}%'),
             _text(context, l.avgPerDay, formatMoney(avgDay)),
@@ -127,10 +127,11 @@ class OverviewTab extends StatelessWidget {
         MoneyText(value, color: color, sign: true, style: const TextStyle(fontSize: 18)),
       ]);
 
-  Widget _row(BuildContext context, String label, int value, {bool sign = false, bool bold = false}) => Padding(
+  Widget _row(BuildContext context, String label, int value, {bool sign = false, bool bold = false, bool help = false}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(children: [
           Expanded(child: Text(label, style: TextStyle(color: bold ? null : context.fam.text2, fontWeight: bold ? FontWeight.w600 : null))),
+          if (help) InfoTip(context.l10n.reportHelpBody, title: context.l10n.reportHelpTitle),
           MoneyText(value, sign: sign, style: bold ? const TextStyle(fontSize: 16) : null),
         ]),
       );

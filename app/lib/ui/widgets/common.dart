@@ -516,22 +516,30 @@ class InfoTip extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = context.l10n;
     return IconButton(
-      tooltip: l.whatIsThis,
+      tooltip: title ?? l.whatIsThis,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
       icon: Icon(Icons.info_outline, size: 18, color: color ?? context.fam.text2),
       onPressed: () => showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
+        isScrollControlled: true,
+        useSafeArea: true,
         builder: (ctx) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (title != null) ...[Text(title!, style: Theme.of(ctx).textTheme.headlineSmall), const SizedBox(height: 8)],
-              Text(text, style: const TextStyle(fontSize: 15, height: 1.45)),
-              const SizedBox(height: 16),
-              FilledButton(onPressed: () => Navigator.pop(ctx), child: Text(l.gotIt)),
-            ]),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * .8),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  if (title != null) ...[Text(title!, style: Theme.of(ctx).textTheme.headlineSmall), const SizedBox(height: 8)],
+                  Text(text, style: const TextStyle(fontSize: 15, height: 1.45)),
+                  const SizedBox(height: 16),
+                  FilledButton(onPressed: () => Navigator.pop(ctx), child: Text(l.gotIt)),
+                ]),
+              ),
+            ),
           ),
         ),
       ),
@@ -589,7 +597,7 @@ class InfoBanner extends StatelessWidget {
 }
 
 /// Нижняя панель с формой: заголовок, прокрутка, отступ под клавиатуру.
-Future<T?> showFormSheet<T>(BuildContext context, {required String title, required Widget Function(BuildContext) builder}) {
+Future<T?> showFormSheet<T>(BuildContext context, {required String title, Widget? titleAction, required Widget Function(BuildContext) builder}) {
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
@@ -600,7 +608,13 @@ Future<T?> showFormSheet<T>(BuildContext context, {required String title, requir
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-          Text(title, style: Theme.of(ctx).textTheme.headlineSmall),
+          if (titleAction == null)
+            Text(title, style: Theme.of(ctx).textTheme.headlineSmall)
+          else
+            Row(children: [
+              Expanded(child: Text(title, style: Theme.of(ctx).textTheme.headlineSmall)),
+              titleAction,
+            ]),
           const SizedBox(height: 16),
           builder(ctx),
         ]),

@@ -70,6 +70,7 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
   return showFormSheet<void>(
     context,
     title: title ?? '${l.pay}: ${p.name}',
+    titleAction: p.debtId == null ? null : InfoTip(l.repaymentNote, title: l.repayHelpTitle),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         AmountField(controller: amount, label: l.amount),
@@ -128,6 +129,7 @@ Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? princip
   return showFormSheet<void>(
     context,
     title: '${l.pay}: ${debt.name}',
+    titleAction: InfoTip(l.repaymentNote, title: l.repayHelpTitle),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text('${l.balanceLeft}: ${formatMoney(state.debtBalance(debt.id))}', style: TextStyle(color: ctx.fam.text2)),
@@ -165,6 +167,7 @@ Future<void> showPersonRepaySheet(BuildContext context, PersonDebt debt) {
   return showFormSheet<void>(
     context,
     title: debt.oweMe ? '${l.returnedToMe}: ${debt.person}' : '${l.iReturned}: ${debt.person}',
+    titleAction: InfoTip(debt.oweMe ? l.repaymentReceivedNote : l.repaymentNote, title: l.repayHelpTitle),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         AmountField(controller: amount, label: l.amount),

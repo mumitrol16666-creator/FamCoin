@@ -399,6 +399,7 @@ void main() {
     // Итоги и вопросы — сразу, без промежуточных шагов.
     expect(find.text('Сентябрь 2026'), findsOneWidget);
     expect(find.text('Доходы'), findsWidgets);
+    await tester.scrollUntilVisible(find.text('1. Остатки на счетах'), 150, scrollable: find.byType(Scrollable).first);
     expect(find.text('1. Остатки на счетах'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Совпадает'), 150, scrollable: find.byType(Scrollable).first);
     await Scrollable.ensureVisible(tester.element(find.text('Совпадает')), alignment: .5);

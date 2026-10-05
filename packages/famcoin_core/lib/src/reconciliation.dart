@@ -31,23 +31,32 @@ Map<String, int> reconciliationBalances(Ledger ledger, DateTime month) {
 
 /// Снимок, который сервер сохраняет при подтверждении сверки. Деньги строками
 /// в тиынах — тот же формат, что у остального журнала.
-Map<String, dynamic> reconciliationSnapshot(Ledger ledger, DateTime month) {
+Map<String, dynamic> reconciliationSnapshot(Ledger ledger, DateTime month,
+    {int version = 2}) {
   final start = DateTime(month.year, month.month, 1);
-  final report = ledger.report(start, DateTime(start.year, start.month + 1, 1));
+  final end = DateTime(start.year, start.month + 1, 1);
+  final report = ledger.report(start, end);
   return {
+    if (version >= 2) 'version': 2,
     'asOf': dateToJson(reconciliationEnd(start)),
     'balances': {
       for (final e in reconciliationBalances(ledger, start).entries)
         e.key: e.value.toString()
     },
-    'income': report.income.toString(),
-    'expense': report.total.toString(),
+    // Сравниваем старые подтверждения по их прежним правилам, чтобы одно
+    // обновление отчёта не создавало фиктивного расхождения в сверке (D109).
+    'income': (version < 2 ? report.earned + report.borrowed : report.income).toString(),
+    'expense': (version < 2
+        ? report.expense + ledger.debtPaymentsBetween(start, end, legacyExpenseOnly: true)
+        : report.expense).toString(),
     'cashFlow': report.cashFlow.toString(),
     // Журнал дописывается, а не переписывается. Позволяет показать записи,
     // появившиеся после подтверждения, включая отмены старых операций.
     'transactionCount': ledger.transactions.length,
   };
 }
+
+int reconciliationVersion(Map snapshot) => (snapshot['version'] as num?)?.toInt() ?? 1;
 
 typedef ReconciliationAmountChange = ({int before, int after});
 
@@ -68,8 +77,9 @@ ReconciliationChanges reconciliationChanges(Map saved, Map current) {
   for (final id in {...before.keys, ...after.keys}) {
     final oldValue = parseMinor(before[id] ?? '0');
     final newValue = parseMinor(after[id] ?? '0');
-    if (oldValue != newValue)
+    if (oldValue != newValue) {
       balances[id as String] = (before: oldValue, after: newValue);
+    }
   }
   final totals = <String, ReconciliationAmountChange>{};
   for (final key in ['income', 'expense', 'cashFlow']) {

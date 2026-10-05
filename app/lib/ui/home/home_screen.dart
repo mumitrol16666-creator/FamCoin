@@ -193,23 +193,12 @@ class HomeScreen extends StatelessWidget {
                   child: Column(children: [
                     Row(children: [
                       Expanded(child: _Kpi(l.reportIncome, report.income, fam.income)),
-                      // Всё, что ушло, включая кредиты и долги (D98).
                       Expanded(child: _Kpi(l.reportExpense, report.total, fam.expense)),
                     ]),
-                    if (report.debtPayments > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(l.reportIncludesDebts(moneyInText(report.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
-                      ),
-                    // Взятое в долг — не доход, но деньги пришли (D102).
-                    if (report.borrowed > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(l.reportBorrowed(moneyInText(report.borrowed)), style: TextStyle(fontSize: 12, color: fam.text2)),
-                      ),
                     const Divider(height: 20),
                     Row(children: [
                       Expanded(child: Text(l.reportResult, style: TextStyle(color: fam.text2))),
+                      InfoTip(l.reportHelpBody, title: l.reportHelpTitle),
                       MoneyText(report.result, sign: true),
                     ]),
                   ]),

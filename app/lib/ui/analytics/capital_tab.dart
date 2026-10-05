@@ -8,7 +8,7 @@ import '../more/accounts_screen.dart';
 import '../widgets/common.dart';
 import 'trend_chart.dart';
 
-/// Капитал (D66): деньги минус долги — отдельно от аналитики периода
+/// Капитал (D66): активы минус обязательства — отдельно от аналитики периода
 /// (владелец 29.09.2026: сверху за месяц 0 ₸, а снизу капитал — путаница).
 /// Здесь только «что есть сейчас» и как это менялось.
 class CapitalTab extends StatelessWidget {
@@ -27,12 +27,16 @@ class CapitalTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       children: [
-        SectionHeader(l.netCapital),
+        Row(children: [
+          Expanded(child: SectionHeader(l.netCapital)),
+          InfoTip(l.capitalHelpBody, title: l.capitalHelpTitle),
+        ]),
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _row(context, l.assets, nw.assets),
             _row(context, l.money, nw.money, muted: true),
             if (nw.receivables > 0) _row(context, l.oweMe, nw.receivables, muted: true, color: fam.income),
+            if (nw.otherAssets != 0) _row(context, l.otherAssets, nw.otherAssets, muted: true),
             _row(context, l.liabilities, -nw.liabilities, color: fam.debt),
             const Divider(height: 20),
             Row(children: [

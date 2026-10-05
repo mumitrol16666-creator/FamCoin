@@ -11,7 +11,7 @@ Ledger _base() {
 void main() {
   final from = DateTime(2026, 9, 1), to = DateTime(2026, 10, 1);
 
-  test('платёж по кредиту: тело — в «кредиты и долги», проценты — расход, вместе — «всего ушло» (D98)', () {
+  test('платёж по кредиту: основная сумма отдельно от расходов, проценты — расход', () {
     final l = _base();
     applyLedgerCommand(l, {'type': 'openingDebt', 'id': 'd', 'date': '2026-09-01', 'debtId': 'red', 'amount': '${kzt(500000)}'});
     applyLedgerCommand(l, {'type': 'loanPayment', 'id': 'p1', 'date': '2026-09-05', 'account': 'kaspi', 'debtId': 'red', 'principal': '${kzt(40000)}', 'interest': '${kzt(12000)}'});
@@ -19,8 +19,8 @@ void main() {
     final r = l.report(from, to);
     expect(r.expense, kzt(17000), reason: 'проценты и продукты');
     expect(r.debtPayments, kzt(40000));
-    expect(r.total, kzt(57000));
-    expect(r.result, -kzt(57000));
+    expect(r.total, kzt(17000));
+    expect(r.result, -kzt(17000));
     expect(l.debtPaymentsIn(from, to).map((t) => t.id), ['p1']);
     // Долг стал меньше на тело платежа — учёт долгов не изменился.
     expect(l.balance(liabilityAccount('red')), kzt(460000));
@@ -30,7 +30,7 @@ void main() {
     expect(l.report(from, to).debtPayments, 0);
   });
 
-  test('взятое в долг деньгами — в доходах месяца с подписью «в т.ч. взято в долг», в заработанное не входит; старый долг без движения по счёту не считается (D102, D105)', () {
+  test('заём меняет деньги и долг, но не доход; старый долг не меняет деньги', () {
     final l = _base();
     applyLedgerCommand(l, {'type': 'borrow', 'id': 'b1', 'date': '2026-09-03', 'account': 'kaspi', 'person': 'Вадим', 'amount': '${kzt(50000)}'});
     applyLedgerCommand(l, {'type': 'openingDebt', 'id': 'd', 'date': '2026-09-04', 'debtId': 'Яков', 'amount': '${kzt(20000)}'});
@@ -39,8 +39,8 @@ void main() {
     final r = l.report(from, to);
     expect(r.borrowed, kzt(50000));
     expect(r.earned, 0, reason: 'заработанного нет');
-    expect(r.income, kzt(50000), reason: 'деньги пришли — в доходах месяца (D105)');
-    expect(r.result, kzt(50000));
+    expect(r.income, 0);
+    expect(r.result, 0);
     expect(l.balance('kaspi'), kzt(350000), reason: 'старый долг остаток счёта не менял');
     expect(l.report(DateTime(2026, 10, 1), DateTime(2026, 11, 1)).debtPayments, 0);
   });
@@ -51,17 +51,17 @@ void main() {
     applyLedgerCommand(l, {'type': 'loanPayment', 'id': 'p1', 'date': '2026-09-20', 'account': 'kaspi', 'debtId': 'inst', 'principal': '${kzt(10000)}'});
     final r = l.report(from, to);
     expect(r.expense, kzt(60000));
-    expect(r.debtPayments, 0);
+    expect(r.debtPayments, kzt(10000));
     expect(r.total, kzt(60000));
   });
 
-  test('возврат личного долга тоже «ушло», а деньги, взятые в долг, — пришло: месяц сходится в ноль', () {
+  test('получение и возврат долга не создают доходов и расходов', () {
     final l = _base();
     applyLedgerCommand(l, {'type': 'borrow', 'id': 'b', 'date': '2026-09-03', 'account': 'kaspi', 'person': 'Асхат', 'amount': '${kzt(20000)}'});
     applyLedgerCommand(l, {'type': 'repaymentMade', 'id': 'r1', 'date': '2026-09-25', 'account': 'kaspi', 'person': 'Асхат', 'principal': '${kzt(20000)}'});
     final r = l.report(from, to);
     expect(r.earned, 0);
-    expect(r.income, kzt(20000), reason: 'взял 20 000 — доход месяца (D105)');
+    expect(r.income, 0);
     expect(r.debtPayments, kzt(20000));
     expect(r.result, 0, reason: 'взял и вернул — месяц в ноль, без «кассового разрыва»');
     expect(expenseTypeOf('debts'), ExpenseType.mandatory);

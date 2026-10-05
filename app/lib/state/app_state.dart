@@ -885,13 +885,9 @@ class AppState extends ChangeNotifier {
   List<MapEntry<String, int>> categoriesFor(DateTime monthStart) {
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
     final raw = ledger.expenseByCategory(monthStart, end);
-    // Платежи по долгам — строкой рядом с категориями (D98): так «куда ушло
-    // больше всего» честно показывает кредит, если он больше всего.
-    final debts = ledger.debtPaymentsBetween(monthStart, end);
     final list = [
       for (final e in raw.entries)
         if (e.value != 0) MapEntry(e.key.substring(8), e.value),
-      if (debts > 0) MapEntry(debtsCategory, debts),
     ]..sort((a, b) => b.value.compareTo(a.value));
     return list;
   }
@@ -926,16 +922,6 @@ class AppState extends ChangeNotifier {
       if (day == null || day.isBefore(monthStart) || !day.isBefore(end)) continue;
       for (final p in tx.postings) {
         if (ledger.account(p.accountId).kind == LedgerKind.expense) out[day.day - 1] += p.amount;
-      }
-    }
-    // Та же база, что у report.total и categoriesFor: проценты уже попали
-    // через расходные проводки. Добавляем только тело учтённых платежей;
-    // рассрочки с записанной покупкой ядро исключает во избежание дубля.
-    for (final tx in ledger.debtPaymentsIn(monthStart, end)) {
-      for (final posting in tx.postings) {
-        if (ledger.account(posting.accountId).kind == LedgerKind.liability) {
-          out[tx.date.day - 1] -= posting.amount;
-        }
       }
     }
     return out;
@@ -1153,7 +1139,8 @@ class AppState extends ChangeNotifier {
 
   ReconciliationChanges? monthChanges(DateTime month) {
     final record = monthReconciliation(month);
-    return record == null ? null : reconciliationChanges(record['snapshot'] as Map, reconciliationSnapshot(ledger, month));
+    return record == null ? null : reconciliationChanges(record['snapshot'] as Map,
+        reconciliationSnapshot(ledger, month, version: reconciliationVersion(record['snapshot'] as Map)));
   }
 
   List<Transaction>? monthChangesSinceConfirmation(DateTime month) {
@@ -1237,7 +1224,7 @@ class AppState extends ChangeNotifier {
       month: start,
       current: current,
       income: r.income,
-      // «Расходы» сверки — всё, что ушло, включая кредиты и долги (D98).
+      // Основная сумма долга — отдельно, без повторного расхода (D109).
       expense: r.total,
       debtPayments: r.debtPayments,
       prevIncome: pr.income,

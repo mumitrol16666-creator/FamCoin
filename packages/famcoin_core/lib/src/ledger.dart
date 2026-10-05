@@ -155,12 +155,9 @@ class PeriodReport {
   /// деньгами (D102). Рассрочка на вещь сюда не входит — денег не приходило.
   final int borrowed;
 
-  /// Всё, что пришло на счета: заработанное плюс взятое в долг (D105). Это то,
-  /// что человек называет «доходами за месяц»; зеркально [total]: раз возврат
-  /// долга — расход, то полученный долг — доход, иначе месяц уходит в минус
-  /// на ровном месте («кассовый разрыв»). В отчётах показывается как «Доходы»
-  /// с подписью «в т.ч. взято в долг».
-  int get income => earned + borrowed;
+  /// Доход периода. Займы и возврат выданного долга меняют деньги и долг,
+  /// но не создают доход (D109).
+  int get income => earned;
 
   /// Расход по категориям — без платежей по долгам.
   final int expense;
@@ -169,9 +166,8 @@ class PeriodReport {
   /// так в [expense]). См. [Ledger.debtPaymentsBetween].
   final int debtPayments;
 
-  /// Всё, что ушло: расходы плюс платежи по долгам. Это то, что человек
-  /// называет «расходами за месяц» (D98); в отчётах показывается как «Расходы».
-  int get total => expense + debtPayments;
+  /// Итог расходов: основная сумма погашений учитывается отдельно от покупок.
+  int get total => expense;
 
   /// Чистый денежный поток через границу денежных счетов.
   final int cashFlow;
@@ -573,15 +569,14 @@ class Ledger {
     return sum;
   }
 
-  /// Платежи по долгам за период, которые считаются расходом (D98): тело
-  /// кредита и возврат личных долгов. Проценты не входят — они уже расход по
-  /// категории «Проценты». Долги, покупки по которым записаны в приложении
-  /// (`creditPurchase`), не считаются: та покупка уже была расходом, и платёж
-  /// по ней был бы учтён второй раз.
-  List<Transaction> debtPaymentsIn(DateTime from, DateTime to) {
+  /// Погашения основной суммы долга: движение денег, не расход. Проценты
+  /// уже учтены отдельными расходными проводками. Старые снимки сверки
+  /// исключали платежи за записанные покупки; флаг нужен только для их чтения.
+  List<Transaction> debtPaymentsIn(DateTime from, DateTime to,
+      {bool legacyExpenseOnly = false}) {
     final purchased = <String>{};
     for (final tx in _transactions) {
-      if (tx.type != EventType.creditPurchase || _reversed.contains(tx.id)) continue;
+      if (!legacyExpenseOnly || tx.type != EventType.creditPurchase || _reversed.contains(tx.id)) continue;
       for (final p in tx.postings) {
         if (_accounts[p.accountId]!.kind == LedgerKind.liability) purchased.add(p.accountId);
       }
@@ -598,9 +593,10 @@ class Ledger {
   }
 
   /// Сумма [debtPaymentsIn]: сколько ушло на долги за период, без процентов.
-  int debtPaymentsBetween(DateTime from, DateTime to) {
+  int debtPaymentsBetween(DateTime from, DateTime to,
+      {bool legacyExpenseOnly = false}) {
     var sum = 0;
-    for (final tx in debtPaymentsIn(from, to)) {
+    for (final tx in debtPaymentsIn(from, to, legacyExpenseOnly: legacyExpenseOnly)) {
       for (final p in tx.postings) {
         if (_accounts[p.accountId]!.kind == LedgerKind.liability) sum -= p.amount;
       }

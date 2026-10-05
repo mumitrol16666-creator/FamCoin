@@ -228,6 +228,7 @@ class _RecheckCard extends StatelessWidget {
     }
     final changes = state.monthChanges(month)!;
     final transactions = state.monthChangesSinceConfirmation(month);
+    final legacy = reconciliationVersion(state.monthReconciliation(month)!['snapshot'] as Map) < 2;
     final locale = Localizations.localeOf(context).toString();
     Widget row(String label, ReconciliationAmountChange change) =>
         Padding(padding: const EdgeInsets.only(top: 8), child: Text(l.monthChangedAmount(label, moneyInText(change.before), moneyInText(change.after))));
@@ -242,8 +243,8 @@ class _RecheckCard extends StatelessWidget {
           for (final e in changes.balances.entries) row(state.accountInfo(e.key)?.name ?? e.key, e.value),
           for (final e in changes.totals.entries)
             row(switch (e.key) {
-              'income' => l.reportIncome,
-              'expense' => l.reportExpense,
+              'income' => legacy ? l.legacyReconciliationIncome : l.reportIncome,
+              'expense' => legacy ? l.legacyReconciliationExpense : l.reportExpense,
               _ => l.cashFlow,
             }, e.value),
           if (transactions == null) ...[
@@ -310,27 +311,22 @@ class _SummaryCard extends StatelessWidget {
               Expanded(child: kpi(l.reportExpense, sum.expense, fam.expense)),
             ],
           ),
-          if (sum.debtPayments > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(l.reportIncludesDebts(moneyInText(sum.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
-            ),
-          if (sum.borrowed > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(l.reportBorrowed(moneyInText(sum.borrowed)), style: TextStyle(fontSize: 12, color: fam.text2)),
-            ),
           const Divider(height: 20),
           Row(
             children: [
               Expanded(
                 child: Text(l.monthResultLabel, style: TextStyle(color: fam.text2)),
               ),
+              InfoTip(l.reportHelpBody, title: l.reportHelpTitle),
               MoneyText(sum.result, sign: true, style: const TextStyle(fontSize: 17)),
             ],
           ),
           const SizedBox(height: 6),
           Text(l.monthResultHint, style: TextStyle(fontSize: 12, color: fam.text2)),
+          if (sum.borrowed > 0)
+            Text(l.reportBorrowed(moneyInText(sum.borrowed)), style: TextStyle(fontSize: 12, color: fam.text2)),
+          if (sum.debtPayments > 0)
+            Text(l.reportIncludesDebts(moneyInText(sum.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
           if (pct != null && pct != 0) ...[
             const SizedBox(height: 4),
             Text(pct < 0 ? l.monthExpenseLess(-pct) : l.monthExpenseMore(pct), style: TextStyle(fontSize: 12, color: fam.text2)),

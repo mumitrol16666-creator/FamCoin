@@ -111,8 +111,8 @@ Brief eveningBrief(BriefInput i) {
       }
     }
   }
-  // Платежи по кредитам и долгам за день — тоже «потрачено» (D98).
-  spentToday += i.ledger.debtPaymentsBetween(today, tomorrow);
+  // Основная сумма долга — отдельное движение денег, без повторной траты.
+  final repaidToday = i.ledger.debtPaymentsBetween(today, tomorrow);
   final top = byCat.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   final report = i.ledger.report(monthStart, monthEnd);
 
@@ -123,9 +123,12 @@ Brief eveningBrief(BriefInput i) {
   for (final e in top.take(3)) {
     lines.add('• ${i.categoryName(e.key)}: ${_kzt(e.value)}');
   }
+  if (repaidToday > 0) {
+    lines.add(kk ? 'Бүгін қарыз өтелді: ${_kzt(repaidToday)}.' : 'Сегодня погашено долгов: ${_kzt(repaidToday)}.');
+  }
   lines.add(kk ? 'Ай басынан: кіріс ${_kzt(report.income)}, шығыс ${_kzt(report.total)}.' : 'С начала месяца: доходы ${_kzt(report.income)}, расходы ${_kzt(report.total)}.');
   if (report.debtPayments > 0) {
-    lines.add(kk ? 'Оның ішінде несиелер мен қарыздар: ${_kzt(report.debtPayments)}.' : 'В том числе кредиты и долги: ${_kzt(report.debtPayments)}.');
+    lines.add(kk ? 'Ай басынан қарыз өтелді: ${_kzt(report.debtPayments)}.' : 'С начала месяца погашено долгов: ${_kzt(report.debtPayments)}.');
   }
 
   final spentByCat = i.ledger.expenseByCategory(monthStart, monthEnd);

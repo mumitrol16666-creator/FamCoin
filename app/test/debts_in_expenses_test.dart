@@ -1,6 +1,4 @@
-/// D98: всё, что ушло со счёта, — в расходах. Платежи по кредитам и долгам —
-/// строкой «Кредиты и долги»; «Реализовать цель» списывает накопленное
-/// расходом; «Уже оплачено» в сверке записывает факт датой срока.
+/// Погашения долгов отдельно от расходов; цель и сверка сохраняют свой учёт.
 library;
 
 import 'package:famcoin/l10n/app_localizations_ru.dart';
@@ -8,7 +6,6 @@ import 'package:famcoin/state/models.dart';
 import 'package:famcoin/ui/budget/month_close_screen.dart';
 import 'package:famcoin/ui/home/home_screen.dart';
 import 'package:famcoin/ui/shell.dart';
-import 'package:famcoin/ui/widgets/common.dart';
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,7 +16,7 @@ import 'layout_test.dart' show pumpApp;
 final ru = AppLocalizationsRu();
 
 void main() {
-  test('платёж по кредиту: тело — строкой «Кредиты и долги», проценты — расход, «Расходы» сверки — всё вместе', () async {
+  test('платёж по кредиту: основная сумма отдельно, проценты — расход в аналитике и сверке', () async {
     final f = FakeServer();
     await f.init();
     final s = f.state;
@@ -30,18 +27,18 @@ void main() {
     final r = s.monthReport;
     expect(r.expense, kzt(5000));
     expect(r.debtPayments, kzt(45000));
-    expect(r.total, kzt(50000));
-    expect(r.result, -kzt(50000));
+    expect(r.total, kzt(5000));
+    expect(r.result, -kzt(5000));
 
     final cats = {for (final e in s.categoriesFor(s.monthStart)) e.key: e.value};
-    expect(cats, {debtsCategory: kzt(45000), 'interest': kzt(5000)});
+    expect(cats, {'interest': kzt(5000)});
     expect(s.categoryTransactions(debtsCategory, s.monthStart).map((t) => t.type), [EventType.loanPayment]);
-    expect(s.expenseTypeSplit(s.monthStart).mandatory, kzt(50000));
+    expect(s.expenseTypeSplit(s.monthStart).mandatory, kzt(5000));
 
     final sum = s.monthSummary(s.monthStart);
-    expect(sum.expense, kzt(50000));
+    expect(sum.expense, kzt(5000));
     expect(sum.debtPayments, kzt(45000));
-    expect(sum.top.first.key, debtsCategory);
+    expect(sum.top.first.key, 'interest');
     // Дневной лимит платёж не трогает: он запланированный.
     expect(s.spentToday(), 0);
   });
@@ -104,7 +101,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('главная: «Расходы» с подписью «в т.ч. кредиты и долги»', (tester) async {
+  testWidgets('главная: основная сумма долга не в расходах; справка по нажатию', (tester) async {
     final f = await pumpApp(tester, home: const Shell(), size: const Size(390, 844), prefs: const {'pushPromptDismissed': true, 'tipsEnabled': false});
     final s = f.state;
     await s.sendBatch(s.newBankDebtCommands(name: 'Кредит', kind: 'loan', balance: kzt(500000), payment: kzt(50000), day: 10, paidThisMonth: false));
@@ -113,9 +110,20 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.dragUntilVisible(find.text(ru.monthReport), find.byType(ListView).first, const Offset(0, -300));
     await tester.pump(const Duration(milliseconds: 600));
-    // Вкладка «Бюджет» в оболочке построена за кадром с той же подписью — ищем только на главной.
-    final found = tester.widgetList<Text>(find.descendant(of: find.byType(HomeScreen), matching: find.textContaining('кредиты и долги'))).map((t) => t.data).toList();
-    expect(found, [ru.reportIncludesDebts(moneyInText(kzt(50000)))], reason: 'найдено: $found');
+    expect(s.monthReport.expense, 0);
+    expect(s.monthReport.total, 0);
+    final help = find.descendant(of: find.byType(HomeScreen), matching: find.byTooltip(ru.reportHelpTitle));
+    expect(help, findsOneWidget);
+    expect(find.text(ru.reportHelpBody), findsNothing);
+    await tester.ensureVisible(help);
+    await tester.tap(help);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text(ru.reportHelpBody), findsOneWidget);
+    await tester.scrollUntilVisible(find.text(ru.gotIt), 300, scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.text(ru.gotIt));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
     expect(tester.takeException(), isNull);
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpWidget(const SizedBox());

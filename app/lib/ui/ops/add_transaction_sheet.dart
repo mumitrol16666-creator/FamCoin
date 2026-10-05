@@ -397,7 +397,24 @@ class _TransactionFieldsState extends State<TransactionFields> {
         const SizedBox(height: 12),
         InfoBanner(l.transferNote),
       ] else if (_kind == FieldsKind.debt) ...[
-        label(l.debt),
+        Row(children: [
+          Expanded(child: label(l.debt)),
+          InfoTip(
+            _isNewDebt && _oldDebt
+                ? (_debtKind == 'borrow' ? l.debtOldBorrowNote : l.debtOldLendNote)
+                : switch (_debtKind) {
+                    'borrow' => l.borrowNote,
+                    'lendOut' => l.debtNote,
+                    'repaymentReceived' => l.repaymentReceivedNote,
+                    _ => l.repaymentNote,
+                  },
+            title: _isNewDebt && _oldDebt ? l.oldDebtHelpTitle : switch (_debtKind) {
+              'borrow' => l.borrowHelpTitle,
+              'lendOut' => l.lendHelpTitle,
+              _ => l.repayHelpTitle,
+            },
+          ),
+        ]),
         Wrap(spacing: 8, runSpacing: 4, children: [
           for (final (k, t) in [('lendOut', l.lendOut), ('borrow', l.borrow), ('repaymentReceived', l.returnedToMe), ('repaymentMade', l.iReturned)])
             ChoiceChip(label: Text(t), selected: _debtKind == k, onSelected: (_) => setState(() => _debtKind = k)),
@@ -426,8 +443,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
           ]),
         ],
         // Когда это было (D102): свежий долг двигает деньги по счёту, старый —
-        // только запоминается. Пояснения простыми словами: что станет со счётом
-        // и как потом записать возврат, чтобы не было «кассового разрыва».
+        // только запоминается. Справка об учёте открывается по значку ⓘ.
         if (_isNewDebt) ...[
           label(l.debtWhenTitle),
           for (final (old, title, note) in [
@@ -446,8 +462,6 @@ class _TransactionFieldsState extends State<TransactionFields> {
         if (!(_isNewDebt && _oldDebt)) ...[
           const SizedBox(height: 14),
           AccountPicker(accounts: accounts, value: _account, onChanged: (v) => setState(() { _account = v; _accountMissing = false; })),
-          const SizedBox(height: 12),
-          InfoBanner(_debtKind == 'lendOut' ? l.debtNote : _debtKind == 'borrow' ? l.borrowNote : l.repaymentNote),
         ],
       ] else ...[
         label(l.category),

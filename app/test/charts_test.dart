@@ -107,10 +107,10 @@ void main() {
     final oldPurchase = s.userTransactions.firstWhere((tx) => tx.type == EventType.expense);
     await s.refund(oldPurchase, category: 'food', amount: kzt(5000), account: 'cash', date: DateTime(2026, 9, 10));
     var daily = s.dailyExpense(s.monthStart);
-    expect(daily[4], kzt(45000));
+    expect(daily[4], kzt(5000), reason: 'только проценты, без основной суммы долга');
     expect(daily[1], kzt(60000));
     expect(daily[19], 0, reason: 'покупка в рассрочку уже учтена 2 сентября');
-    expect(daily[24], kzt(20000));
+    expect(daily[24], 0, reason: 'возврат основной суммы не создаёт расход');
     expect(daily[9], kzt(-5000));
     expect(daily.fold(0, (sum, day) => sum + day), s.monthReport.total);
     await s.deleteTransaction('loan-paid');

@@ -390,7 +390,7 @@ class MonthSummary {
 
   final DateTime month;
 
-  /// Сколько из [expense] — платежи по кредитам и долгам (D98).
+  /// Погашения основной суммы долга, отдельно от [expense].
   final int debtPayments;
 
   /// Сколько из [expense] владелец отметил непредвиденным (D101).
