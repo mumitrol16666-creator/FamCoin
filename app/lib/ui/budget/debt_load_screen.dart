@@ -39,6 +39,7 @@ class DebtLoadScreen extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 4),
                             child: Row(children: [
                               Expanded(child: Text(l.incomeShare, style: TextStyle(color: fam.text2))),
+                              InfoTip(l.debtLoadHelp, title: l.debtLoadHelpTitle),
                               // Платежей больше записанного дохода — процент ничего не говорит (D92).
                               status.incomeSharePercent! > 100
                                   ? Text(l.incomeIncompleteShort, style: TextStyle(fontSize: 12, color: fam.warn))

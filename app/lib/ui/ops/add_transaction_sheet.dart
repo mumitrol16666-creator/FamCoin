@@ -669,7 +669,11 @@ class _TransactionFieldsState extends State<TransactionFields> {
           AccountPicker(accounts: accounts, value: _account, onChanged: (v) => setState(() { _account = v; _accountMissing = false; })),
         ],
       ] else ...[
-        label(l.category),
+        Row(children: [
+          Expanded(child: label(l.category)),
+          // Развилка «расход или перевод» — главное место ошибок (И2).
+          if (_kind == FieldsKind.expense) InfoTip(l.expenseHelp, title: l.expenseHelpTitle) else InfoTip(l.incomeHelp, title: l.incomeHelpTitle),
+        ]),
         if (_kind == FieldsKind.expense)
           CategoryPicker(
             options: ensureIncluded(state.visibleExpenseCategories, _category),

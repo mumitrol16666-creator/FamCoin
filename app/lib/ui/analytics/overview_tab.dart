@@ -59,6 +59,8 @@ class OverviewTab extends StatelessWidget {
             _row(context, l.incomeMinusExpense, report.result, sign: true, bold: true, help: true),
             _row(context, l.cashFlow, report.cashFlow, sign: true),
             if (report.borrowed > 0) Text(l.reportBorrowed(moneyInText(report.borrowed)), style: TextStyle(fontSize: 12, color: fam.text2)),
+            if (report.lent > 0) Text(l.reportLent(moneyInText(report.lent)), style: TextStyle(fontSize: 12, color: fam.text2)),
+            if (report.returnedToMe > 0) Text(l.reportReturnedToMe(moneyInText(report.returnedToMe)), style: TextStyle(fontSize: 12, color: fam.text2)),
             if (report.debtPayments > 0) Text(l.reportIncludesDebts(moneyInText(report.debtPayments)), style: TextStyle(fontSize: 12, color: fam.text2)),
             if (adjustments != 0) _row(context, l.adjustments, adjustments, sign: true),
             if (report.income > 0) _text(context, l.savingsRate, '${(report.result * 100 / report.income).round()}%'),

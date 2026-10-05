@@ -44,7 +44,7 @@ void main() {
       final s = f.state;
 
       final fresh = tipsFor(s, ru);
-      expect(fresh.map((t) => t.id).take(4), ['appLimit', 'moneyPayFirst', 'appGoal', 'moneyTenPercent']);
+      expect(fresh.map((t) => t.id).take(4), ['appLimit', 'moneyPayFirst', 'appGuide', 'moneyTenPercent']);
       expect(fresh.map((t) => t.id).toSet().length, fresh.length, reason: 'без повторов');
       expect(fresh.where((t) => t.id.startsWith('money')).length, moneyTips.length);
 

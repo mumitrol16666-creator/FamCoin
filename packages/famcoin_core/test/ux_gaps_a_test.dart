@@ -12,6 +12,7 @@ const accounts = [
 ];
 
 void main() {
+  lentReportTests();
   final september = DateTime(2026, 9), october = DateTime(2026, 10);
   Ledger base() => Ledger()
     ..addMoneyAccount('cash')
@@ -134,6 +135,29 @@ void main() {
       expect(l.report(september, october).expense, kzt(300000));
       expect(l.balance(liabilityAccount('phone')), kzt(240000));
       expect(l.balance('cash'), kzt(40000));
+    });
+  });
+}
+
+void lentReportTests() {
+  group('И7 «дал в долг» и «мне вернули» в отчёте периода', () {
+    final september = DateTime(2026, 9), october = DateTime(2026, 10);
+    test('выдача и возврат считаются отдельно и не входят в доходы и расходы', () {
+      final l = Ledger()
+        ..addMoneyAccount('cash')
+        ..openingBalance(id: 'o', date: september, account: 'cash', amount: kzt(100000));
+      l.lendOut(id: 'a', date: september, account: 'cash', person: 'Друг', amount: kzt(50000));
+      l.repaymentReceived(id: 'b', date: DateTime(2026, 9, 20), account: 'cash', person: 'Друг', principal: kzt(20000));
+      final r = l.report(september, october);
+      expect(r.lent, kzt(50000));
+      expect(r.returnedToMe, kzt(20000));
+      expect(r.income, 0);
+      expect(r.expense, 0);
+      expect(r.cashFlow, -kzt(30000));
+      // Отменённая выдача не считается; другой месяц — тоже.
+      l.reverse('a', newId: 'rev');
+      expect(l.report(september, october).lent, 0);
+      expect(l.report(october, DateTime(2026, 11)).returnedToMe, 0);
     });
   });
 }

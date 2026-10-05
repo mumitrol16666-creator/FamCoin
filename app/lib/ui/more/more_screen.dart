@@ -6,6 +6,7 @@ import '../budget/calendar_screen.dart';
 import 'accounts_screen.dart';
 import 'categories_screen.dart';
 import 'family_screen.dart';
+import 'guide_screen.dart';
 import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'settings_screen.dart';
@@ -26,6 +27,7 @@ class MoreScreen extends StatelessWidget {
     void open(Widget w) => Navigator.push(context, MaterialPageRoute(builder: (_) => w));
 
     final items = <(IconData, String, _Badge, VoidCallback)>[
+      (Icons.menu_book_outlined, l.guideTitle, _Badge.none, () => open(const GuideScreen())),
       (Icons.account_balance_wallet_outlined, l.accounts, _Badge.none, () => open(const AccountsScreen())),
       (Icons.fact_check_outlined, l.monthCloseTitle, _Badge.none, () => open(const MonthCloseListScreen())),
       (Icons.calendar_month_outlined, l.calendar, _Badge.none, () => open(const CalendarScreen())),

@@ -146,6 +146,8 @@ class PeriodReport {
     required this.cashFlow,
     this.debtPayments = 0,
     this.borrowed = 0,
+    this.lent = 0,
+    this.returnedToMe = 0,
   });
 
   /// Заработанное: доходы по категориям, без взятого в долг. Для прогнозов,
@@ -155,6 +157,13 @@ class PeriodReport {
   /// Получено в долг за период деньгами на счёт: личные долги и кредиты
   /// деньгами (D102). Рассрочка на вещь сюда не входит — денег не приходило.
   final int borrowed;
+
+  /// Дано в долг людям за период (И7): деньги ушли со счёта, но это не
+  /// расход — они остаются «мне должны».
+  final int lent;
+
+  /// Возвращено мне из выданных долгов за период: деньги пришли, но это не доход.
+  final int returnedToMe;
 
   /// Доход периода. Займы и возврат выданного долга меняют деньги и долг,
   /// но не создают доход (D109).
@@ -551,6 +560,8 @@ class Ledger {
             sumPostings((a) => a.kind == LedgerKind.expense, from: from, to: to),
         debtPayments: debtPaymentsBetween(from, to),
         borrowed: borrowedBetween(from, to),
+        lent: lentBetween(from, to),
+        returnedToMe: returnedToMeBetween(from, to),
         cashFlow: sumPostings((a) => a.isMoney,
             from: from, to: to, skipOpening: true),
       );
@@ -565,6 +576,24 @@ class Ledger {
       if (tx.date.isBefore(from) || !tx.date.isBefore(to)) continue;
       for (final p in tx.postings) {
         if (_accounts[p.accountId]!.kind == LedgerKind.liability) sum += p.amount;
+      }
+    }
+    return sum;
+  }
+
+  /// Сколько дано в долг людям за период: рост «мне должны» по выдачам.
+  int lentBetween(DateTime from, DateTime to) => _receivableMoved(EventType.lendOut, from, to);
+
+  /// Сколько возвращено мне за период: уменьшение «мне должны» по возвратам.
+  int returnedToMeBetween(DateTime from, DateTime to) => -_receivableMoved(EventType.repaymentReceived, from, to);
+
+  int _receivableMoved(EventType type, DateTime from, DateTime to) {
+    var sum = 0;
+    for (final tx in _transactions) {
+      if (tx.type != type || _reversed.contains(tx.id)) continue;
+      if (tx.date.isBefore(from) || !tx.date.isBefore(to)) continue;
+      for (final p in tx.postings) {
+        if (_accounts[p.accountId]!.assetClass == AssetClass.receivable) sum += p.amount;
       }
     }
     return sum;

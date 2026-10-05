@@ -47,7 +47,7 @@ class _LimitDraft {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const steps = 10;
+  static const steps = 11;
   int _step = 0;
   bool _busy = false;
 
@@ -69,7 +69,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _people = <_PersonDraft>[];
   final _limits = <_LimitDraft>[];
   final _goalName = TextEditingController();
-  // 9. Уведомления (D76): по умолчанию включено всё, как на сервере.
+  // 7. Дневной лимит на мелочи (D120): центральное понятие приложения вводится в анкете.
+  final _dailyLimit = TextEditingController();
+  // 10. Уведомления (D76): по умолчанию включено всё, как на сервере.
   final _notif = {for (final k in notificationKinds) k: true};
   final _goalTarget = TextEditingController();
 
@@ -87,7 +89,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   void dispose() {
-    for (final c in [_firstName, _lastName, _accName, _accBalance, _goalName, _goalTarget]) {
+    for (final c in [_firstName, _lastName, _accName, _accBalance, _goalName, _goalTarget, _dailyLimit]) {
       c.dispose();
     }
     super.dispose();
@@ -104,6 +106,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       balance: parseAmount(_accBalance.text, allowZero: true) ?? 0,
     );
     final goalTarget = parseAmount(_goalTarget.text);
+    final dailyLimit = parseAmount(_dailyLimit.text);
     return [
       ...accountCmds,
       for (final m in _members) {'type': 'upsertEntity', 'kind': 'member', 'entityId': m.id, 'data': m.toJson()},
@@ -122,6 +125,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'firstName': _firstName.text.trim(),
           'lastName': _lastName.text.trim(),
           'birthDate': _birth == null ? null : dateToJson(_birth!),
+          // Как AppState.setDailyLimit при первом включении: лимит, дата начала и история суммы.
+          if (dailyLimit != null) ...{
+            'dailyLimit': dailyLimit.toString(),
+            'dailyLimitSince': today,
+            'dailyLimitHistory': [{'from': today, 'amount': dailyLimit.toString()}],
+          },
           'onboarded': true,
         },
       },
@@ -174,9 +183,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       3 => (l.ob5Title, l.ob5Hint, l.tipDebts, _debtStep()),
       4 => (l.ob4Title, l.ob4Hint, l.tipPlanned, _plannedStep()),
       5 => (l.ob6Title, l.ob6Hint, l.tipPeople, _peopleStep()),
-      6 => (l.ob7Title, l.ob7Hint, l.tipLimits, _limitsStep()),
-      7 => (l.obGoalTitle, l.obGoalHint, l.tipGoal, _goalStep()),
-      8 => (l.obNotifTitle, l.obNotifHint, l.tipNotif, NotificationStep(values: _notif, onToggle: (k, v) => setState(() => _notif[k] = v))),
+      6 => (l.obDailyTitle, l.obDailyHint, l.tipDailyLimit, _dailyStep()),
+      7 => (l.ob7Title, l.ob7Hint, l.tipLimits, _limitsStep()),
+      8 => (l.obGoalTitle, l.obGoalHint, l.tipGoal, _goalStep()),
+      9 => (l.obNotifTitle, l.obNotifHint, l.tipNotif, NotificationStep(values: _notif, onToggle: (k, v) => setState(() => _notif[k] = v))),
       _ => (l.ob8Title, l.ob8Hint, l.tipSummary, _summaryStep(state)),
     };
 
@@ -294,6 +304,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             onSelected: (_) => setState(() => _accType = t),
           ),
       ]),
+      const SizedBox(height: 6),
+      Text(
+        switch (_accType) { 'cash' => l.accountTypeCashNote, 'deposit' => l.accountTypeDepositNote, _ => l.accountTypeCardNote },
+        style: TextStyle(fontSize: 12, color: context.fam.text2),
+      ),
       const SizedBox(height: 12),
       AmountField(controller: _accBalance, label: l.openingBalance, onChanged: (_) => setState(() {})),
       const SizedBox(height: 8),
@@ -415,6 +430,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ]),
       ),
     );
+  }
+
+  Widget _dailyStep() {
+    final l = context.l10n;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      AmountField(controller: _dailyLimit, label: l.limitAmountDay),
+      const SizedBox(height: 8),
+      Text(l.obDailyNote, style: TextStyle(fontSize: 12, color: context.fam.text2)),
+    ]);
   }
 
   Widget _limitsStep() {
@@ -759,6 +783,8 @@ Future<LimitResult?> showLimitSheet(BuildContext context, {Set<String> exclude =
         ),
         const SizedBox(height: 12),
         AmountField(controller: amount, label: l.limitAmount),
+        const SizedBox(height: 8),
+        Text(l.limitFormNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
         const SizedBox(height: 20),
         FilledButton(
           onPressed: () {

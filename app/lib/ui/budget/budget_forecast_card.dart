@@ -19,6 +19,7 @@ class BudgetForecastCard extends StatelessWidget {
     return AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         Expanded(child: Text(l.forecastEstimate, style: TextStyle(color: fam.text2))),
+        InfoTip(l.forecastHelp, title: l.forecastHelpTitle),
         MoneyText(f.estimate, color: negative ? fam.expense : null, style: const TextStyle(fontSize: 18)),
       ]),
       const SizedBox(height: 4),

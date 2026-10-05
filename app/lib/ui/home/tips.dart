@@ -23,7 +23,7 @@ import '../../state/app_state.dart';
 import '../widgets/common.dart';
 
 /// Куда ведёт совет; обработчики — в карточке на главной.
-enum TipAction { setLimit, addGoal, openCalendar, openLimits, addQuick, voice, telegram, add, openBudget, catchUp }
+enum TipAction { setLimit, addGoal, openCalendar, openLimits, addQuick, voice, telegram, add, openBudget, catchUp, openGuide }
 
 class Tip {
   const Tip(this.id, this.text, {this.actionLabel, this.action});
@@ -88,6 +88,7 @@ List<Tip> dataTipsFor(AppState s, AppLocalizations l) {
 List<Tip> tipsFor(AppState s, AppLocalizations l) {
   final app = <Tip>[
     if (s.dailyLimit == null) Tip('appLimit', l.adviceAppLimit, actionLabel: l.adviceActLimit, action: TipAction.setLimit),
+    Tip('appGuide', l.adviceAppGuide, actionLabel: l.adviceActGuide, action: TipAction.openGuide),
     if (s.goals.isEmpty) Tip('appGoal', l.adviceAppGoal, actionLabel: l.adviceActGoal, action: TipAction.addGoal),
     if (s.planned.isEmpty) Tip('appPlanned', l.adviceAppPlanned, actionLabel: l.adviceActCalendar, action: TipAction.openCalendar),
     if (s.limits.isEmpty) Tip('appCatLimit', l.adviceAppCatLimit, actionLabel: l.adviceActCatLimit, action: TipAction.openLimits),

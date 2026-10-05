@@ -439,10 +439,10 @@ void main() {
     await next(); // 3. счёт
     await tester.enterText(find.byType(TextField).at(1), '100000'); // остаток
     await tester.pump();
-    for (var i = 0; i < 6; i++) {
-      await next(); // кредиты, платежи, люди, лимиты, цель → уведомления
+    for (var i = 0; i < 7; i++) {
+      await next(); // кредиты, платежи, люди, дневной лимит, лимиты, цель → уведомления
     }
-    expect(find.text('Шаг 9 из 10'), findsOneWidget);
+    expect(find.text('Шаг 10 из 11'), findsOneWidget);
     expect(find.text('Уведомления'), findsWidgets);
     expect(find.text('Утренняя сводка'), findsOneWidget);
     expect(find.text('Вечерний отчёт'), findsOneWidget);
@@ -454,8 +454,8 @@ void main() {
 
     await tester.tap(find.text('Вечерний отчёт'));
     await tester.pump();
-    await next(); // 10. сводка
-    expect(find.text('Шаг 10 из 10'), findsOneWidget);
+    await next(); // 11. сводка
+    expect(find.text('Шаг 11 из 11'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Начать учёт'));
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pump(const Duration(milliseconds: 600));

@@ -11,6 +11,7 @@ import '../budget/limits_section.dart';
 import '../budget/month_close_screen.dart';
 import '../budget/sheets.dart';
 import '../more/accounts_screen.dart';
+import '../more/guide_screen.dart';
 import '../more/ai_screen.dart';
 import '../more/notifications_screen.dart';
 import '../more/settings_screen.dart';
@@ -240,7 +241,7 @@ class HomeScreen extends StatelessWidget {
         // Сколько в день позволяют свободные деньги до дохода (D73) — чтобы
         // выбирать лимит, зная, на что хватит денег.
         if (state.guide.dailyBudget > 0) ...[
-          Text(l.dailyLimitHint(moneyInText(state.guide.dailyBudget)), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ctx.fam.text2)),
+          Text((state.hasPayDay ? l.dailyLimitHint : l.dailyLimitHintMonth)(moneyInText(state.guide.dailyBudget)), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ctx.fam.text2)),
           const SizedBox(height: 4),
         ],
         Text(state.dailyLimitCarryOn ? l.dailyLimitNote : l.dailyLimitNoteNoCarry, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
@@ -578,6 +579,8 @@ class _TipCard extends StatelessWidget {
         onAdd();
       case TipAction.openBudget:
         onOpenBudget();
+      case TipAction.openGuide:
+        push(const GuideScreen());
       case TipAction.catchUp:
         final account = state.activeAccounts.where((a) => a.liquid).firstOrNull ?? state.activeAccounts.firstOrNull;
         if (account != null) showAdjustBalanceSheet(context, account.id);

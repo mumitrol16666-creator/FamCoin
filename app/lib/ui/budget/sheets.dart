@@ -379,8 +379,15 @@ Future<void> addAccountFlow(BuildContext context) async {
           for (final t in accountTypes)
             ChoiceChip(label: Text(accountTypeName(l, t)), selected: type == t, onSelected: (_) => set(() => type = t)),
         ]),
+        const SizedBox(height: 6),
+        Text(
+          switch (type) { 'cash' => l.accountTypeCashNote, 'deposit' => l.accountTypeDepositNote, _ => l.accountTypeCardNote },
+          style: TextStyle(fontSize: 12, color: ctx.fam.text2),
+        ),
         const SizedBox(height: 12),
         AmountField(controller: balance, label: l.openingBalance),
+        const SizedBox(height: 4),
+        Text(l.openingBalanceNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
         if (state.familyMode) ...[
           const SizedBox(height: 12),
           AccountOwnerPicker(value: owner, onChanged: (v) => set(() => owner = v)),
