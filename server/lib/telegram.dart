@@ -197,6 +197,12 @@ class Telegram {
   /// последней повторы идут с тем же интервалом.
   static const retryPauses = [Duration(seconds: 2), Duration(seconds: 5), Duration(seconds: 15), Duration(seconds: 30)];
 
+  /// Сколько раз повторяется платёж, который не обрабатывается. Постоянно
+  /// падающее событие не должно навсегда остановить всю очередь бота: после
+  /// этого числа попыток (около четверти часа) оно целиком записывается в журнал
+  /// для ручного разбора и пропускается.
+
+  static const maxPaymentAttempts = 30;
   final _attempts = <int, int>{};
 
   /// Следующий `offset` для getUpdates: всё до него Telegram считает
@@ -240,8 +246,14 @@ class Telegram {
       } catch (e, st) {
         if (_isPayment(u)) {
           final attempt = _attempts.update(id, (n) => n + 1, ifAbsent: () => 1);
-          stderr.writeln('telegram payment update $id: ${e.runtimeType}, попытка $attempt — событие не подтверждено, будет повторено\n$st');
-          return retryPauses[min(attempt, retryPauses.length) - 1];
+          if (attempt >= maxPaymentAttempts) {
+            // Платёж не удаётся записать: сохраняем событие целиком, чтобы
+            // начислить Pro вручную, и снимаем блокировку очереди.
+            stderr.writeln('telegram payment update $id: ${e.runtimeType}, $attempt попыток — пропущено, РАЗОБРАТЬ ВРУЧНУЮ: ${jsonEncode(u)}\n$st');
+          } else {
+            stderr.writeln('telegram payment update $id: ${e.runtimeType}, попытка $attempt — событие не подтверждено, будет повторено\n$st');
+            return retryPauses[min(attempt, retryPauses.length) - 1];
+          }
         }
         stderr.writeln('telegram update $id: ${e.runtimeType}\n$st');
       }

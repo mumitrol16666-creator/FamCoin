@@ -43,6 +43,26 @@ Map<String, dynamic> _callback(int updateId) => {
     };
 
 void main() {
+  test('платёж, который не обрабатывается 30 раз, пропускается: очередь бота не блокируется навсегда', () async {
+    final tg = _FakeTelegram()..batches.add([_payment(100, 'chBad'), _callback(101)]);
+    var calls = 0;
+    var handled = 0;
+    tg.onPayment = (chatId, from, payment) async {
+      calls++;
+      throw StateError('вечная ошибка');
+    };
+    tg.onCallback = (q) async => handled++;
+    for (var i = 0; i < Telegram.maxPaymentAttempts - 1; i++) {
+      expect(await tg.pollOnce(), greaterThan(Duration.zero));
+      expect(tg.offset, 0, reason: 'до предела событие не подтверждено');
+    }
+    expect(handled, 0, reason: 'следующие события ждут');
+    expect(await tg.pollOnce(), Duration.zero);
+    expect(calls, Telegram.maxPaymentAttempts);
+    expect(tg.offset, 102, reason: 'после предела платёж записан в журнал, offset ушёл дальше');
+    expect(handled, 1, reason: 'очередь снова идёт');
+  });
+
   test('оплата: обработчик упал до сохранения — offset не двигается, событие приходит снова и обрабатывается', () async {
     final tg = _FakeTelegram()..batches.add([_callback(99), _payment(100, 'ch1')]);
     final seen = <String>[];
