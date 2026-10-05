@@ -46,7 +46,7 @@ void main() {
       final fresh = tipsFor(s, ru);
       expect(fresh.map((t) => t.id).take(4), ['appLimit', 'moneyPayFirst', 'appGoal', 'moneyTenPercent']);
       expect(fresh.map((t) => t.id).toSet().length, fresh.length, reason: 'без повторов');
-      expect(fresh.where((t) => t.id.startsWith('money')).length, 24);
+      expect(fresh.where((t) => t.id.startsWith('money')).length, moneyTips.length);
 
       await s.setDailyLimit(kzt(5000));
       await s.upsert('quick', 'q1', const QuickAction('', 'Кофе', 'cafe', 150000).toJson());
@@ -56,7 +56,7 @@ void main() {
       expect(later.map((t) => t.id), contains('appGoal'));
       // Общие советы остаются всегда: пул не бывает пустым. Берутся из ядра —
       // те же, что в утренней сводке бота, — на языке интерфейса.
-      expect(later.where((t) => t.id.startsWith('money')).length, 24);
+      expect(later.where((t) => t.id.startsWith('money')).length, moneyTips.length);
       expect(later.where((t) => t.id.startsWith('money')).map((t) => t.text), moneyTips.map((t) => t.ru));
       expect(tipsFor(s, AppLocalizationsKk()).where((t) => t.id.startsWith('money')).map((t) => t.text), moneyTips.map((t) => t.kk));
       expect(dataTipsFor(s, ru), isEmpty, reason: 'у новичка поводов для советов по данным нет');
@@ -188,18 +188,26 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('на 320 px и тексте 200 % — без переполнений', (tester) async {
-      await pumpApp(tester, home: const Shell(), size: const Size(320, 694), textScale: 2, prefs: const {'pushPromptDismissed': true});
-      // Секции появляются с затуханием: пока они прозрачны, переполнение не
-      // рисуется и не ловится — поэтому прокручиваем и даём кадрам пройти.
-      await tester.dragUntilVisible(find.byIcon(Icons.lightbulb_outline), find.byType(ListView).first, const Offset(0, -200));
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.dragUntilVisible(find.text(ru.recent), find.byType(ListView).first, const Offset(0, -300));
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-    });
+    for (final l in [AppLocalizationsRu(), AppLocalizationsKk()]) {
+      testWidgets('длинный совет ${l.localeName} на 320 px и тексте 200 % — без переполнений', (tester) async {
+        final sample = FakeServer();
+        await sample.init();
+        final pool = tipsFor(sample.state, l);
+        final longest = pool.reduce((a, b) => a.text.length >= b.text.length ? a : b);
+        await pumpApp(tester, home: const Shell(), size: const Size(320, 694), textScale: 2, locale: Locale(l.localeName),
+            prefs: {'pushPromptDismissed': true, 'tipCursor': pool.indexOf(longest)});
+        // Секции появляются с затуханием: пока они прозрачны, переполнение не
+        // рисуется и не ловится — поэтому прокручиваем и даём кадрам пройти.
+        await tester.dragUntilVisible(find.byIcon(Icons.lightbulb_outline), find.byType(ListView).first, const Offset(0, -200));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget);
+        expect(find.text(longest.text), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.dragUntilVisible(find.text(l.recent), find.byType(ListView).first, const Offset(0, -300));
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      });
+    }
   });
 }
