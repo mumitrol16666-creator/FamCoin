@@ -34,6 +34,7 @@ String? aiActionLabel(AppLocalizations l, String id) => switch (id) {
       'analytics_overview' => l.aiGoOverview,
       'analytics_expenses' => l.aiGoExpenses,
       'analytics_budget' => l.aiGoBudget,
+      'debts' => l.aiGoDebts,
       'analytics_capital' => l.aiGoCapital,
       'analytics_history' => l.aiGoHistory,
       'limits' => l.aiGoLimits,
@@ -84,6 +85,8 @@ Future<void> runAiAction(BuildContext context, String id) async {
     case 'analytics_expenses':
       tab(() => Shell.openAnalytics(AnalyticsSection.expenses));
     case 'analytics_budget':
+      tab(() => Shell.openAnalytics(AnalyticsSection.budget));
+    case 'debts':
       tab(() => Shell.openAnalytics(AnalyticsSection.budget));
     case 'analytics_capital':
       tab(() => Shell.openAnalytics(AnalyticsSection.capital));
