@@ -1,0 +1,25 @@
+[
+  {
+    "case": "missing-backup",
+    "exit": 1,
+    "dockerCalls": [
+      "compose stop api",
+      "compose exec -T db psql -U famcoin -d postgres -c DROP DATABASE IF EXISTS famcoin -c CREATE DATABASE famcoin OWNER famcoin",
+      "compose exec -T db psql -U famcoin -d famcoin -q"
+    ],
+    "stdout": "",
+    "stderr": "gunzip: can't stat: /var/folders/5t/trcd5xdx271_48q0b7kj2lpw0000gn/T/famcoin-restore-probe-a689g47u/does-not-exist.sql.gz (/var/folders/5t/trcd5xdx271_48q0b7kj2lpw0000gn/T/famcoin-restore-probe-a689g47u/does-not-exist.sql.gz.gz): No such file or directory\nERROR: simulated SQL error (psql default continues)"
+  },
+  {
+    "case": "sql-error",
+    "exit": 0,
+    "dockerCalls": [
+      "compose stop api",
+      "compose exec -T db psql -U famcoin -d postgres -c DROP DATABASE IF EXISTS famcoin -c CREATE DATABASE famcoin OWNER famcoin",
+      "compose exec -T db psql -U famcoin -d famcoin -q",
+      "compose start api"
+    ],
+    "stdout": "восстановлено из /var/folders/5t/trcd5xdx271_48q0b7kj2lpw0000gn/T/famcoin-restore-probe-a689g47u/sql-error.sql.gz",
+    "stderr": "ERROR: simulated SQL error (psql default continues)"
+  }
+]

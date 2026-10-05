@@ -55,7 +55,8 @@ Future<void> exportData(BuildContext context, {required String format}) async {
     'status:cancelled': l.cancelled,
     'status:reversal': l.statusReversal,
   });
-  final headers = [l.date, l.csvTime, l.csvType, l.category, l.account, l.amount, l.note, l.forWhom, l.csvStatus, 'ID'];
+  // Два последних столбца — перевод (S04): на какой счёт и комиссия отдельно.
+  final headers = [l.date, l.csvTime, l.csvType, l.category, l.account, l.amount, l.note, l.forWhom, l.csvStatus, 'ID', l.toAccount, l.csvFee];
 
   messenger.showSnackBar(SnackBar(content: Text(l.exportOpening), duration: const Duration(seconds: 2)));
   final ok = await runAction(context, () async {

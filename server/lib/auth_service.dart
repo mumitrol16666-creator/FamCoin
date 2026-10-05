@@ -284,9 +284,20 @@ class AuthService {
   }
 }
 
+/// Блокировка строки владельца — первое, что берёт любая запись его данных
+/// (`LedgerService.command` делает то же): «владелец → дочерние таблицы».
+/// Пока сброс или удаление держат строку, чужая команда ждёт и затем получает
+/// отказ «аккаунта нет»/пустой журнал, а не внешний ключ на половину стёртых
+/// проводок (S05). Нет владельца — 404.
+Future<void> _lockOwner(Session tx, String userId) async {
+  final r = await tx.execute(Sql.named('SELECT 1 FROM users WHERE id = @u FOR UPDATE'), parameters: {'u': userId});
+  if (r.isEmpty) throw ApiError(404, 'not_found');
+}
+
 /// «Начать всё заново»: стереть журнал, справочники, планы, уведомления и
 /// анкету, оставив аккаунт, вход, тариф и настройки Telegram.
 Future<void> resetUserData(Pool db, String userId) => db.runTx((tx) async {
+      await _lockOwner(tx, userId);
       for (final table in ['month_reconciliations', 'postings', 'reservations', 'transactions', 'ledger_accounts', 'entities', 'commands', 'notifications', 'telegram_drafts', 'telegram_imports', 'ai_conversations', 'ai_monthly_reviews']) {
         await tx.execute(Sql.named('DELETE FROM $table WHERE user_id = @u'), parameters: {'u': userId});
       }
@@ -302,6 +313,7 @@ Future<void> resetUserData(Pool db, String userId) => db.runTx((tx) async {
 /// каскад от `users` их не удаляет: журнал очищается явно по порядку, остальное
 /// (справочники, команды, сессии, уведомления, платежи) — каскадом.
 Future<void> deleteUserData(Pool db, String userId) => db.runTx((tx) async {
+      await _lockOwner(tx, userId);
       for (final table in ['postings', 'reservations', 'transactions', 'ledger_accounts']) {
         await tx.execute(Sql.named('DELETE FROM $table WHERE user_id = @u'), parameters: {'u': userId});
       }

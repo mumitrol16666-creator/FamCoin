@@ -73,7 +73,7 @@ class _MonthCloseScreenState extends State<MonthCloseScreen> {
             for (final a in accounts)
               if (_checked[a.id] != balances[a.id]) a.id,
           ];
-          final due = state.dueItems(lastDay).where((d) => !d.date.isBefore(m)).toList();
+          final due = state.unpaidOccurrences(m, lastDay);
           final savedAt = state.monthReconciliation(m)?['closedAt'] as String?;
 
           return Column(

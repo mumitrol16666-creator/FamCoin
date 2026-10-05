@@ -1,0 +1,229 @@
+Resolving dependencies...
+Downloading packages...
+  code_assets 1.2.1 (2.1.0 available)
+  flutter_lints 5.0.0 (6.0.0 available)
+  flutter_secure_storage 10.3.4 (11.2.0 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.3 available)
+  google_fonts 6.3.3 (9.0.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  jni 1.0.3 (1.1.0 available)
+  lints 5.1.1 (6.1.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.2 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  url_launcher 6.3.2 (6.3.3 available)
+  vector_math 2.4.0 (2.4.3 available)
+Got dependencies!
+15 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/analytics_tabs_test.dart
+00:00 +0: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/analytics_tabs_test.dart: История открывает выбранный месяц и не повторяет график капитала
+00:00 +1: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/push_enable_test.dart: разрешение до сети; успех только после сервера, плашка уходит сразу
+00:01 +2: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/push_enable_test.dart: разрешение до сети; успех только после сервера, плашка уходит сразу
+00:01 +3: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/push_enable_test.dart: разрешение до сети; успех только после сервера, плашка уходит сразу
+00:01 +4: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/push_enable_test.dart: разрешение до сети; успех только после сервера, плашка уходит сразу
+00:01 +5: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +6: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +7: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +8: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +9: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +10: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +11: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +12: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +13: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +14: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +15: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +16: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +17: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +18: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +19: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +20: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +21: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +22: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +23: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +24: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:01 +25: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +26: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +27: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +28: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +29: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +30: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +31: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +32: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +33: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +34: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: анкета: шаг «Сколько тратить в день на мелочи?» сумма из анкеты становится дневным лимитом с историей и датой начала
+00:02 +35: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/update_check_test.dart: плашка «Вышло обновление»: кнопка «Обновить» видна в строке, «Позже» прячет
+00:02 +36: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/update_check_test.dart: плашка «Вышло обновление»: кнопка «Обновить» видна в строке, «Позже» прячет
+00:02 +37: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/update_check_test.dart: плашка «Вышло обновление»: кнопка «Обновить» видна в строке, «Позже» прячет
+00:02 +38: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/push_enable_test.dart: кнопка показывает ожидание и не отправляет повторные запросы
+00:02 +39: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: «Как устроен FamCoin» есть в «Ещё», семь карточек, кнопка ведёт в нужное место
+00:03 +40: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: «Как устроен FamCoin» есть в «Ещё», семь карточек, кнопка ведёт в нужное место
+00:03 +41: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: «Как устроен FamCoin» есть в «Ещё», семь карточек, кнопка ведёт в нужное место
+00:03 +42: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debts_in_expenses_test.dart: «Реализовать цель»: накопленное списывается расходом в категорию, вне лимита, цель закрыта
+00:03 +43: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_c_test.dart: «Как устроен FamCoin» на 320 px и тексте 200 % — без переполнений
+00:03 +44: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debts_in_expenses_test.dart: сверка: «Уже оплачено» открывает оплату датой срока и записывает расход этой датой
+00:03 +45: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debts_in_expenses_test.dart: сверка: «Уже оплачено» открывает оплату датой срока и записывает расход этой датой
+00:04 +46: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debts_in_expenses_test.dart: сверка: «Уже оплачено» открывает оплату датой срока и записывает расход этой датой
+00:04 +47: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debts_in_expenses_test.dart: сверка: «Уже оплачено» открывает оплату датой срока и записывает расход этой датой
+00:04 +48: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж7 периодичность платежа «Каждую неделю» + день недели: форма создаёт недельный платёж, сроки идут по средам
+00:04 +49: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж7 периодичность платежа «Каждую неделю» + день недели: форма создаёт недельный платёж, сроки идут по средам
+00:04 +50: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж7 периодичность платежа «Каждую неделю» + день недели: форма создаёт недельный платёж, сроки идут по средам
+00:04 +51: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж7 периодичность платежа «Каждую неделю» + день недели: форма создаёт недельный платёж, сроки идут по средам
+00:04 +52: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж7 периодичность платежа «Каждую неделю» + день недели: форма создаёт недельный платёж, сроки идут по средам
+00:04 +53: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж7 периодичность платежа «Каждую неделю» + день недели: форма создаёт недельный платёж, сроки идут по средам
+00:04 +54: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж7 периодичность платежа «Каждую неделю» + день недели: форма создаёт недельный платёж, сроки идут по средам
+00:05 +55: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/pro_celebration_test.dart: сцена Pro: вырастает, показывает открытое, закрывается кнопкой
+00:05 +56: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/pro_celebration_test.dart: сцена Pro: вырастает, показывает открытое, закрывается кнопкой
+00:05 +57: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/pro_celebration_test.dart: сцена Pro: вырастает, показывает открытое, закрывается кнопкой
+00:05 +58: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/pro_celebration_test.dart: сцена Pro: вырастает, показывает открытое, закрывается кнопкой
+00:05 +59: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждый месяц» на 320 px и тексте 200 % — без переполнений
+00:07 +60: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +61: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +62: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +63: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +64: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +65: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +66: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +67: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +68: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +69: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: вёрстка форма платежа «Каждую неделю» на 320 px и тексте 200 % — без переполнений
+00:07 +70: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/widget_test.dart: цель с копилкой: перевод в копилку не тратит дневной лимит и не считается расходом
+00:07 +71: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/month_reconciliation_test.dart: настоящая оболочка: предупреждение до записи, отмена сохраняет данные, подтверждение пересчитывает
+00:07 +72: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/month_reconciliation_test.dart: настоящая оболочка: предупреждение до записи, отмена сохраняет данные, подтверждение пересчитывает
+00:07 +73: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/month_reconciliation_test.dart: настоящая оболочка: предупреждение до записи, отмена сохраняет данные, подтверждение пересчитывает
+00:07 +74: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/month_reconciliation_test.dart: настоящая оболочка: предупреждение до записи, отмена сохраняет данные, подтверждение пересчитывает
+00:07 +75: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/month_reconciliation_test.dart: настоящая оболочка: предупреждение до записи, отмена сохраняет данные, подтверждение пересчитывает
+00:07 +76: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/month_reconciliation_test.dart: настоящая оболочка: предупреждение до записи, отмена сохраняет данные, подтверждение пересчитывает
+00:07 +77: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/month_reconciliation_test.dart: настоящая оболочка: предупреждение до записи, отмена сохраняет данные, подтверждение пересчитывает
+00:07 +78: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/month_reconciliation_test.dart: настоящая оболочка: предупреждение до записи, отмена сохраняет данные, подтверждение пересчитывает
+00:09 +79: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж12 правка и удаление платежа «Удалить платёж» спрашивает подтверждение и убирает платёж
+00:09 +80: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж12 правка и удаление платежа «Удалить платёж» спрашивает подтверждение и убирает платёж
+00:09 +81: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж12 правка и удаление платежа «Удалить платёж» спрашивает подтверждение и убирает платёж
+00:09 +82: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж12 правка и удаление платежа «Удалить платёж» спрашивает подтверждение и убирает платёж
+00:09 +83: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_b_test.dart: Ж12 правка и удаление платежа «Удалить платёж» спрашивает подтверждение и убирает платёж
+00:09 +84: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/income_goals_test.dart: когда предлагать нужны незакрытые цели с копилкой, заметный доход и не выключенное предложение
+00:09 +85: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/income_goals_test.dart: когда предлагать нужны незакрытые цели с копилкой, заметный доход и не выключенное предложение
+00:09 +86: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:09 +87: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:09 +88: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:09 +89: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:09 +90: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:10 +91: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:10 +92: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:10 +93: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:10 +94: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:10 +95: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:10 +96: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:10 +97: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:10 +98: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:10 +99: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж1 покупка в рассрочку расход сейчас, долг на остаток, график в календаре
+00:11 +100: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/income_goals_test.dart: после дохода — лист с подсказкой, «Отложить» переводит в копилку; «Не предлагать» выключает
+00:11 +101: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/income_goals_test.dart: после дохода — лист с подсказкой, «Отложить» переводит в копилку; «Не предлагать» выключает
+00:11 +102: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/income_goals_test.dart: после дохода — лист с подсказкой, «Отложить» переводит в копилку; «Не предлагать» выключает
+00:12 +103: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/income_goals_test.dart: после дохода — лист с подсказкой, «Отложить» переводит в копилку; «Не предлагать» выключает
+00:12 +104: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/audit_regression_test.dart: возврат уменьшает траты дня покупки, а не дня возврата; покупку с возвратом нельзя удалить
+00:12 +105: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +106: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +107: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +108: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +109: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +110: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +111: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +112: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +113: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +114: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +115: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» расход с названием кредита в заметке → вопрос → лист оплаты уменьшает долг
+00:12 +116: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/audit_regression_test.dart: D88: разовая покупка — один срок в своём месяце, не ежемесячный платёж; «купил» — расход вне лимита
+00:12 +117: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +118: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +119: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +120: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +121: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +122: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +123: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +124: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +125: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +126: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +127: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +128: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +129: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» «Обычный расход» — записывается как расход, вопрос не повторяется
+00:12 +130: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/layout_test.dart: главная на 320 px и тексте 200 % — без переполнений
+00:14 +131: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/tips_test.dart: пул советов у новичка: по очереди про приложение и про деньги; подсказки исчезают, когда сделано
+00:14 +132: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/ux_gaps_a_test.dart: Ж2 платёж по кредиту через «＋» без похожего названия вопроса нет
+00:15 +133: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/layout_test.dart: «Как посчитано» (D73): карточка говорит, что доступное ограничено деньгами; разбор открывается без переполнений
+00:15 +134: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:15 +135: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:15 +136: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:15 +137: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:15 +138: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:15 +139: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:15 +140: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:16 +141: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:16 +142: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:16 +143: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:16 +144: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:16 +145: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:16 +146: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:16 +147: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: ru: справка по выбранному виду долга, без автопоказа и потери черновика
+00:16 +148: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/layout_test.dart: форма операции на 360×732: подписи в строку, «Сохранить» видна, черновик защищён
+00:16 +149: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: редактирование, подтверждение удаления и ограничение двух лимитов сохранены
+00:16 +150: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: редактирование, подтверждение удаления и ограничение двух лимитов сохранены
+00:16 +151: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: редактирование, подтверждение удаления и ограничение двух лимитов сохранены
+00:17 +152: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: редактирование, подтверждение удаления и ограничение двух лимитов сохранены
+00:17 +153: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: kk: справка по выбранному виду долга, без автопоказа и потери черновика
+00:17 +154: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: kk: справка по выбранному виду долга, без автопоказа и потери черновика
+00:17 +155: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: kk: справка по выбранному виду долга, без автопоказа и потери черновика
+00:17 +156: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: kk: справка по выбранному виду долга, без автопоказа и потери черновика
+00:17 +157: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/debt_help_test.dart: kk: справка по выбранному виду долга, без автопоказа и потери черновика
+00:17 +158: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: полночь обновляет карточку без действий и сети; перенос=false
+00:17 +159: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: полночь обновляет карточку без действий и сети; перенос=false
+00:17 +160: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: полночь обновляет карточку без действий и сети; перенос=false
+00:17 +161: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: полночь обновляет карточку без действий и сети; перенос=false
+00:17 +162: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: полночь обновляет карточку без действий и сети; перенос=false
+00:18 +163: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: полночь обновляет карточку без действий и сети; перенос=false
+00:18 +164: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: полночь обновляет карточку без действий и сети; перенос=false
+00:18 +165: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: полный список: поиск, фильтры, возврат из подробностей и доступ к последнему из 35 лимитов
+00:18 +166: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/layout_test.dart: плитка: долгое нажатие записывает другую сумму, плитка не меняется (D106)
+00:18 +167: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: полночь обновляет карточку без действий и сети; перенос=true
+00:18 +168: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: полночь обновляет карточку без действий и сети; перенос=true
+00:18 +169: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: полный список: когда все категории заняты, добавление создаёт новую категорию и лимит
+00:18 +170: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: полный список: когда все категории заняты, добавление создаёт новую категорию и лимит
+00:18 +171: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: полный список: когда все категории заняты, добавление создаёт новую категорию и лимит
+00:18 +172: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: полный список: когда все категории заняты, добавление создаёт новую категорию и лимит
+00:18 +173: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: полный список: когда все категории заняты, добавление создаёт новую категорию и лимит
+00:18 +174: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/layout_test.dart: сверка месяца (D75): карточка на главной, итоги и вопросы сразу, «Подтвердить сверку» снимает карточку
+00:18 +175: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/layout_test.dart: сверка месяца (D75): карточка на главной, итоги и вопросы сразу, «Подтвердить сверку» снимает карточку
+00:19 +176: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/charts_test.dart: нажатие на сектор открывает его категорию
+00:19 +177: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/charts_test.dart: нажатие на сектор открывает его категорию
+00:19 +178: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/charts_test.dart: нажатие на сектор открывает его категорию
+00:22 +179: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/charts_test.dart: нажатие на сектор открывает его категорию
+00:22 +180: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/charts_test.dart: нажатие на сектор открывает его категорию
+00:22 +181: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: kk, 320 px, текст 100.0%: крупные суммы, длинная категория и подробности
+00:22 +182: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: kk, 320 px, текст 100.0%: крупные суммы, длинная категория и подробности
+00:22 +183: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: kk, 320 px, текст 100.0%: крупные суммы, длинная категория и подробности
+00:22 +184: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: kk, 320 px, текст 100.0%: крупные суммы, длинная категория и подробности
+00:22 +185: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: смена дня сохраняет ограничение деньгами на счетах
+00:22 +186: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: смена дня сохраняет ограничение деньгами на счетах
+00:22 +187: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: смена дня сохраняет ограничение деньгами на счетах
+00:22 +188: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: смена дня сохраняет ограничение деньгами на счетах
+00:22 +189: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: смена дня сохраняет ограничение деньгами на счетах
+00:22 +190: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: kk, 320 px, текст 200.0%: крупные суммы, длинная категория и подробности
+00:22 +191: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/limits_section_test.dart: kk, 320 px, текст 200.0%: крупные суммы, длинная категория и подробности
+00:22 +192: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/charts_test.dart: категории ru, 320 px, масштаб 1.0: выбор, раскрытие, отрицательный итог
+00:23 +193: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/day_rollover_test.dart: выход отменяет таймер прежней сессии
+00:23 +194: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/layout_test.dart: счёт подставляет «для кого» по владельцу, ручной выбор не сбрасывается
+00:23 +195: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/layout_test.dart: счёт подставляет «для кого» по владельцу, ручной выбор не сбрасывается
+00:23 +196: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/layout_test.dart: счёт подставляет «для кого» по владельцу, ручной выбор не сбрасывается
+00:23 +197: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: нижняя панель открывает Аналитику; Бюджет внутри, без дубля в Ещё
+00:23 +198: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: нижняя панель открывает Аналитику; Бюджет внутри, без дубля в Ещё
+00:23 +199: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: нижняя панель открывает Аналитику; Бюджет внутри, без дубля в Ещё
+00:23 +200: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: нижняя панель открывает Аналитику; Бюджет внутри, без дубля в Ещё
+00:23 +201: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: нижняя панель открывает Аналитику; Бюджет внутри, без дубля в Ещё
+00:23 +202: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: нижняя панель открывает Аналитику; Бюджет внутри, без дубля в Ещё
+00:23 +203: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: нижняя панель открывает Аналитику; Бюджет внутри, без дубля в Ещё
+00:24 +204: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: ИИ на главной: телефон 320 px, крупный текст, ru
+00:24 +205: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: ИИ на главной: телефон 320 px, крупный текст, kk
+00:24 +206: /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/navigation_test.dart: ИИ: боковая панель, отправка вопроса и повторное открытие истории
+00:24 +207: All tests passed!

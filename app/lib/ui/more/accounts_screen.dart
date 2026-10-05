@@ -104,6 +104,19 @@ class AccountScreen extends StatelessWidget {
                     }
                   },
                   itemBuilder: (_) => [PopupMenuItem(value: 'archive', child: Text(l.archive))],
+                )
+              else
+                // Возврат из архива (C08): и для отмены импорта с заменой остатка, о
+                // чём просит бот. В обычной версии активный счёт один — как при добавлении.
+                PopupMenuButton<String>(
+                  onSelected: (_) async {
+                    if (!state.pro && state.activeAccounts.isNotEmpty) {
+                      await showProGate(context, l.proGateAccounts);
+                      return;
+                    }
+                    await runAction(context, () => state.send({'type': 'archiveAccount', 'accountId': accountId, 'archived': false}));
+                  },
+                  itemBuilder: (_) => [PopupMenuItem(value: 'unarchive', child: Text(l.unarchiveAccount))],
                 ),
             ],
           ),

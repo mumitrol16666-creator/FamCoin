@@ -50,6 +50,8 @@ class Schedule {
 
 /// Строит график: проценты на остаток, тело = платёж − проценты,
 /// последний платёж закрывает остаток с учётом округлений.
+/// При заданном сроке округление закрывается в его последнем месяце.
+/// Явный `payment` имеет приоритет над `months`: срок зависит от платежа.
 /// Если платёж не покрывает проценты, возвращает `null` — долг не гасится.
 Schedule? buildSchedule({
   required int principal,
@@ -63,6 +65,7 @@ Schedule? buildSchedule({
     throw ArgumentError('Нужен payment или months');
   }
   final r = monthlyRate(annualRatePercent);
+  final fixedTerm = payment == null ? months : null;
   final a = payment ??
       annuityPayment(
           principal: principal, annualRatePercent: annualRatePercent, months: months!);
@@ -76,7 +79,7 @@ Schedule? buildSchedule({
     if (a <= interest && balance > 0) return null;
     var body = a - interest;
     var pay = a;
-    if (body >= balance) {
+    if (body >= balance || i == fixedTerm) {
       body = balance;
       pay = body + interest;
     }
@@ -159,7 +162,7 @@ EarlyRepayment earlyRepayment({
   final newPayment = annuityPayment(
       principal: b, annualRatePercent: annualRatePercent, months: baseline.months);
   final sameTerm = buildSchedule(
-          principal: b, annualRatePercent: annualRatePercent, payment: newPayment) ??
+          principal: b, annualRatePercent: annualRatePercent, months: baseline.months) ??
       shorter;
   return EarlyRepayment(
     balanceAfter: b,

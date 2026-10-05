@@ -140,9 +140,10 @@ class TxView {
         return TxView(
           title: '${forgiven ? l.debtForgiven : l.debtWrittenOff} · $person',
           subtitle: [if (note.isNotEmpty) note],
-          amount: forgiven ? income : -expense,
+          // Не доход и не расход (D124): сумма закрытого долга без знака.
+          amount: tx.postings.where((p) => p.amount < 0 || forgiven).map((p) => p.amount.abs()).fold(0, (a, b) => a > b ? a : b),
           icon: Icons.handshake_outlined,
-          kind: forgiven ? 'income' : 'expense',
+          kind: 'neutral',
         );
       case EventType.creditPurchase:
         return TxView(

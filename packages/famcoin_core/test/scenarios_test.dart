@@ -79,6 +79,26 @@ void main() {
       expect(l.report(periodFrom, periodTo).expense, kzt(5000));
     });
 
+    test('C06/T16 трата из цели с отрицательной суммой: операции нет, резерв и деньги прежние', () {
+      final l = seed()..reserve(goalId: 'trip', accountId: 'kaspi', amount: kzt(20000));
+      l.ensure(expenseAccount('travel'), LedgerKind.expense);
+      final tx = Transaction(
+        id: 'e',
+        date: d1,
+        type: EventType.expense,
+        postings: [Posting(expenseAccount('travel'), kzt(5000)), Posting('kaspi', -kzt(5000))],
+      );
+      for (final bad in [-kzt(5000), 0]) {
+        expect(
+          () => l.postFromReservation(tx, goalId: 'trip', accountId: 'kaspi', amount: bad),
+          throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'invalidAmount')),
+        );
+      }
+      expect(l.reserved(goalId: 'trip'), kzt(20000));
+      expect(l.balance('kaspi'), kzt(100000));
+      expect(l.byId('e'), isNull);
+    });
+
     test('резерв не может превышать доступный остаток', () {
       final l = seed();
       expect(

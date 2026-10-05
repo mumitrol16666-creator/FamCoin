@@ -5,6 +5,7 @@ import 'package:famcoin_core/famcoin_core.dart';
 import 'package:test/test.dart';
 
 void main() {
+  scheduleVersionTests();
   List<String> p(PaySchedule s, DateTime a, DateTime b) => [for (final o in s.occurrences(a, b)) o.toString()];
 
   test('ежемесячный: ключ ГГГГ-ММ, 31-е в коротком месяце — последний день', () {
@@ -62,5 +63,43 @@ void main() {
     expect(const PaySchedule(day: 10).scanFrom(today), DateTime(2026, 10, 1));
     expect(PaySchedule(day: 10, start: DateTime(2026, 8, 3)).scanFrom(today), DateTime(2026, 8, 3));
     expect(const PaySchedule(day: 10, once: '2027-03').scanFrom(today), DateTime(2027, 3, 1));
+  });
+}
+
+void scheduleVersionTests() {
+  group('R03 версии расписания', () {
+    List<String> keys(PaySchedule s, DateTime a, DateTime b) => [for (final o in s.occurrences(a, b)) o.period];
+
+    test('смена дня недели со сегодняшней даты не создаёт сроки в оплаченном прошлом', () {
+      const monday = PaySchedule(every: everyWeek, weekday: 1);
+      final old = PaySchedule(every: everyWeek, weekday: 1, start: DateTime(2026, 9, 1));
+      final next = PaySchedule(every: everyWeek, weekday: 2, start: DateTime(2026, 9, 28), previous: old);
+      expect(monday.every, everyWeek);
+      // Сентябрьские понедельники остались прежними, новые сроки — вторники.
+      expect(keys(next, DateTime(2026, 9, 1), DateTime(2026, 10, 13)),
+          ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-29', '2026-10-06', '2026-10-13']);
+    });
+
+    test('смена периодичности месяц → неделя: оплаченные месяцы сохраняют ключи ГГГГ-ММ', () {
+      final old = PaySchedule(day: 10, start: DateTime(2026, 8, 1));
+      final next = PaySchedule(every: everyWeek, weekday: 3, start: DateTime(2026, 10, 1), previous: old);
+      expect(keys(next, DateTime(2026, 8, 1), DateTime(2026, 10, 14)), ['2026-08', '2026-09', '2026-10-07', '2026-10-14']);
+    });
+
+    test('toJson / fromJson сохраняют цепочку версий', () {
+      final v1 = PaySchedule(day: 5, start: DateTime(2026, 1, 1));
+      final v2 = PaySchedule(day: 20, start: DateTime(2026, 6, 1), previous: v1);
+      final back = PaySchedule.fromJson(v2.toJson().cast<String, dynamic>());
+      expect(back.previous?.day, 5);
+      expect(back.start, DateTime(2026, 6, 1));
+      expect(keys(back, DateTime(2026, 5, 1), DateTime(2026, 7, 31)), ['2026-05', '2026-06', '2026-07']);
+      expect(back.occurrences(DateTime(2026, 5, 1), DateTime(2026, 7, 31)).map((o) => o.date.day), [5, 20, 20]);
+    });
+
+    test('scanFrom учитывает прежнюю версию', () {
+      final v1 = PaySchedule(day: 5, start: DateTime(2026, 3, 1));
+      final v2 = PaySchedule(day: 20, start: DateTime(2026, 6, 1), previous: v1);
+      expect(v2.scanFrom(DateTime(2026, 10, 5)), DateTime(2026, 3, 1));
+    });
   });
 }

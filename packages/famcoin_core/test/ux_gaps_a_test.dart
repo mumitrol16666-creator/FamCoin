@@ -19,7 +19,7 @@ void main() {
     ..openingBalance(id: 'opening', date: september, account: 'cash', amount: kzt(100000));
 
   group('Ж6 списание долга', () {
-    test('«мне должны» списывается в расход «Прочее», долг закрывается, деньги не меняются', () {
+    test('«мне должны» списывается без доходов и расходов, долг закрывается, деньги не меняются', () {
       final l = base();
       l.lendOut(id: 'lend', date: september, account: 'cash', person: 'Друг', amount: kzt(50000));
       expect(l.balance(receivableAccount('Друг')), kzt(50000));
@@ -27,25 +27,31 @@ void main() {
       expect(l.balance(receivableAccount('Друг')), 0);
       expect(l.balance('cash'), kzt(50000));
       final r = l.report(september, october);
-      expect(r.expense, kzt(50000));
+      expect(r.expense, 0, reason: 'списание — не расход (D124)');
       expect(r.income, 0);
+      expect(r.writtenOff, kzt(50000));
+      expect(r.forgiven, 0);
       expect(r.cashFlow, -kzt(50000), reason: 'деньги ушли, когда давали в долг');
+      expect(l.netWorth().capital, kzt(50000), reason: 'потеря 50 000 уменьшила капитал');
       final tx = l.byId('wo')!;
       expect(tx.type, EventType.writeOff);
       expect(tx.meta['person'], 'Друг');
       expect(tx.meta['note'], 'не вернёт');
     });
 
-    test('«я должен» прощён — доход «Прочий доход», долг закрыт', () {
+    test('«я должен» закрыт без оплаты — не доход, долг закрыт, капитал вырос', () {
       final l = base();
       l.borrow(id: 'borrow', date: september, account: 'cash', person: 'Брат', amount: kzt(30000));
       applyLedgerCommand(l, {'type': 'writeOff', 'id': 'wo', 'date': '2026-09-20', 'person': 'Брат', 'amount': '${kzt(30000)}', 'side': 'liability'});
       expect(l.balance(liabilityAccount('Брат')), 0);
       expect(l.balance('cash'), kzt(130000));
       final r = l.report(september, october);
-      expect(r.income, kzt(30000));
+      expect(r.income, 0, reason: 'закрытие долга без оплаты — не доход (D124)');
       expect(r.expense, 0);
+      expect(r.forgiven, kzt(30000));
+      expect(r.writtenOff, 0);
       expect(r.borrowed, kzt(30000));
+      expect(l.netWorth().capital, kzt(130000));
     });
 
     test('частичное списание и запрет списать больше остатка', () {
@@ -66,7 +72,8 @@ void main() {
       l.writeOff(id: 'wo', date: september, person: 'Друг', amount: kzt(50000), receivable: true);
       l.reverse('wo', newId: 'rev');
       expect(l.balance(receivableAccount('Друг')), kzt(50000));
-      expect(l.report(september, october).expense, 0);
+      expect(l.report(september, october).writtenOff, 0);
+      expect(l.netWorth().capital, kzt(100000));
     });
   });
 
@@ -155,6 +162,7 @@ void lentReportTests() {
       expect(r.expense, 0);
       expect(r.cashFlow, -kzt(30000));
       // Отменённая выдача не считается; другой месяц — тоже.
+      l.reverse('b', newId: 'rev-b'); // сначала возврат: выдачу с возвратами удалить нельзя (C03)
       l.reverse('a', newId: 'rev');
       expect(l.report(september, october).lent, 0);
       expect(l.report(october, DateTime(2026, 11)).returnedToMe, 0);

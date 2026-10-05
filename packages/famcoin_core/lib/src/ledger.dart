@@ -148,6 +148,8 @@ class PeriodReport {
     this.borrowed = 0,
     this.lent = 0,
     this.returnedToMe = 0,
+    this.writtenOff = 0,
+    this.forgiven = 0,
   });
 
   /// Заработанное: доходы по категориям, без взятого в долг. Для прогнозов,
@@ -164,6 +166,11 @@ class PeriodReport {
 
   /// Возвращено мне из выданных долгов за период: деньги пришли, но это не доход.
   final int returnedToMe;
+
+  /// Списано мне должных (не вернут) и закрыто моих долгов без оплаты за период
+  /// (D124): деньги не двигались, в доходы и расходы это не входит.
+  final int writtenOff;
+  final int forgiven;
 
   /// Доход периода. Займы и возврат выданного долга меняют деньги и долг,
   /// но не создают доход (D109).
@@ -321,20 +328,21 @@ class Ledger {
   Transaction? byId(String id) => _byId[id];
   bool isReversed(String id) => _reversed.contains(id);
 
-  /// Исходная версия покупки. Правка отменяет старую запись и создаёт новую
-  /// с `meta.edited` → id старой; возвраты и лимит возврата считаются по
-  /// всей цепочке версий, поэтому не теряются после правки.
+  /// Исходная версия операции через правки и восстановления. Возвраты и
+  /// корзина используют одну идентичность, даже после нескольких циклов.
   String purchaseRoot(String txId) {
     var id = txId;
-    for (var i = 0; i < 1000; i++) {
-      final prev = _byId[id]?.meta['edited'];
-      if (prev is! String || prev.isEmpty || !_byId.containsKey(prev)) break;
+    final visited = <String>{};
+    while (visited.add(id)) {
+      var prev = _byId[id]?.meta['edited'];
+      if (prev is! String || prev.isEmpty) prev = _byId[id]?.meta['restoredFrom'];
+      if (prev is! String || prev.isEmpty || !_byId.containsKey(prev)) return id;
       id = prev;
     }
-    return id;
+    throw LedgerException('Циклическая связь версий операции', code: 'invalidVersionChain');
   }
 
-  /// Действующая (не отменённая) версия покупки из цепочки правок [txId].
+  /// Действующая версия покупки из цепочки правок и восстановлений [txId].
   Transaction? currentVersion(String txId) {
     final root = purchaseRoot(txId);
     for (final t in _transactions.reversed) {
@@ -365,6 +373,16 @@ class Ledger {
     if (_reversed.contains(txId)) {
       throw LedgerException('Операция $txId уже отменена', code: 'alreadyReversed');
     }
+    // Удаление займа, выдачи или покупки в рассрочку после погашений оставило бы
+    // долг отрицательным (C03). Создание погашения такого не допускает, значит
+    // и отмена исходной записи не должна. Сначала удаляются погашения.
+    for (final p in original.postings) {
+      final a = _accounts[p.accountId];
+      if (a == null || (a.kind != LedgerKind.liability && a.assetClass != AssetClass.receivable)) continue;
+      if (balance(p.accountId) - p.amount < 0) {
+        throw LedgerException('Сначала удалите погашения по этому долгу', code: 'reverseBreaksDebt');
+      }
+    }
     final tx = Transaction(
       id: newId,
       date: date ?? original.date,
@@ -376,9 +394,21 @@ class Ledger {
     return tx;
   }
 
-  /// Удалённая операция уже восстановлена действующей копией.
-  bool isRestored(String txId) =>
-      _transactions.any((t) => t.meta['restoredFrom'] == txId && !_reversed.contains(t.id));
+  /// У операции уже есть другая действующая версия в той же цепочке.
+  bool isRestored(String txId) {
+    final root = purchaseRoot(txId);
+    return _transactions.any((t) => t.id != txId && t.type != EventType.reversal &&
+        !_reversed.contains(t.id) && purchaseRoot(t.id) == root);
+  }
+
+  /// Последняя версия, включая удалённую: только она доступна в корзине.
+  Transaction? _latestVersion(String txId) {
+    final root = purchaseRoot(txId);
+    for (final t in _transactions.reversed) {
+      if (t.type != EventType.reversal && purchaseRoot(t.id) == root) return t;
+    }
+    return null;
+  }
 
   /// `true`, если [txId] отменена не настоящим удалением, а как шаг правки:
   /// где-то есть более новая версия с `meta.edited == txId`. Такую старую
@@ -388,11 +418,12 @@ class Ledger {
   /// аудит, F01).
   bool _supersededByEdit(String txId) => _transactions.any((t) => t.meta['edited'] == txId);
 
-  /// В корзине: удалена и ещё не восстановлена (сами отмены и старые версии
-  /// правок не считаются).
+  /// В корзине: последняя удалённая версия без действующей копии.
+  /// Сами отмены, старые правки и прежние восстановления не считаются.
   bool isDeleted(String txId) {
     final t = _byId[txId];
-    return t != null && t.type != EventType.reversal && _reversed.contains(txId) && !isRestored(txId) && !_supersededByEdit(txId);
+    return t != null && t.type != EventType.reversal && _reversed.contains(txId) &&
+        !isRestored(txId) && _latestVersion(txId)?.id == txId;
   }
 
   /// Восстановление удалённой операции: новая запись с теми же проводками и
@@ -406,11 +437,14 @@ class Ledger {
     if (!_reversed.contains(txId) || original.type == EventType.reversal) {
       throw LedgerException('Восстановить можно только удалённую операцию', code: 'restoreNotReversed');
     }
+    if (_supersededByEdit(txId)) {
+      throw LedgerException('Эта версия операции заменена более новой правкой', code: 'restoreSuperseded');
+    }
     if (isRestored(txId)) {
       throw LedgerException('Операция уже восстановлена', code: 'alreadyRestored');
     }
-    if (_supersededByEdit(txId)) {
-      throw LedgerException('Эта версия операции заменена более новой правкой', code: 'restoreSuperseded');
+    if (_latestVersion(txId)?.id != txId) {
+      throw LedgerException('У операции есть более новая версия', code: 'restoreSuperseded');
     }
     _revalidateForRestore(original);
     final tx = Transaction(
@@ -422,6 +456,37 @@ class Ledger {
     );
     post(tx);
     return tx;
+  }
+
+  /// Один срок планового платежа оплачивается один раз (R01): если запись с
+  /// теми же `meta.planned` и `meta.period` уже действует, вторая — с другого
+  /// устройства или со старой формы — отклоняется, а не списывает деньги заново.
+  /// [exceptTxId] — сама проверяемая запись (при восстановлении).
+  void requireOccurrenceFree(Map<String, Object?> meta, {String? exceptTxId}) {
+    final planned = meta['planned'], period = meta['period'];
+    if (planned is! String || period is! String) return;
+    for (final t in _transactions) {
+      if (t.id == exceptTxId || t.type == EventType.reversal || _reversed.contains(t.id)) continue;
+      if (t.meta['planned'] == planned && t.meta['period'] == period) {
+        throw LedgerException('Этот срок уже оплачен', code: 'occurrencePaid');
+      }
+    }
+  }
+
+  /// Общая проверка тела возврата при создании и восстановлении.
+  /// Проценты не уменьшают требование и сюда не входят.
+  void validateReceivableRepayment(String accountId, int principal) {
+    final owed = balance(accountId);
+    if (principal > owed) {
+      throw LedgerException('Возврат $principal больше требования $owed', code: 'repaymentExceeds');
+    }
+  }
+
+  /// Общая проверка списания обеих сторон долга, без движения денег.
+  void validateDebtWriteOff(String accountId, int amount) {
+    if (amount > balance(accountId)) {
+      throw LedgerException('Списать можно не больше остатка долга', code: 'writeOffExceeds');
+    }
   }
 
   /// Заново проверяет то же самое, что проверяет создание такой операции:
@@ -445,8 +510,22 @@ class Ledger {
             throw LedgerException('Возврат больше суммы покупки в этой категории', code: 'refundExceeds');
           }
         }
+      case EventType.repaymentReceived:
+        for (final p in original.postings) {
+          if (_accounts[p.accountId]?.assetClass != AssetClass.receivable) continue;
+          validateReceivableRepayment(p.accountId, -p.amount);
+        }
+      case EventType.expense:
+        requireOccurrenceFree(original.meta, exceptTxId: original.id);
+      case EventType.writeOff:
+        for (final p in original.postings) {
+          final account = _accounts[p.accountId];
+          if (account?.kind != LedgerKind.liability && account?.assetClass != AssetClass.receivable) continue;
+          validateDebtWriteOff(p.accountId, -p.amount);
+        }
       case EventType.loanPayment:
       case EventType.repaymentMade:
+        requireOccurrenceFree(original.meta, exceptTxId: original.id);
         for (final p in original.postings) {
           if (_accounts[p.accountId]?.kind != LedgerKind.liability) continue;
           final principal = -p.amount; // платёж уменьшает долг
@@ -562,6 +641,8 @@ class Ledger {
         borrowed: borrowedBetween(from, to),
         lent: lentBetween(from, to),
         returnedToMe: returnedToMeBetween(from, to),
+        writtenOff: writtenOffBetween(from, to, receivable: true),
+        forgiven: writtenOffBetween(from, to, receivable: false),
         cashFlow: sumPostings((a) => a.isMoney,
             from: from, to: to, skipOpening: true),
       );
@@ -583,6 +664,22 @@ class Ledger {
 
   /// Сколько дано в долг людям за период: рост «мне должны» по выдачам.
   int lentBetween(DateTime from, DateTime to) => _receivableMoved(EventType.lendOut, from, to);
+
+  /// Списанные за период долги: [receivable] — мне должны, но не вернут;
+  /// иначе — я был должен и долг закрыт без оплаты (D124).
+  int writtenOffBetween(DateTime from, DateTime to, {required bool receivable}) {
+    var sum = 0;
+    for (final tx in _transactions) {
+      if (tx.type != EventType.writeOff || _reversed.contains(tx.id)) continue;
+      if ((tx.meta['side'] == 'liability') == receivable) continue;
+      if (tx.date.isBefore(from) || !tx.date.isBefore(to)) continue;
+      for (final p in tx.postings) {
+        final a = _accounts[p.accountId]!;
+        if (a.kind == LedgerKind.liability || a.assetClass == AssetClass.receivable) sum += -p.amount;
+      }
+    }
+    return sum;
+  }
 
   /// Сколько возвращено мне за период: уменьшение «мне должны» по возвратам.
   int returnedToMeBetween(DateTime from, DateTime to) => -_receivableMoved(EventType.repaymentReceived, from, to);
@@ -681,8 +778,15 @@ class Ledger {
         Reservation(goalId: goalId, accountId: accountId, amount: amount);
   }
 
+  /// Сумма резерва — положительная и не больше предела (C06): отрицательное
+  /// «освобождение» иначе увеличивало бы резерв.
+  void _requireReservationAmount(int amount) {
+    if (amount <= 0 || amount > maxAmount) throw LedgerException('Сумма резерва должна быть > 0', code: 'invalidAmount');
+  }
+
   /// Освободить резерв (O06). Не создаёт дохода и не меняет баланс.
   void release({required String goalId, required String accountId, required int amount}) {
+    _requireReservationAmount(amount);
     final r = _reservations[_rkey(goalId, accountId)];
     if (r == null || r.amount < amount) {
       throw LedgerException('Резерв меньше запрошенной суммы', code: 'reserveTooSmall');
@@ -695,6 +799,7 @@ class Ledger {
   /// вместе — либо оба изменения, либо ни одного.
   bool postFromReservation(Transaction tx,
       {required String goalId, required String accountId, required int amount}) {
+    _requireReservationAmount(amount);
     validate(tx);
     final r = _reservations[_rkey(goalId, accountId)];
     if (r == null || r.amount < amount) {

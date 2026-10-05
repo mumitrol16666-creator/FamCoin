@@ -271,6 +271,9 @@ class AppState extends ChangeNotifier {
   /// остаток. [commandId] задаёт форма и повторяет при повторной отправке:
   /// сервер не применит команду дважды, а клиент перечитает состояние.
   Future<void> send(Map<String, dynamic> command, {String? commandId}) async {
+    final key = commandId ?? newId();
+    final attempt = Zone.current[submitAttemptKey];
+    if (attempt is SubmitAttempt) attempt.check(key, command);
     final affected = _commandDate(command);
     final confirm = confirmReconciliationEdit;
     if (affected != null && confirm != null) {
@@ -300,7 +303,7 @@ class AppState extends ChangeNotifier {
     _ahead++;
     notifyListeners();
     try {
-      final r = await api.command(token, {...command, 'commandId': commandId ?? newId()});
+      final r = await api.command(token, {...command, 'commandId': key});
       if (r.repeated || r.revision != revision + 1) {
         // Повтор уже принятой команды или изменения с другого устройства —
         // берём состояние сервера целиком.
@@ -353,6 +356,10 @@ class AppState extends ChangeNotifier {
       case 'deleteEntity':
         _entities[c['kind']]?.remove(c['entityId']);
         if (c['kind'] == 'category') _syncCategories();
+      case setPaidCommand:
+        final kind = _entities[c['kind']];
+        final data = kind?[c['entityId']];
+        if (data != null) kind![c['entityId'] as String] = withPaidMark(data, c['period'] as String, paid: c['paid'] != false, clearGoal: c['clearGoal'] == true);
       case 'updateProfile':
         profile = {...profile, ...(c['profile'] as Map).cast<String, dynamic>()};
       default:
@@ -706,6 +713,26 @@ class AppState extends ChangeNotifier {
     return items;
   }
 
+  /// Неоплаченные сроки точного промежутка [from, to] (R02): без обрезки
+  /// относительно сегодняшней даты. Нужны сверке прошлого месяца, где недельные
+  /// сроки двухмесячной давности не должны исчезать из списка, но попадать в
+  /// счётчик. Платежи по закрытым долгам не требуются.
+  List<DueItem> unpaidOccurrences(DateTime from, DateTime to) {
+    final items = <DueItem>[];
+    for (final p in planned) {
+      if (!_plannedDebtActive(p)) continue;
+      for (final o in p.schedule.occurrences(from, to)) {
+        if (!p.paid.contains(o.period)) items.add(DueItem(p, o.date, o.period));
+      }
+    }
+    items.sort((a, b) => a.date.compareTo(b.date));
+    return items;
+  }
+
+  /// Платёж по расписанию действует в списках, календаре и сводках (R04):
+  /// платёж по кредиту, который уже погашен, больше не требуется.
+  bool isPlannedActive(PlannedInfo p) => _plannedDebtActive(p);
+
   /// Платёж за текущий период оплачен: для месячного — этот месяц, для
   /// недельного — все сроки этого месяца, для годового — этот год.
   bool paidThisPeriod(PlannedInfo p) {
@@ -989,14 +1016,18 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
-  /// Расход месяца по отметке «для кого» — считает и возвраты (F04), иначе
-  /// покупка с возвратом в одном месяце завышает расход члена семьи.
+  /// Расход месяца по отметке «для кого» — по проводкам расходов любых
+  /// действующих событий (APP-06): покупка в рассрочку, проценты кредита и
+  /// возврат учитываются так же, как в общем отчёте, поэтому сумма значений
+  /// всегда равна `reportFor(month).expense`. Возврат наследует «для кого»
+  /// покупки (F04, F10). Без отметки — «Я».
   Map<String, int> expenseByWho(DateTime monthStart) {
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
     final out = <String, int>{};
     for (final tx in userTransactions) {
-      if ((tx.type != EventType.expense && tx.type != EventType.refund) || tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
+      if (tx.date.isBefore(monthStart) || !tx.date.isBefore(end)) continue;
       final sum = tx.postings.where((p) => ledger.account(p.accountId).kind == LedgerKind.expense).fold(0, (s, p) => s + p.amount);
+      if (sum == 0) continue;
       out.update(_whoFor(tx), (v) => v + sum, ifAbsent: () => sum);
     }
     return out;
@@ -1160,11 +1191,15 @@ class AppState extends ChangeNotifier {
         : {'type': 'expense', 'id': newId(), 'date': d, 'account': account, 'splits': {p.category: amount.toString()}, 'meta': {'who': 'shared', 'note': p.name, ...link}};
     // Покупка из копилки (D90): накопленное возвращается на счёт оплаты,
     // копилка закрывается — и расход проводится уже с этого счёта.
+    // Задним числом (APP-07): накопленное возвращается на ту же дату, что и
+    // расход, и в пределах того, что в копилке уже было на эту дату.
+    final when = date ?? today;
     final goal = p.once == null ? null : purchaseGoal(p);
+    final closesFully = goal == null || goalClosesFully(goal, when);
     return sendBatch([
-      if (goal != null) ...closeGoalCommands(goal, returnTo: account),
+      if (goal != null) ...closeGoalCommands(goal, returnTo: account, date: when),
       fact,
-      {'type': 'upsertEntity', 'kind': p.entityKind, 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, due.period}, keepGoal: goal == null)},
+      paidMark(p, due.period, clearGoal: goal != null && closesFully),
     ], commandId: commandId);
   }
 
@@ -1301,8 +1336,13 @@ class AppState extends ChangeNotifier {
 
   /// Платёж уже оплачен — внесён обычным расходом или вне приложения: срок
   /// отмечается оплаченным без новой операции.
-  Future<void> markDuePaid(DueItem due) =>
-      send({'type': 'upsertEntity', 'kind': due.planned.entityKind, 'entityId': due.planned.id, 'data': due.planned.toJson(paid: {...due.planned.paid, due.period})});
+  Future<void> markDuePaid(DueItem due) => send(paidMark(due.planned, due.period));
+
+  /// Отметка срока одной командой (R01): сервер добавляет или снимает ключ в
+  /// актуальной записи платежа под блокировкой, а не заменяет её целиком
+  /// копией, которая могла устареть на втором устройстве.
+  Map<String, dynamic> paidMark(PlannedInfo p, String period, {bool paid = true, bool clearGoal = false}) =>
+      {'type': setPaidCommand, 'kind': p.entityKind, 'entityId': p.id, 'period': period, 'paid': paid, if (clearGoal) 'clearGoal': true};
 
   /// Итоги месяца для сверки: доходы, расходы, куда ушло больше всего, платежи,
   /// расхождения остатков и средний расход в день из дневного лимита.
@@ -1403,9 +1443,30 @@ class AppState extends ChangeNotifier {
   /// списка, не всех `planned` без разбора.
   List<PlannedInfo> get activePlanned => planned.where((p) => p.once == null && _plannedDebtActive(p)).toList();
 
-  /// Постоянные ежемесячные обязательства (раздел 9.11): плановые платежи,
-  /// включая платежи по кредитам — они заводятся как планы со ссылкой на долг.
-  int get recurringMonthly => activePlanned.fold(0, (s, p) => s + p.amount);
+  /// Что платёж стоит в среднем за месяц (APP-01): месячный — его сумма,
+  /// недельный — сумма × 52 / 12, годовой — сумма / 12. Простая сумма
+  /// платежей разной частоты называлась бы «в месяц» ошибочно.
+  static int monthlyEquivalent(PlannedInfo p) => switch (p.every) {
+        everyWeek => (p.amount * 52 / 12).round(),
+        everyYear => (p.amount / 12).round(),
+        _ => p.amount,
+      };
+
+  /// Средняя месячная нагрузка постоянных платежей (раздел 9.11): плановые
+  /// платежи, включая кредиты, приведённые к месяцу ([monthlyEquivalent]).
+  /// Сравнивается со средним доходом; для сумм конкретного месяца — [scheduledForMonth].
+  int get averageMonthlyCommitment => activePlanned.fold(0, (s, p) => s + monthlyEquivalent(p));
+
+  /// Прежнее имя [averageMonthlyCommitment].
+  int get recurringMonthly => averageMonthlyCommitment;
+
+  /// Сколько платежей приходится на конкретный месяц по реальным срокам:
+  /// четыре или пять сред, годовой платёж только в своём месяце.
+  int scheduledForMonth(DateTime month) {
+    final start = DateTime(month.year, month.month, 1);
+    final end = DateTime(month.year, month.month + 1, 0);
+    return activePlanned.fold(0, (s, p) => s + p.amount * p.schedule.occurrences(start, end).length);
+  }
 
   /// Средний доход за последние [months] уже закончившихся месяцев (без
   /// текущего — он не закончился), но не раньше начала учёта: месяц без
@@ -1621,7 +1682,7 @@ class AppState extends ChangeNotifier {
       if (p != null && p.paid.contains(period)) {
         return sendBatch([
           reverse,
-          {'type': 'upsertEntity', 'kind': p.entityKind, 'entityId': p.id, 'data': p.toJson(paid: {...p.paid}..remove(period))},
+          paidMark(p, period, paid: false),
         ], commandId: commandId);
       }
     }
@@ -1640,7 +1701,7 @@ class AppState extends ChangeNotifier {
       if (p != null && !p.paid.contains(period)) {
         return sendBatch([
           restore,
-          {'type': 'upsertEntity', 'kind': p.entityKind, 'entityId': p.id, 'data': p.toJson(paid: {...p.paid, period})},
+          paidMark(p, period),
         ], commandId: commandId);
       }
     }
@@ -1694,15 +1755,32 @@ class AppState extends ChangeNotifier {
         },
       ]);
 
-  List<Map<String, dynamic>> closeGoalCommands(GoalInfo g, {required String returnTo}) {
+  /// Копилка закрывается целиком, если на дату [date] в ней столько же, сколько
+  /// сейчас: после этой даты не было пополнений или снятий (APP-07).
+  bool goalClosesFully(GoalInfo g, DateTime date) {
     final acc = g.account;
-    final balance = acc != null && ledger.hasAccount(acc) ? ledger.balance(acc) : 0;
+    if (acc == null || !ledger.hasAccount(acc) || !date.isBefore(today)) return true;
+    return ledger.balance(acc, asOf: date) == ledger.balance(acc);
+  }
+
+  /// Команды закрытия цели. С [date] в прошлом перевод из копилки датируется
+  /// ею и берёт только то, что было накоплено на эту дату; если позже в
+  /// копилку клали ещё, она остаётся открытой с остатком — поздние деньги не
+  /// переносятся задним числом и не теряются.
+  List<Map<String, dynamic>> closeGoalCommands(GoalInfo g, {required String returnTo, DateTime? date}) {
+    final acc = g.account;
+    final when = date == null || !date.isBefore(today) ? today : date;
+    final exists = acc != null && ledger.hasAccount(acc);
+    final full = goalClosesFully(g, when);
+    final amount = !exists ? 0 : (full ? ledger.balance(acc) : ledger.balance(acc, asOf: when));
     return [
-      if (acc != null && balance > 0) {'type': 'transfer', 'id': newId(), 'date': _date(today), 'from': acc, 'to': returnTo, 'amount': balance.toString()},
-      for (final r in ledger.reservations.where((r) => r.goalId == g.id))
-        {'type': 'release', 'goalId': g.id, 'accountId': r.accountId, 'amount': r.amount.toString()},
-      if (acc != null && ledger.hasAccount(acc)) {'type': 'archiveAccount', 'accountId': acc},
-      {'type': 'deleteEntity', 'kind': 'goal', 'entityId': g.id},
+      if (amount > 0) {'type': 'transfer', 'id': newId(), 'date': _date(when), 'from': acc, 'to': returnTo, 'amount': amount.toString()},
+      if (full) ...[
+        for (final r in ledger.reservations.where((r) => r.goalId == g.id))
+          {'type': 'release', 'goalId': g.id, 'accountId': r.accountId, 'amount': r.amount.toString()},
+        if (exists) {'type': 'archiveAccount', 'accountId': acc},
+        {'type': 'deleteEntity', 'kind': 'goal', 'entityId': g.id},
+      ],
     ];
   }
 

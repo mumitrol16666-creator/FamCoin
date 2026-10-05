@@ -56,6 +56,26 @@ enum PlanGroup {
 /// Срок планового платежа: вид справочника, id платежа и период `ГГГГ-ММ`.
 typedef DueMark = ({String kind, String id, String period});
 
+/// Срок планового платежа, который может оплачиваться строкой выписки.
+class LinkCandidate {
+  const LinkCandidate(this.mark, this.name, this.date, {required this.loan});
+  final DueMark mark;
+  final String name;
+  final DateTime date;
+
+  /// Платёж по кредиту: связанная строка не записывается, платёж делит на
+  /// долг и проценты сам человек.
+  final bool loan;
+}
+
+/// Строка выписки с суммой, как у неоплаченных сроков, но без подтверждающих
+/// признаков (название, категория магазина): связь — только по решению человека.
+class LinkSuggestion {
+  const LinkSuggestion(this.n, this.candidates);
+  final int n;
+  final List<LinkCandidate> candidates;
+}
+
 class PlannedOp {
   const PlannedOp(this.n, this.amount, this.group, this.command, this.label, {this.mark});
 
@@ -92,6 +112,8 @@ class ImportPlan {
     required this.gap,
     required this.piggyHeld,
     required this.startDate,
+    this.suggestions = const [],
+    this.linked = const [],
   });
 
   /// Новые операции — по порядку выписки, от старых к новым.
@@ -141,6 +163,14 @@ class ImportPlan {
   /// С какого дня ведётся счёт (дата начального остатка), если это мешает
   /// записать часть строк.
   final DateTime? startDate;
+
+  /// Строки, похожие на оплату планового платежа только по сумме и дате
+  /// (S01): они записываются как обычные расходы, а связь со сроком
+  /// устанавливает лишь человек, подтвердив её кнопкой.
+  final List<LinkSuggestion> suggestions;
+
+  /// Строки, связанные со сроком по подтверждению человека.
+  final List<int> linked;
 
   int count(PlanGroup g) => ops.where((o) => o.group == g).length;
   int total(PlanGroup g) => ops.where((o) => o.group == g).fold(0, (s, o) => s + o.amount);
@@ -231,6 +261,18 @@ final _cashbackWords = RegExp(r'кешбэк|кэшбек|кешбек|cashback|
 final _interestWords = RegExp(r'вознагражден|сыйақы|процент|пайыз|interest');
 final _feeWords = RegExp(r'комисси|commission|(?<![a-z])fee');
 
+const _nameStop = {'kaspi', 'каспи', 'bank', 'банк', 'платеж', 'оплата', 'подписка', 'subscription', 'payment'};
+
+/// Слово из названия платежа (не короче 4 знаков, не служебное) начинает
+/// какое-то слово описания строки.
+bool _namedIn(String name, String details) {
+  final text = ' ${_plain(details)} ';
+  for (final w in _plain(name).split(' ')) {
+    if (w.length >= 4 && !_nameStop.contains(w) && text.contains(' $w')) return true;
+  }
+  return false;
+}
+
 DateTime _day(DateTime d, int shift) => DateTime(d.year, d.month, d.day + shift);
 
 /// Неоплаченный срок планового платежа.
@@ -249,7 +291,13 @@ class _Due {
 
 /// Строит план записи выписки [st] на счёт [accountId]. [today] — сегодняшний
 /// день по времени Казахстана.
-ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String importId, DateTime today) {
+///
+/// [links] — связи «строка выписки → срок платежа», подтверждённые человеком
+/// (номер строки → срок). Без подтверждения строка связывается со сроком лишь
+/// при признаке, кроме суммы и даты: название платежа в описании или совпавшая
+/// категория магазина; остальные совпадения по сумме только предлагаются
+/// ([ImportPlan.suggestions]).
+ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String importId, DateTime today, {Map<int, DueMark> links = const {}}) {
   final l = v.ledger;
   final kk = v.locale == 'kk';
   final accounts = chatAccounts(v);
@@ -410,19 +458,45 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
     }
   }
 
-  _Due? dueFor(StatementRow r) {
-    if (r.amount >= 0 || r.kind == RowKind.withdrawal || r.kind == RowKind.credit) return null;
-    _Due? nearest;
-    var best = 11;
+  bool eligible(StatementRow r) => r.amount < 0 && r.kind != RowKind.withdrawal && r.kind != RowKind.credit;
+
+  /// Название платежа (или долга) названо в описании строки, либо магазин из
+  /// описания той же категории, что и платёж. Одной суммы и близкой даты для
+  /// этого мало (S01): MAGNUM на 5 000 ₸ — не коммунальная услуга.
+  bool evidence(StatementRow r, _Due d) {
+    final debtId = d.data['debtId'] as String?;
+    if (debtId == null) {
+      final category = merchantCategory(r.details);
+      if (category != null && category == d.data['category']) return true;
+    }
+    final debtName = debtId == null ? null : '${v.of('debt')[debtId]?['name'] ?? ''}';
+    return _namedIn(d.name, r.details) || (debtName != null && _namedIn(debtName, r.details));
+  }
+
+  Iterable<_Due> candidatesFor(StatementRow r, {required bool Function(_Due) where}) {
+    if (!eligible(r)) return const [];
+    final list = [
+      for (final d in dues)
+        if (!d.used && d.amount == -r.amount && daysBetween(r.date, d.date).abs() <= 10 && where(d)) d,
+    ]..sort((a, b) => daysBetween(r.date, a.date).abs().compareTo(daysBetween(r.date, b.date).abs()));
+    return list;
+  }
+
+  _Due? dueFor(StatementRow r) => candidatesFor(r, where: (d) => evidence(r, d)).firstOrNull;
+
+  // Подтверждённые человеком связи занимают свои сроки раньше всех: иначе их
+  // забрала бы другая строка. Подтверждение действует, пока срок не оплачен и
+  // сумма та же.
+  final linkedDue = <int, _Due>{};
+  for (final e in links.entries) {
+    if (!fresh.contains(e.key) || !eligible(st.rows[e.key])) continue;
     for (final d in dues) {
-      if (d.used || d.amount != -r.amount) continue;
-      final days = daysBetween(r.date, d.date).abs();
-      if (days < best) {
-        best = days;
-        nearest = d;
+      if (!d.used && d.kind == e.value.kind && d.id == e.value.id && d.period == e.value.period && d.amount == -st.rows[e.key].amount && d.data['goal'] == null) {
+        d.used = true;
+        linkedDue[e.key] = d;
+        break;
       }
     }
-    return nearest;
   }
 
   // ------------------------------------------------------- новые операции
@@ -547,18 +621,28 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
       'date': dateToJson(r.date),
       'account': accountId,
       'splits': {category: r.amount.abs().toString()},
-      'meta': {'who': 'shared', 'note': clip(due.name), 'planned': due.id, 'period': due.period, 'src': 'kaspi'},
+      'meta': {
+        'who': 'shared',
+        'note': clip(due.name),
+        'planned': due.id,
+        'period': due.period,
+        // Что написано в выписке: рядом с названием платежа видно, какая это покупка.
+        if (r.details.isNotEmpty) 'bank': clip(r.details),
+        'src': 'kaspi',
+      },
     }, categoryName(category, v), mark: mark);
   }
 
   final ops = <PlannedOp>[];
   final loans = <({int n, String name})>[];
+  final plain = <int>[];
   for (final n in fresh) {
-    final due = dueFor(st.rows[n]);
+    final due = linkedDue[n] ?? dueFor(st.rows[n]);
     // Разовую покупку с копилкой оплачивают в приложении: там копилка
     // закрывается и деньги возвращаются на счёт.
     if (due == null || due.data['goal'] != null) {
       ops.add(plan(n));
+      plain.add(n);
       continue;
     }
     due.used = true;
@@ -567,6 +651,14 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
     } else {
       ops.add(payment(n, due));
     }
+  }
+
+  // Что осталось похожим по сумме и дате, но не подтверждено: предложение.
+  final suggestions = <LinkSuggestion>[];
+  for (final n in plain) {
+    final found = candidatesFor(st.rows[n], where: (d) => d.data['goal'] == null);
+    if (found.isEmpty) continue;
+    suggestions.add(LinkSuggestion(n, [for (final d in found) LinkCandidate((kind: d.kind, id: d.id, period: d.period), d.name, d.date, loan: d.data['debtId'] != null)]));
   }
 
   // --------------------------------------------------------------- остатки
@@ -611,6 +703,8 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
     gap: st.balanced && beforeStart.isEmpty && loans.isEmpty ? st.closing! - balanceAtEnd : null,
     piggyHeld: piggyHeld,
     startDate: startDate,
+    suggestions: suggestions,
+    linked: linkedDue.keys.toList()..sort(),
   );
 }
 

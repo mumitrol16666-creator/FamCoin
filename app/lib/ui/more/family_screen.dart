@@ -1,4 +1,3 @@
-import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 
 import '../../state/app_scope.dart';
@@ -19,14 +18,9 @@ class FamilyScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: state,
       builder: (context, _) {
-        // Расходы месяца по отметке «для кого».
-        final byWho = <String, int>{};
-        for (final tx in state.userTransactions) {
-          if (tx.type != EventType.expense || tx.date.isBefore(state.monthStart)) continue;
-          final who = tx.meta['who'] as String? ?? 'me';
-          final sum = tx.postings.where((p) => state.ledger.account(p.accountId).kind == LedgerKind.expense).fold(0, (s, p) => s + p.amount);
-          byWho.update(who, (v) => v + sum, ifAbsent: () => sum);
-        }
+        // Расходы месяца по отметке «для кого»: тот же расчёт, что в аналитике
+        // (APP-05) — с возвратами и всеми видами расходных событий.
+        final byWho = state.expenseByWho(state.monthStart);
         return Scaffold(
           appBar: AppBar(title: Text(l.family)),
           body: ListView(

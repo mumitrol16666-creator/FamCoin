@@ -135,6 +135,43 @@ void main() {
       expect(s.rows.last.balanceAfter, 0);
     });
 
+    test('C05/T12 округление 100 000 на три месяца закрывается последним платежом', () {
+      final s = buildSchedule(principal: kzt(100000), annualRatePercent: 0, months: 3)!;
+      expect(s.months, 3);
+      expect(s.rows.map((r) => r.payment), [3333333, 3333333, 3333334]);
+      expect(s.rows.fold<int>(0, (sum, r) => sum + r.principal), kzt(100000));
+      expect(s.totalInterest, 0);
+      expect(s.rows.last.balanceAfter, 0);
+
+      // Явно заданный платёж нельзя увеличить ради желаемого срока.
+      final fixedPayment = buildSchedule(
+        principal: kzt(100000), annualRatePercent: 0, payment: 3333333, months: 3,
+      )!;
+      expect(fixedPayment.months, 4);
+      expect(fixedPayment.rows.last.payment, 1);
+      expect(buildSchedule(principal: kzt(100000), annualRatePercent: 24,
+          payment: kzt(1000), months: 1), isNull);
+    });
+
+    test('C05/T13 уменьшение платежа после досрочки сохраняет три месяца', () {
+      final e = earlyRepayment(
+        balance: kzt(150000), annualRatePercent: 0,
+        payment: kzt(50000), extra: kzt(50000),
+      );
+      expect(e.balanceAfter, kzt(100000));
+      expect(e.baseline.months, 3);
+      expect(e.reducePayment!.months, 3);
+      expect(e.reducePayment!.payment, 3333333);
+      expect(e.reducePayment!.totalInterest, 0);
+      expect(e.shortenTerm!.months, 2);
+      expect(e.shortenTerm!.payment, kzt(50000));
+      final reduced = buildSchedule(principal: e.balanceAfter,
+          annualRatePercent: 0, months: e.reducePayment!.months)!;
+      expect(reduced.totalPaid, kzt(100000));
+      expect(reduced.rows.last.payment, 3333334);
+      expect(reduced.rows.last.balanceAfter, 0);
+    });
+
     test('T16 остаток 100 000, 0%, платёж 10 000, досрочно 20 000 → 80 000 и восемь платежей', () {
       final e = earlyRepayment(balance: kzt(100000), annualRatePercent: 0, payment: kzt(10000), extra: kzt(20000));
       expect(e.balanceAfter, kzt(80000));

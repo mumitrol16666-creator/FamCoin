@@ -131,9 +131,10 @@ void main() {
   });
 
   group('Ж2 платёж по кредиту через «＋»', () {
-    Future<FakeServer> withDebt(WidgetTester tester) async {
+    // Платёж за сентябрь (25-е) ещё не оплачен — иначе срока, который можно закрыть, нет (APP-04).
+    Future<FakeServer> withDebt(WidgetTester tester, {String kind = 'creditCard', double rate = 0}) async {
       final f = await pumpForm(tester);
-      await f.state.sendBatch(f.state.newBankDebtCommands(name: 'Kaspi Red', kind: 'creditCard', balance: kzt(100000), payment: kzt(10000), day: 25));
+      await f.state.sendBatch(f.state.newBankDebtCommands(name: 'Kaspi Red', kind: kind, balance: kzt(100000), payment: kzt(10000), day: 25, rate: rate, paidThisMonth: false));
       return f;
     }
 
@@ -147,12 +148,86 @@ void main() {
       expect(find.text('Это платёж по кредиту?'), findsOneWidget);
       expect(find.textContaining('«Kaspi Red», остаток 100 000 ₸'), findsOneWidget);
       await tapText(tester, 'Платёж по кредиту');
-      expect(find.text('Оплатить: Kaspi Red'), findsOneWidget, reason: 'открылся лист оплаты кредита');
+      // Какой срок оплачивается: сентябрьский просроченный выбран сам, есть «досрочно».
+      expect(find.text('Какой платёж оплачиваете?'), findsOneWidget);
+      expect(find.text('Досрочно, вне графика'), findsOneWidget);
+      await tapText(tester, 'Продолжить');
+      expect(find.text('Оплатить: Kaspi Red'), findsOneWidget, reason: 'открылся лист оплаты срока');
+      expect(s.planned.single.paid, isEmpty);
       await tester.tap(find.widgetWithText(FilledButton, 'Оплатить'));
       await tester.pumpAndSettle();
       expect(s.debtBalance(s.bankDebts.single.id), kzt(90000));
       expect(s.ledger.balance('cash'), kzt(90000));
       expect(s.userTransactions.where((t) => t.type == EventType.expense), isEmpty, reason: 'обычный расход не записан');
+      // Срок закрыт именно этой оплатой и связан с ней — APP-04.
+      expect(s.planned.single.paid, {'2026-09'});
+      final pay = s.userTransactions.firstWhere((t) => t.type == EventType.loanPayment);
+      expect(pay.meta['planned'], s.planned.single.id);
+      expect(pay.meta['period'], '2026-09');
+      expect(s.upcoming.where((d) => d.period == '2026-09'), isEmpty);
+      // Отмена оплаты снова открывает тот же срок.
+      await s.deleteTransaction(pay.id);
+      expect(s.planned.single.paid, isEmpty);
+      expect(s.upcoming.where((d) => d.period == '2026-09'), hasLength(1));
+    });
+
+    testWidgets('APP-04: выбранные в расходе дата, счёт и сумма сохраняются; проценты делят платёж на тело и проценты', (tester) async {
+      final f = await withDebt(tester, kind: 'loan', rate: 20);
+      final s = f.state;
+      await s.sendBatch(s.newAccountCommands(name: 'Halyk', type: 'card', balance: kzt(50000)));
+      final halyk = s.activeAccounts.firstWhere((a) => a.name == 'Halyk').id;
+      await openForm(tester);
+      await tester.enterText(find.byType(TextField).first, '10000');
+      await tester.dragUntilVisible(find.text('Вчера'), find.byType(ListView).last, const Offset(0, -200));
+      await tester.tap(find.text('Вчера'));
+      await tester.pump();
+      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Halyk').last);
+      await tester.pumpAndSettle();
+      await enterNote(tester, 'kaspi red');
+      await save(tester);
+      await tapText(tester, 'Платёж по кредиту');
+      await tapText(tester, 'Продолжить');
+      // Лист оплаты открыт с суммой 10 000 и счётом Halyk.
+      expect(find.text('Оплатить: Kaspi Red'), findsOneWidget);
+      final fields = find.descendant(of: find.byType(BottomSheet).last, matching: find.byType(TextField));
+      expect(tester.widget<TextField>(fields.at(0)).controller!.text.replaceAll(' ', ''), '10000');
+      expect(find.text('Halyk'), findsWidgets);
+      await tester.enterText(fields.at(1), '2000'); // проценты
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Оплатить'));
+      await tester.pumpAndSettle();
+      final pay = s.userTransactions.firstWhere((t) => t.type == EventType.loanPayment);
+      expect(pay.date, DateTime(2026, 9, 27), reason: 'дата из формы расхода, а не «сегодня»');
+      expect(s.ledger.balance(halyk), kzt(40000));
+      expect(s.ledger.balance('cash'), kzt(100000));
+      expect(s.debtBalance(s.bankDebts.single.id), kzt(92000), reason: 'тело 8 000, проценты 2 000');
+      expect(s.planned.single.paid, {'2026-09'});
+    });
+
+    testWidgets('APP-04: несколько сроков и «досрочно» — выбор явный; досрочный платёж срок не закрывает', (tester) async {
+      final f = await withDebt(tester);
+      final s = f.state;
+      // Август тоже не оплачен: платёж заведён с начала августа.
+      final p = s.planned.single;
+      await s.upsert('planned', p.id, p.copyWith().toJson()..['start'] = '2026-08-01');
+      expect(s.upcoming.where((d) => d.planned.id == p.id).map((d) => d.period).toList()..sort(), ['2026-08', '2026-09', '2026-10']);
+      await openForm(tester);
+      await tester.enterText(find.byType(TextField).first, '10000');
+      await enterNote(tester, 'kaspi red');
+      await save(tester);
+      await tapText(tester, 'Платёж по кредиту');
+      expect(find.textContaining('августа'), findsOneWidget);
+      expect(find.textContaining('сентября'), findsOneWidget);
+      await tapText(tester, 'Досрочно, вне графика');
+      await tapText(tester, 'Продолжить');
+      expect(find.text('Оплатить: Kaspi Red'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Оплатить'));
+      await tester.pumpAndSettle();
+      expect(s.debtBalance(s.bankDebts.single.id), kzt(90000));
+      expect(s.planned.single.paid, isEmpty, reason: 'досрочный платёж не закрывает срок');
+      expect(s.userTransactions.firstWhere((t) => t.type == EventType.loanPayment).meta.containsKey('planned'), isFalse);
     });
 
     testWidgets('«Обычный расход» — записывается как расход, вопрос не повторяется', (tester) async {
@@ -254,7 +329,7 @@ void main() {
   });
 
   group('Ж6 списание долга', () {
-    testWidgets('«не вернут» → расход «Прочее», долг закрыт, деньги не меняются', (tester) async {
+    testWidgets('«не вернут» → отдельная строка, не расход; долг закрыт, деньги не меняются', (tester) async {
       late FakeServer f;
       f = await pumpWith(tester, (c) => Navigator.push(c, MaterialPageRoute<void>(builder: (_) => const PersonDebtScreen(person: 'Друг'))));
       final s = f.state;
@@ -269,8 +344,9 @@ void main() {
       expect(find.text('Долг закрыт'), findsOneWidget);
       expect(s.personDebts, isEmpty);
       expect(s.ledger.balance('cash'), kzt(50000));
-      expect(s.reportFor(DateTime(2026, 9, 1)).expense, kzt(50000));
-      expect(s.reportFor(october).expense, 0);
+      expect(s.reportFor(DateTime(2026, 9, 1)).expense, 0, reason: 'списание не раздувает расходы месяца (D124)');
+      expect(s.reportFor(DateTime(2026, 9, 1)).writtenOff, kzt(50000));
+      expect(s.reportFor(october).writtenOff, 0);
       expect(find.text('Списан долг · Друг'), findsOneWidget, reason: 'запись видна в истории долга');
     });
   });

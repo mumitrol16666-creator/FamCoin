@@ -39,10 +39,39 @@ void main() {
       () => applyLedgerCommand(l, {'type': 'restore', 'txId': 'e1', 'id': 'e1-back-2'}),
       throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'alreadyRestored')),
     );
-    // Удалили восстановленную копию — исходная снова в корзине.
+    // После повторного удаления в корзине только последняя версия.
     applyLedgerCommand(l, {'type': 'reverse', 'txId': 'e1-back', 'id': 'e1-back-rev'});
-    expect(l.isDeleted('e1'), isTrue);
+    expect(l.isDeleted('e1'), isFalse);
     expect(l.isDeleted('e1-back'), isTrue);
+    expect(() => l.restore('e1', newId: 'old-back'),
+        throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'restoreSuperseded')));
+    l.restore('e1-back', newId: 'latest-back');
+    expect(() => l.restore('e1', newId: 'duplicate'),
+        throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'alreadyRestored')));
+    expect(l.balance('cash'), 9750000);
+  });
+
+  test('C01/T01 после reload одна живая версия за несколько циклов корзины', () {
+    var l = base();
+    var latest = 'e1';
+    final versions = <String>['e1'];
+    for (var cycle = 0; cycle < 3; cycle++) {
+      l.reverse(latest, newId: 'delete-$cycle');
+      l = ledgerFromSnapshot(accounts: l.accounts.map(accountToJson),
+          transactions: l.transactions.map(transactionToJson));
+      expect(l.transactions.where((t) => l.isDeleted(t.id)).map((t) => t.id), [latest]);
+      expect(l.balance('cash'), 10000000);
+      final next = 'restored-$cycle';
+      l.restore(latest, newId: next);
+      for (final old in versions) {
+        expect(() => l.restore(old, newId: 'duplicate-$cycle-$old'),
+            throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'alreadyRestored')));
+      }
+      expect(l.balance('cash'), 9750000);
+      expect(l.transactions.where((t) => t.type == EventType.expense && !l.isReversed(t.id)), hasLength(1));
+      latest = next;
+      versions.add(next);
+    }
   });
 
   test('восстановить можно только удалённую операцию', () {

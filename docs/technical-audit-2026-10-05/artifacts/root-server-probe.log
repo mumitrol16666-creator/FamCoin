@@ -1,0 +1,4 @@
+00:00 +0: loading test/technical_audit_root_probe_test.dart
+00:00 +0: ROOT-04 brief still demands a payment for fully repaid debt
+ROOT-04 server: zero debt, but morning brief asks 10000 KZT payment.
+00:00 +1: All tests passed!

@@ -65,6 +65,10 @@ class LedgerService {
   static const maxCachedTransactions = 300000;
 
   void _remember(String userId, _Cached c) {
+    // Устаревшую ревизию поверх более новой не кладём: читатель, начавший
+    // раньше, мог закончить позже команды.
+    final current = _cache[userId];
+    if (current != null && current.revision > c.revision) return;
     _cache.remove(userId);
     _cache[userId] = c;
     var total = 0;
@@ -81,11 +85,23 @@ class LedgerService {
 
   // --------------------------------------------------------------- чтение
 
-  Future<Ledger> _loadLedger(Session s, String userId, int revision) async {
+  /// Независимая копия журнала: команда меняет копию, а кеш и ранее выданные
+  /// читателям журналы остаются прежними, пока команда не зафиксирована.
+  static Ledger _copy(Ledger l) => ledgerFromSnapshot(
+        accounts: [for (final a in l.accounts) accountToJson(a)],
+        transactions: [for (final t in l.transactions) transactionToJson(t)],
+        reservations: reservationsToJson(l),
+      );
+
+  /// Журнал владельца на [revision]. Для чтения возвращается общий экземпляр
+  /// из кеша: он неизменяем — команды работают с копией ([forWrite]) и кладут
+  /// в кеш новый журнал только после commit. Для записи — всегда свой
+  /// экземпляр, который в кеш сам не попадает.
+  Future<Ledger> _loadLedger(Session s, String userId, int revision, {bool forWrite = false}) async {
     final cached = _cache[userId];
     if (cached != null && cached.revision == revision) {
       _remember(userId, cached); // недавно использован — вытесняется последним
-      return cached.ledger;
+      return forWrite ? _copy(cached.ledger) : cached.ledger;
     }
 
     final accounts = await s.execute(
@@ -122,7 +138,7 @@ class LedgerService {
         for (final r in reservations) {'goalId': r[0], 'accountId': r[1], 'amount': r[2]},
       ],
     );
-    _remember(userId, _Cached(revision, ledger));
+    if (!forWrite) _remember(userId, _Cached(revision, ledger));
     return ledger;
   }
 
@@ -182,11 +198,14 @@ class LedgerService {
 
   /// Журнал и справочники владельца для чтения на самом сервере (бот) — без
   /// сборки JSON-снимка всех операций, который нужен только приложению.
-  /// Журнал общий с кешем: его можно только читать. `null` — владельца нет.
+  /// Журнал общий с кешем: его можно только читать, и он не меняется после
+  /// выдачи — команды работают с копией. Строка владельца читается с
+  /// `FOR SHARE`, как в [state]: пока команда не закончилась (commit или
+  /// откат), чтение ждёт и видит только подтверждённое. `null` — владельца нет.
   Future<LedgerView?> view(String userId) async {
     return db.runTx((s) async {
       final u = await s.execute(
-        Sql.named('SELECT locale, profile, revision FROM users WHERE id = @u'),
+        Sql.named('SELECT locale, profile, revision FROM users WHERE id = @u FOR SHARE'),
         parameters: {'u': userId},
       );
       if (u.isEmpty) return null;
@@ -218,7 +237,8 @@ class LedgerService {
       throw ApiError(400, 'bad_request');
     }
     try {
-      return await db.runTx((s) async {
+      Ledger? published;
+      final result = await db.runTx((s) async {
         final u = await s.execute(
           Sql.named('SELECT revision, plan, profile FROM users WHERE id = @u FOR UPDATE'),
           parameters: {'u': userId},
@@ -236,7 +256,7 @@ class LedgerService {
           throw LedgerException('Данные изменились во время сверки', code: 'monthChanged');
         }
 
-        final ledger = await _loadLedger(s, userId, revision);
+        final ledger = await _loadLedger(s, userId, revision, forWrite: true);
         final before = _Snapshot.of(ledger);
         final ctx = _Ctx(s, userId, plan, ledger, Map<String, dynamic>.from(u.first[2] as Map));
         await _apply(ctx, cmd, depth: 0);
@@ -256,12 +276,15 @@ class LedgerService {
           Sql.named('INSERT INTO commands (user_id, id, revision) VALUES (@u, @id, @r)'),
           parameters: {'u': userId, 'id': commandId, 'r': next},
         );
-        _remember(userId, _Cached(next, ledger));
+        published = ledger;
         return (revision: next, repeated: false);
       });
+      // В кеш — только после commit: до него читатели видят прежний журнал.
+      final done = published;
+      if (done != null) _remember(userId, _Cached(result.revision, done));
+      return result;
     } catch (e) {
-      // Журнал в памяти мог измениться до отказа — перечитываем из базы.
-      _cache.remove(userId);
+      // Журнал в кеше команда не меняла (работала с копией) — он остаётся.
       if (e is LedgerException) throw ApiError(422, 'ledger', message: e.message, ledgerCode: e.code);
       rethrow;
     }
@@ -289,6 +312,12 @@ class LedgerService {
         final newId = c['accountId'];
         final active = ctx.ledger.accounts.where((a) => a.isMoney && !a.archived && !isPiggy(a.id)).length;
         if (newId is String && !isPiggy(newId) && active >= freeMoneyAccounts) throw ApiError(402, 'plan_limit');
+      }
+      if (type == 'archiveAccount' && c['archived'] == false && ctx.plan == 'free') {
+        // Возврат из архива не должен обходить лимит обычной версии (C08).
+        final id = c['accountId'];
+        final active = ctx.ledger.accounts.where((a) => a.isMoney && !a.archived && !isPiggy(a.id)).length;
+        if (id is String && !isPiggy(id) && active >= freeMoneyAccounts) throw ApiError(402, 'plan_limit');
       }
       applyLedgerCommand(ctx.ledger, c);
       return;
@@ -325,6 +354,28 @@ class LedgerService {
             ON CONFLICT (user_id, kind, id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()'''),
           parameters: {'u': ctx.userId, 'k': kind, 'id': id, 'd': data},
         );
+      case setPaidCommand:
+        // Отметка срока (R01): ключ добавляется или снимается в актуальной записи
+        // под блокировкой строки, а не заменяет её копией, которая могла устареть
+        // на другом устройстве. Платёж удалили — отмечать нечего.
+        final kind = c['kind'];
+        final id = c['entityId'];
+        final period = c['period'];
+        if ((kind != 'planned' && kind != 'purchase') || id is! String || id.isEmpty || id.length > maxIdLength || period is! String || period.isEmpty || period.length > 20) {
+          throw ApiError(400, 'bad_request');
+        }
+        final rows = await ctx.s.execute(
+          Sql.named('SELECT data FROM entities WHERE user_id = @u AND kind = @k AND id = @id FOR UPDATE'),
+          parameters: {'u': ctx.userId, 'k': kind, 'id': id},
+        );
+        if (rows.isNotEmpty) {
+          final current = (rows.first[0] as Map).cast<String, dynamic>();
+          final next = withPaidMark(current, period, paid: c['paid'] != false, clearGoal: c['clearGoal'] == true);
+          await ctx.s.execute(
+            Sql.named('UPDATE entities SET data = @d:jsonb, updated_at = now() WHERE user_id = @u AND kind = @k AND id = @id'),
+            parameters: {'u': ctx.userId, 'k': kind, 'id': id, 'd': next},
+          );
+        }
       case 'deleteEntity':
         final kind = c['kind'];
         final id = c['entityId'];

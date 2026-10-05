@@ -1,0 +1,37 @@
+00:00 +0: loading test/statement_import_db_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: длинная выписка пишется несколькими пачками и целиком отменяется
+import: выписка разобрана — строк 320, язык ru, итоги сошлись, виды {purchase: 320}
+03:00 +0 -1: длинная выписка пишется несколькими пачками и целиком отменяется [E]
+  TimeoutException after 0:03:00.000000: Test timed out after 3 minutes.
+  dart:isolate  _RawReceivePort._handleMessage
+  
+03:00 +0 -1: (tearDownAll)
+03:06 +0 -2: (tearDownAll) [E]
+  Severity.error 23503: update or delete on table "transactions" violates foreign key constraint "transactions_user_id_reverses_fkey" on table "transactions" detail: Key (user_id, id)=(01a10baf-4932-7fc2-ae37-074455aea4fd, ic54574a55620-150) is still referenced from table "transactions". table: transactions constraint transactions_user_id_reverses_fkey
+  package:postgres/src/v3/connection.dart 1070:37  _PgResultStreamSubscription.handleError
+  package:postgres/src/v3/connection.dart 611:21   PgConnectionImplementation._handleMessage
+  ===== asynchronous gap ===========================
+  package:postgres/src/v3/connection.dart 855:35   _PreparedStatement.run
+  package:postgres/src/v3/connection.dart 197:29   _PgSessionBase.execute
+  package:famcoin_server/auth_service.dart 306:18  deleteUserData.<fn>
+  package:postgres/src/v3/connection.dart 695:24   PgConnectionImplementation.runTx.<fn>
+  package:pool/pool.dart 127:14                    Pool.withResource
+  package:postgres/src/pool/pool_impl.dart 196:16  PoolImplementation.withConnection
+  test/statement_import_db_test.dart 122:7         main.<fn>
+  ===== asynchronous gap ===========================
+  package:postgres/src/v3/connection.dart 186:37   _PgSessionBase.execute
+  package:famcoin_server/auth_service.dart 306:18  deleteUserData.<fn>
+  package:postgres/src/v3/connection.dart 695:24   PgConnectionImplementation.runTx.<fn>
+  package:pool/pool.dart 127:14                    Pool.withResource
+  package:postgres/src/pool/pool_impl.dart 196:16  PoolImplementation.withConnection
+  test/statement_import_db_test.dart 122:7         main.<fn>
+  
+03:06 +0 -2: Some tests failed.
+
+Failing tests:
+  test/statement_import_db_test.dart: (tearDownAll)
+  test/statement_import_db_test.dart: длинная выписка пишется несколькими пачками и целиком отменяется
+
+Consider enabling the flag chain-stack-traces to receive more detailed exceptions.
+For example, 'dart test --chain-stack-traces'.

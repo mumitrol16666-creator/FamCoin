@@ -1,0 +1,43 @@
+00:00 +0: loading test/technical_audit_server_probe_test.dart
+00:00 +0: S-IMPORT: unrelated MAGNUM purchase auto-pays utility due by amount/date alone
+S-IMPORT ordinary: MAGNUM 5000 => utilities 5000, paid=2026-09
+00:00 +1: S-IMPORT: unrelated MAGNUM purchase is skipped as a loan payment
+S-IMPORT loan: MAGNUM 5000 omitted, ledger 100000 vs bank 95000, gap suppressed
+00:00 +2: S-CSV: transfer export loses transferred amount and target account
+S-CSV: 2026-09-12;;transfer;;Kaspi Gold;0;;;active;move-1
+00:00 +3: S-TG: successful_payment offset advances despite failed handler
+telegram update: StateError
+#0      main.<anonymous closure>.<anonymous closure> (file:///Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance%202/server/test/technical_audit_server_probe_test.dart:118:54)
+#1      Telegram._handle (package:famcoin_server/telegram.dart:249:41)
+#2      Telegram.pollForever (package:famcoin_server/telegram.dart:229:17)
+<asynchronous suspension>
+#3      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#4      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#5      OutstandingWork.complete (package:test_api/hooks.dart:77:3)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance%202/server/test/technical_audit_server_probe_test.dart:119:5)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+S-TG: handler failed; next getUpdates offset=101 acknowledges update_id=100
+00:00 +4: PostgreSQL atomicity probes (setUpAll)
+00:00 +4: PostgreSQL atomicity probes S-CACHE: view sees in-flight expense that is later rolled back
+S-CACHE during transaction: view balance=95000, PostgreSQL transaction count=0
+S-CACHE after rollback: view balance=100000, rejected expense absent
+00:04 +5: PostgreSQL atomicity probes control: failed batch rolls back journal, entities and command id
+00:08 +6: PostgreSQL atomicity probes S-CACHE: a previously returned view changes after a later command
+S-CACHE escaped snapshot: previously returned view balance changed from100000 to95000
+00:11 +7: PostgreSQL atomicity probes control: concurrent same command id applies once
+00:16 +8: PostgreSQL atomicity probes S-ERASE: reset races with command and fails foreign key validation
+S-ERASE reset: failed SQLSTATE23503, account still exists; concurrent expense committed
+00:21 +9: PostgreSQL atomicity probes S-ERASE: delete races with command and fails foreign key validation
+S-ERASE delete: failed SQLSTATE23503, account still exists; concurrent expense committed
+00:25 +10: PostgreSQL atomicity probes (tearDownAll)
+00:25 +10: All tests passed!

@@ -19,11 +19,13 @@ String _period(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 int _minor(Object? v) => v == null ? 0 : parseMinor(v);
 
 /// Плановые платежи и разовые покупки, не оплаченные и попадающие в [from, until].
-List<(Map<String, dynamic>, DateTime)> _due(List<Map<String, dynamic>> planned, DateTime from, DateTime until) {
+List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dynamic>> planned, DateTime from, DateTime until) {
   final out = <(Map<String, dynamic>, DateTime)>[];
   // Сроки считает ядро: ежемесячные, недельные, годовые и разовые покупки (D88).
   final horizon = DateTime(from.year, from.month + 3, 0);
   for (final p in planned) {
+    // Погашенный кредит больше не требует оплаты — то же правило, что в приложении (R04).
+    if (!plannedDebtActive(ledger, p['debtId'] as String?)) continue;
     final paid = ((p['paid'] as List?) ?? const []).cast<String>();
     final end = until.isBefore(horizon) ? until : horizon;
     for (final o in PaySchedule.fromJson(p).occurrences(from, end)) {
@@ -59,7 +61,7 @@ Brief morningBrief(BriefInput i) {
   final today = i.today;
   // D48/D50: никаких «до зарплаты» — остаток на счетах и лимит владельца.
   final limit = i.profile['dailyLimit'] == null ? null : parseMinor(i.profile['dailyLimit']);
-  final dueToday = _due(i.planned, today, today);
+  final dueToday = _due(i.ledger, i.planned, today, today);
 
   final lines = <String>[
     kk ? 'Шоттарда: <b>${_kzt(i.ledger.liquid())}</b>.' : 'На счетах: <b>${_kzt(i.ledger.liquid())}</b>.',
@@ -71,7 +73,7 @@ Brief morningBrief(BriefInput i) {
       lines.add('• ${p['name']} — ${_kzt(_minor(p['amount']))}');
     }
   }
-  final soon = _due(i.planned, today.add(const Duration(days: 1)), today.add(const Duration(days: 3)));
+  final soon = _due(i.ledger, i.planned, today.add(const Duration(days: 1)), today.add(const Duration(days: 3)));
   if (soon.isNotEmpty) {
     lines.add(kk ? 'Жақын 3 күнде: ${soon.map((e) => '${e.$1['name']} (${e.$2.day}.${e.$2.month.toString().padLeft(2, '0')})').join(', ')}.' : 'В ближайшие 3 дня: ${soon.map((e) => '${e.$1['name']} (${e.$2.day}.${e.$2.month.toString().padLeft(2, '0')})').join(', ')}.');
   }
@@ -134,7 +136,7 @@ Brief eveningBrief(BriefInput i) {
       lines.add(kk ? '«$cat» лимиті: ${st.usedPercent?.round()}%.' : 'Лимит «$cat»: ${st.usedPercent?.round()}%.');
     }
   }
-  final dueTomorrow = _due(i.planned, tomorrow, tomorrow);
+  final dueTomorrow = _due(i.ledger, i.planned, tomorrow, tomorrow);
   if (dueTomorrow.isNotEmpty) {
     lines.add(kk ? 'Ертең төлем: ${dueTomorrow.map((e) => e.$1['name']).join(', ')}.' : 'Завтра платёж: ${dueTomorrow.map((e) => e.$1['name']).join(', ')}.');
   }

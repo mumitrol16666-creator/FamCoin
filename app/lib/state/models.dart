@@ -2,15 +2,71 @@
 /// плановые платежи и условия кредитов. Хранятся на сервере как `entities`.
 library;
 
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 
-/// Случайный идентификатор для новых объектов и команд.
-String newId() {
+String _randomId() {
   final r = Random.secure();
   return List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+}
+
+/// Ключ зоны, в которой выполняется отправка формы (см. [SubmitAttempt]).
+const submitAttemptKey = #famcoinSubmitAttempt;
+
+/// Одна отправка формы (APP-03). Пока форма открыта, все идентификаторы фактов
+/// и ключ команды, созданные при отправке, воспроизводятся одинаково при каждой
+/// попытке: потерянный ответ сервера и повторное нажатие дают тот же факт, а не
+/// второй. Если после неопределённой сетевой ошибки пользователь изменил
+/// поля, повтор отклоняется ([AttemptChanged]) — предыдущая отправка могла
+/// дойти, и молча слать другое под тем же ключом нельзя.
+class SubmitAttempt {
+  String _base = _randomId();
+  int _n = 0;
+  final _fingerprints = <String, String>{};
+
+  /// Последняя попытка оборвалась сетевой ошибкой: неизвестно, дошла ли она.
+  bool uncertain = false;
+
+  /// Начало очередной попытки: счётчик идентификаторов начинается заново.
+  void beginCall() {
+    _n = 0;
+    uncertain = false;
+  }
+
+  String nextId() => '$_base${(_n++).toRadixString(16).padLeft(2, '0')}';
+
+  /// Новая отправка с новыми идентификаторами (после успеха или отказа).
+  void reset() {
+    _base = _randomId();
+    _n = 0;
+    uncertain = false;
+    _fingerprints.clear();
+  }
+
+  /// Команда под этим ключом уже отправлялась другого содержания?
+  void check(String commandId, Object command) {
+    final fp = jsonEncode(command);
+    final old = _fingerprints[commandId];
+    if (old != null && old != fp) throw AttemptChanged();
+    _fingerprints[commandId] = fp;
+  }
+}
+
+/// Поля формы изменились после обрыва связи: прежняя отправка могла дойти.
+class AttemptChanged implements Exception {
+  @override
+  String toString() => 'AttemptChanged';
+}
+
+/// Идентификатор для новых объектов и команд. Внутри отправки формы
+/// ([SubmitAttempt]) он воспроизводим при повторе.
+String newId() {
+  final attempt = Zone.current[submitAttemptKey];
+  return attempt is SubmitAttempt ? attempt.nextId() : _randomId();
 }
 
 int _minor(Object? v) => v == null ? 0 : parseMinor(v);
@@ -183,7 +239,7 @@ class GoalInfo {
 
 /// Плановый платёж: план не меняет баланс, факт оплаты проводится отдельно (D14).
 class PlannedInfo {
-  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once, this.goalId, this.every = everyMonth, this.weekday, this.monthOfYear});
+  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once, this.goalId, this.every = everyMonth, this.weekday, this.monthOfYear, this.previous});
   factory PlannedInfo.fromJson(String id, Map<String, dynamic> d) => PlannedInfo(
         id,
         d['name'] as String? ?? '',
@@ -198,6 +254,7 @@ class PlannedInfo {
         every: d['every'] == everyWeek || d['every'] == everyYear ? d['every'] as String : everyMonth,
         weekday: (d['weekday'] as num?)?.toInt(),
         monthOfYear: (d['monthOfYear'] as num?)?.toInt(),
+        previous: d['prev'] is Map ? PaySchedule.fromJson((d['prev'] as Map).cast<String, dynamic>()) : null,
       );
   final String id;
   final String name;
@@ -233,18 +290,37 @@ class PlannedInfo {
   /// Месяц года 1–12 для годового платежа.
   final int? monthOfYear;
 
+  /// Прежняя версия расписания (R03): после смены дня или частоты старые сроки
+  /// и их отметки «оплачено» остаются в силе, а новые правила действуют с [start].
+  final PaySchedule? previous;
+
   /// Сроки платежа: общий расчёт ядра, тот же, что у сервера и бота.
-  PaySchedule get schedule => PaySchedule(every: every, day: day, weekday: weekday, monthOfYear: monthOfYear, once: once, start: start);
+  PaySchedule get schedule => PaySchedule(every: every, day: day, weekday: weekday, monthOfYear: monthOfYear, once: once, start: start, previous: previous);
 
   /// Копия с другими условиями; `paid`, `start`, долг и копилка сохраняются —
   /// правка платежа не теряет историю оплат.
-  PlannedInfo copyWith({String? name, int? amount, int? day, String? category, String? every, int? weekday, int? monthOfYear}) => PlannedInfo(
-        id, name ?? this.name, amount ?? this.amount, day ?? this.day, category ?? this.category, debtId, paid,
-        start: start, once: once, goalId: goalId,
-        every: every ?? this.every,
-        weekday: every == null ? this.weekday : (every == everyWeek ? weekday : null),
-        monthOfYear: every == null ? this.monthOfYear : (every == everyYear ? monthOfYear : null),
-      );
+  ///
+  /// Если меняются день, частота, день недели или месяц и задан [effectiveFrom]
+  /// (R03), прежние правила сохраняются как версия: прошлые сроки не меняются,
+  /// новые правила действуют с этой даты.
+  PlannedInfo copyWith({String? name, int? amount, int? day, String? category, String? every, int? weekday, int? monthOfYear, DateTime? effectiveFrom}) {
+    final nextEvery = every ?? this.every;
+    final nextDay = day ?? this.day;
+    final nextWeekday = every == null ? this.weekday : (every == everyWeek ? weekday : null);
+    final nextMonth = every == null ? this.monthOfYear : (every == everyYear ? monthOfYear : null);
+    final changed = nextEvery != this.every || nextDay != this.day || nextWeekday != this.weekday || nextMonth != this.monthOfYear;
+    final versioned = changed && effectiveFrom != null && once == null;
+    return PlannedInfo(
+      id, name ?? this.name, amount ?? this.amount, nextDay, category ?? this.category, debtId, paid,
+      start: versioned ? effectiveFrom : start,
+      once: once,
+      goalId: goalId,
+      every: nextEvery,
+      weekday: nextWeekday,
+      monthOfYear: nextMonth,
+      previous: versioned ? schedule : previous,
+    );
+  }
 
   /// Вид справочника на сервере: разовые покупки хранятся отдельно.
   String get entityKind => once == null ? 'planned' : 'purchase';
@@ -267,6 +343,7 @@ class PlannedInfo {
         if (every != everyMonth) 'every': every,
         if (every == everyWeek && weekday != null) 'weekday': weekday,
         if (every == everyYear && monthOfYear != null) 'monthOfYear': monthOfYear,
+        if (previous != null) 'prev': previous!.toJson(),
       };
 }
 

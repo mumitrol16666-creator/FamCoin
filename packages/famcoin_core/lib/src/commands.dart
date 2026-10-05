@@ -87,8 +87,14 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
     case 'addMoneyAccount':
       l.addMoneyAccount(s('accountId'), liquid: c['liquid'] != false, currency: so('currency') ?? 'KZT');
     case 'archiveAccount':
-      l.requireActiveMoney(s('accountId'));
-      l.archiveAccount(s('accountId'), archived: c['archived'] != false);
+      final archive = c['archived'] != false;
+      if (archive) {
+        l.requireActiveMoney(s('accountId'));
+      } else if (!l.account(s('accountId')).isMoney) {
+        // Вернуть из архива можно именно архивный счёт (C08), но только денежный.
+        throw LedgerException('${s('accountId')} — не денежный счёт', code: 'accountNotMoney');
+      }
+      l.archiveAccount(s('accountId'), archived: archive);
     case 'opening':
       l.openingBalance(id: s('id'), date: date(), account: s('account'), amount: m('amount'), meta: meta());
     case 'openingDebt':
@@ -96,6 +102,7 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
     case 'openingReceivable':
       l.openingReceivable(id: s('id'), date: date(), person: s('person'), amount: m('amount'));
     case 'expense':
+      l.requireOccurrenceFree(meta(), exceptTxId: so('id'));
       l.expense(id: s('id'), date: date(), account: s('account'), splits: splits(), meta: meta());
     case 'income':
       l.income(id: s('id'), date: date(), account: s('account'), source: s('source'), amount: m('amount'), meta: meta());
@@ -112,6 +119,7 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
     case 'creditReceived':
       l.creditReceived(id: s('id'), date: date(), account: s('account'), debtId: s('debtId'), amount: m('amount'));
     case 'loanPayment':
+      l.requireOccurrenceFree(meta(), exceptTxId: so('id'));
       l.loanPayment(id: s('id'), date: date(), account: s('account'), debtId: s('debtId'), principal: m('principal'), interest: mo('interest'), fees: mo('fees'), meta: meta());
     case 'creditPurchase':
       l.creditPurchase(id: s('id'), date: date(), debtId: s('debtId'), splits: splits(), downPaymentAccount: so('downPaymentAccount'), downPayment: mo('downPayment'), meta: meta());

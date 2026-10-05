@@ -1,0 +1,23 @@
+✔ Mac permission prompt runs synchronously before registering the service worker (2.217209ms)
+✔ denied: no subscription when permission is not granted (0.313125ms)
+✔ default: no subscription when permission is not granted (0.591417ms)
+✔ server confirmation is required; reload and retry keep the existing subscription (0.970084ms)
+✔ push service failure remains retryable without another permission prompt (0.563875ms)
+✔ iPhone browser and browsers without push do not request unusable permissions (0.486833ms)
+✔ stalled cold start offers recovery; a late first frame still opens the app (1.538041ms)
+✔ script/network errors and uncaught startup failures show a working retry (1.056667ms)
+✔ a working app is not covered by unrelated runtime failures or an old timeout (0.24475ms)
+✔ lost application view on resume offers recovery without losing input automatically (0.264417ms)
+✔ recovery works in Kazakh and when the browser denies access to storage (0.426708ms)
+✔ engine and loader share local assets configuration: {"ios":true} (2.936625ms)
+✔ engine and loader share local assets configuration: {"ipad":true} (1.152125ms)
+✔ engine and loader share local assets configuration: {} (0.507375ms)
+✔ loader, engine and Dart entrypoint failures all reach the HTML recovery screen (1.143583ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 57.097084

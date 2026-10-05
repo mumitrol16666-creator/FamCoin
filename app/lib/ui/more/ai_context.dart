@@ -298,9 +298,12 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
     },
     'recordedIncome': {
       'averagePerMonth': _t(avgIncome),
-      'recurringPaymentsPerMonth': _t(s.recurringMonthly),
+      // Среднее за месяц: недельные платежи × 52/12, годовые / 12. Сумма
+      // этого месяца по реальным срокам — в recurringPaymentsThisMonth.
+      'recurringPaymentsPerMonth': _t(s.averageMonthlyCommitment),
+      'recurringPaymentsThisMonth': _t(s.scheduledForMonth(s.monthStart)),
       // Платежей больше, чем записано доходов: скорее всего, доходы внесены не все.
-      'looksIncomplete': s.recurringMonthly > avgIncome,
+      'looksIncomplete': s.averageMonthlyCommitment > avgIncome,
     },
     ..._operations(s, l),
     'operationsNote': 'operationsToday, operationsYesterday, operationsDayBeforeYesterday, operationsEarlier — только траты (расходы) по дням; incomes — только доходы, с датой. У траты с полем unexpected: true человек отметил её непредвиденной, с planned: true — запланированной; обе не входят в дневной лимит. Из операций этого и прошлого месяца взяты последние $_recentOperations и $_largestOperations самых крупных. Пустой список — за этот день трат нет. Заметки написал сам человек.',

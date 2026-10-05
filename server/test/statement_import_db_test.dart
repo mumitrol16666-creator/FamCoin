@@ -342,35 +342,67 @@ void main() {
     expect(profile['dailyLimitHistory'], history);
   });
 
-  test('плановый платёж из выписки отмечается оплаченным, платёж по кредиту не пишется; отмена снимает отметку', () async {
+  /// Подписка по названию магазина и «Kaspi Кредит» на 20 000 ₸: в выписке
+  /// на 20 000 ₸ есть только перевод Айгуль К. — похожий по сумме и дате.
+  List<Map<String, dynamic>> plannedSetup() => [
+        {'type': 'upsertEntity', 'kind': 'planned', 'entityId': 'p1', 'data': {'name': 'Подписка ChatGPT', 'amount': '1147008', 'day': 25, 'category': 'subscriptions', 'paid': <String>[], 'start': '2026-09-01'}},
+        {'type': 'openingDebt', 'id': 'd1', 'date': '2026-09-01', 'debtId': 'red', 'amount': '${kzt(300000)}'},
+        {'type': 'upsertEntity', 'kind': 'debt', 'entityId': 'red', 'data': {'name': 'Kaspi Кредит', 'kind': 'loan'}},
+        {'type': 'upsertEntity', 'kind': 'planned', 'entityId': 'p2', 'data': {'name': 'Kaspi Кредит', 'amount': '${kzt(20000)}', 'day': 28, 'category': 'other', 'debtId': 'red', 'paid': <String>[], 'start': '2026-09-01'}},
+      ];
+
+  test('плановый платёж по названию магазина отмечается оплаченным; перевод человеку на сумму кредита сам платежом не становится (S01); отмена снимает отметку', () async {
     if (skip()) return;
-    final (chatId, userId) = await owner(openingDate: '2026-09-01', openingAmount: 100000, extra: [
-      {'type': 'upsertEntity', 'kind': 'planned', 'entityId': 'p1', 'data': {'name': 'Подписка ChatGPT', 'amount': '1147008', 'day': 25, 'category': 'subscriptions', 'paid': <String>[], 'start': '2026-09-01'}},
-      {'type': 'openingDebt', 'id': 'd1', 'date': '2026-09-01', 'debtId': 'red', 'amount': '${kzt(300000)}'},
-      {'type': 'upsertEntity', 'kind': 'debt', 'entityId': 'red', 'data': {'name': 'Kaspi Кредит', 'kind': 'loan'}},
-      {'type': 'upsertEntity', 'kind': 'planned', 'entityId': 'p2', 'data': {'name': 'Kaspi Кредит', 'amount': '${kzt(20000)}', 'day': 28, 'category': 'other', 'debtId': 'red', 'paid': <String>[], 'start': '2026-09-01'}},
-    ]);
+    final (chatId, userId) = await owner(openingDate: '2026-09-01', openingAmount: 100000, extra: plannedSetup());
     Future<List<dynamic>> paid(String id) async => ((await view(userId)).of('planned')[id]!['paid'] as List);
 
     await send(chatId, userId);
-    expect(bot.text, allOf(contains('новых — 8'), contains('платежи по кредитам — 1, не записываю'), contains('плановые платежи 1'), contains('Плановые платежи отмечу оплаченными: Подписка ChatGPT.')));
-    expect(bot.text, allOf(contains('Платежи по кредитам не записываю — 1, 20 000 ₸ (Kaspi Кредит)'), isNot(contains('совпадает с выпиской')), isNot(contains('предложу выровнять'))));
-    final ok = bot.button('Записать (8)');
+    expect(bot.text, allOf(contains('новых — 9'), contains('плановые платежи 1'), contains('Плановые платежи отмечу оплаченными: Подписка ChatGPT.')));
+    expect(bot.text, allOf(contains('Эти строки похожи на плановый платёж'), contains('Айгуль К.'), contains('«Kaspi Кредит»'), isNot(contains('платежи по кредитам'))));
+    expect(bot.has('Айгуль К. → Kaspi Кредит'), isTrue);
+    final ok = bot.button('Записать (9)');
     await press(chatId, ok);
     var v = await view(userId);
     expect(await paid('p1'), ['2026-09']);
-    expect(await paid('p2'), isEmpty);
+    expect(await paid('p2'), isEmpty, reason: 'без подтверждения кредит не оплачен');
     final payment = v.ledger.byId(importRowId(ok.split(':')[1], 4))!;
-    expect(payment.meta, {'who': 'shared', 'note': 'Подписка ChatGPT', 'planned': 'p1', 'period': '2026-09', 'src': 'kaspi'});
-    expect(v.ledger.balance('acc0'), 9427992 + kzt(20000), reason: 'платёж по кредиту не записан');
+    expect(payment.meta, {'who': 'shared', 'note': 'Подписка ChatGPT', 'planned': 'p1', 'period': '2026-09', 'bank': 'OPENAI *CHATGPT SUBSCR (23,20 USD)', 'src': 'kaspi'});
+    final person = liveOps(v.ledger).singleWhere((t) => '${t.meta['note']}'.contains('Айгуль'));
+    expect(person.meta['planned'], isNull);
+    expect(person.postings.any((p) => p.accountId == 'expense:other'), isTrue, reason: 'обычный расход, а не оплата кредита');
+    expect(v.ledger.balance('acc0'), 9427992, reason: 'как в банке: перевод Айгуль записан расходом');
     expect(v.ledger.balance(liabilityAccount('red')), kzt(300000));
-    expect(bot.text, allOf(contains('Записано операций: 8'), contains('Плановые платежи отмечены оплаченными: 1'), contains('Платежи по кредитам не записаны: Kaspi Кредит 20 000 ₸ (28.09.2026)')));
-    expect(bot.has('Выровнять'), isFalse, reason: 'пока не записана вся выписка, остаток с банком не сравнивается');
 
     await press(chatId, bot.button('Отменить импорт'));
     v = await view(userId);
     expect(await paid('p1'), isEmpty);
     expect(v.ledger.balance('acc0'), kzt(100000));
+  });
+
+  test('связь с платежом по кредиту подтверждается кнопкой: строка не пишется, срок не отмечается, связь можно снять (S01)', () async {
+    if (skip()) return;
+    final (chatId, userId) = await owner(openingDate: '2026-09-01', openingAmount: 100000, extra: plannedSetup());
+    Future<List<dynamic>> paid(String id) async => ((await view(userId)).of('planned')[id]!['paid'] as List);
+
+    await send(chatId, userId);
+    final link = bot.button('Айгуль К. → Kaspi Кредит');
+    await press(chatId, link);
+    expect(bot.text, allOf(contains('новых — 8'), contains('платежи по кредитам — 1, не записываю'), contains('Связано вами с платежами: 1'), isNot(contains('Эти строки похожи'))));
+    expect(bot.has('Не связывать'), isTrue);
+
+    // Снять связь — строка снова обычный расход.
+    await press(chatId, bot.button('Не связывать'));
+    expect(bot.text, allOf(contains('новых — 9'), contains('Эти строки похожи')));
+    await press(chatId, bot.button('Айгуль К. → Kaspi Кредит'));
+
+    final ok = bot.button('Записать (8)');
+    await press(chatId, ok);
+    final v = await view(userId);
+    expect(liveOps(v.ledger).where((t) => '${t.meta['note']}'.contains('Айгуль')), isEmpty, reason: 'платёж по кредиту делит на долг и проценты сам человек');
+    expect(v.ledger.balance('acc0'), 9427992 + kzt(20000));
+    expect(await paid('p2'), isEmpty);
+    expect(bot.text, allOf(contains('Записано операций: 8'), contains('Платежи по кредитам не записаны: Kaspi Кредит 20 000 ₸ (28.09.2026)')));
+    expect(bot.has('Выровнять'), isFalse, reason: 'пока не записана вся выписка, остаток с банком не сравнивается');
   });
 
   test('деньги в копилке цели не считаются расхождением с банком и не выравниваются', () async {

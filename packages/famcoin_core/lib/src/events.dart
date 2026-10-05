@@ -22,10 +22,8 @@ const categoryFees = 'fees';
 const sourceCashback = 'cashback';
 const sourceInterest = 'interest';
 
-/// Категория и источник «прочее» — для списания долгов (Ж6) и записей
-/// «догнать учёт» (Ж4), у которых нет своей категории.
-const categoryOther = 'other';
-const sourceOther = 'otherIncome';
+/// Списание долга (D124): не доход и не расход, меняет только капитал.
+const equityWriteOff = 'equity:writeoff';
 
 extension LedgerEvents on Ledger {
   String _exp(String category) {
@@ -336,10 +334,7 @@ extension LedgerEvents on Ledger {
       throw LedgerException('Части возврата не могут быть отрицательными', code: 'negativeParts');
     }
     _positive(principal + interest, 'Сумма возврата');
-    final owed = balance(_recv(person));
-    if (principal > owed) {
-      throw LedgerException('Возврат $principal больше требования $owed', code: 'repaymentExceeds');
-    }
+    validateReceivableRepayment(_recv(person), principal);
     return _post(Transaction(
       id: id,
       date: date,
@@ -463,10 +458,12 @@ extension LedgerEvents on Ledger {
 
   // ------------------------------------------------------------ списание
 
-  /// Списание личного долга (Ж6). Деньги не вернутся — остаток «мне должны»
-  /// уходит в расход категории [categoryOther]; долг, который мне простили, —
-  /// в доход источника [sourceOther]. Денежные счета не трогаются: это
-  /// признание потери (или подарка), а не движение денег. Списать можно не
+  /// Списание личного долга (Ж6, D124). Деньги не вернутся — остаток «мне
+  /// должны» закрывается; долг, который мне простили, закрывается тоже.
+  /// Денежные счета не трогаются, и это не доход и не расход: человек
+  /// закрывает долг, а не зарабатывает и не тратит. Меняется только капитал
+  /// (счёт `equity:writeoff`); в отчёте периода — отдельные строки
+  /// [PeriodReport.writtenOff] и [PeriodReport.forgiven]. Списать можно не
   /// больше текущего остатка долга.
   Transaction writeOff({
     required String id,
@@ -478,17 +475,14 @@ extension LedgerEvents on Ledger {
   }) {
     _positive(amount, 'Сумма списания');
     final debtAccount = receivable ? _recv(person) : _liab(person);
-    final left = balance(debtAccount);
-    if (amount > left) {
-      throw LedgerException('Списать можно не больше остатка долга', code: 'writeOffExceeds');
-    }
+    validateDebtWriteOff(debtAccount, amount);
     return _post(Transaction(
       id: id,
       date: date,
       type: EventType.writeOff,
       postings: receivable
-          ? [Posting(_exp(categoryOther), amount), Posting(debtAccount, -amount)]
-          : [Posting(debtAccount, -amount), Posting(_inc(sourceOther), amount)],
+          ? [Posting(debtAccount, -amount), Posting(_equity(equityWriteOff), -amount)]
+          : [Posting(debtAccount, -amount), Posting(_equity(equityWriteOff), amount)],
       meta: {...meta, 'person': person, 'side': receivable ? 'receivable' : 'liability'},
     ));
   }

@@ -7,6 +7,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:postgres/postgres.dart';
 
@@ -192,46 +193,77 @@ class Telegram {
   Future<bool> refundStars({required int telegramUserId, required String chargeId}) async =>
       (await call('refundStarPayment', {'user_id': telegramUserId, 'telegram_payment_charge_id': chargeId})) != null;
 
+  /// Паузы между повторами оплаты, которую не удалось обработать; после
+  /// последней повторы идут с тем же интервалом.
+  static const retryPauses = [Duration(seconds: 2), Duration(seconds: 5), Duration(seconds: 15), Duration(seconds: 30)];
+
+  final _attempts = <int, int>{};
+
+  /// Следующий `offset` для getUpdates: всё до него Telegram считает
+  /// подтверждённым и больше не пришлёт. Двигается только после успешной
+  /// обработки события.
+  int get offset => _offset;
+
   /// Длинный опрос: «/start <код>», сообщения и кнопки, предоплата и успешные платежи.
   Future<void> pollForever() async {
     if (!enabled) return;
     while (true) {
-      final data = await call('getUpdates', {
-        'offset': _offset,
-        'timeout': 25,
-        'allowed_updates': ['message', 'pre_checkout_query', 'callback_query'],
-      });
-      if (data == null) {
-        await Future<void>.delayed(const Duration(seconds: 10));
-        continue;
-      }
-      final updates = data['result'];
-      if (updates is! List) {
-        await Future<void>.delayed(const Duration(seconds: 10));
-        continue;
-      }
-      for (final u in updates.cast<Map<String, dynamic>>()) {
-        _offset = (u['update_id'] as int) + 1;
-        try {
-          final pre = u['pre_checkout_query'] as Map<String, dynamic>?;
-          if (pre != null) {
-            await _preCheckout(pre);
-            continue;
-          }
-          final cb = u['callback_query'] as Map<String, dynamic>?;
-          if (cb != null) {
-            final handler = onCallback;
-            if (handler != null) await handler(cb);
-            continue;
-          }
-          final msg = u['message'] as Map<String, dynamic>?;
-          if (msg == null) continue;
-          await _handle(msg);
-        } catch (e, st) {
-          stderr.writeln('telegram update: ${e.runtimeType}\n$st');
-        }
-      }
+      final wait = await pollOnce();
+      if (wait > Duration.zero) await Future<void>.delayed(wait);
     }
+  }
+
+  /// Один запрос getUpdates и обработка пачки по порядку. Возвращает, сколько
+  /// ждать до следующего.
+  ///
+  /// Событие подтверждается (offset двигается), только когда его обработчик
+  /// завершился. Если обработчик упал, offset остаётся на этом событии, пачка
+  /// не обрабатывается дальше — иначе подтверждение более позднего события
+  /// заодно подтвердило бы потерянное, — и Telegram пришлёт то же событие
+  /// снова. Так оплата не теряется при обрыве базы: повтор безопасен, потому
+  /// что платёж защищён от дубля по `charge_id`. Остальные события (сообщение,
+  /// кнопка) при ошибке только записываются в журнал и подтверждаются: их
+  /// повтор мог бы выполнить действие дважды, а потеря не стоит денег.
+  Future<Duration> pollOnce() async {
+    final data = await call('getUpdates', {
+      'offset': _offset,
+      'timeout': 25,
+      'allowed_updates': ['message', 'pre_checkout_query', 'callback_query'],
+    });
+    if (data == null) return const Duration(seconds: 10);
+    final updates = data['result'];
+    if (updates is! List) return const Duration(seconds: 10);
+    for (final u in updates.cast<Map<String, dynamic>>()) {
+      final id = u['update_id'] as int;
+      try {
+        await _process(u);
+      } catch (e, st) {
+        if (_isPayment(u)) {
+          final attempt = _attempts.update(id, (n) => n + 1, ifAbsent: () => 1);
+          stderr.writeln('telegram payment update $id: ${e.runtimeType}, попытка $attempt — событие не подтверждено, будет повторено\n$st');
+          return retryPauses[min(attempt, retryPauses.length) - 1];
+        }
+        stderr.writeln('telegram update $id: ${e.runtimeType}\n$st');
+      }
+      _attempts.remove(id);
+      _offset = id + 1;
+    }
+    return Duration.zero;
+  }
+
+  bool _isPayment(Map<String, dynamic> u) => (u['message'] as Map?)?['successful_payment'] != null;
+
+  Future<void> _process(Map<String, dynamic> u) async {
+    final pre = u['pre_checkout_query'] as Map<String, dynamic>?;
+    if (pre != null) return _preCheckout(pre);
+    final cb = u['callback_query'] as Map<String, dynamic>?;
+    if (cb != null) {
+      final handler = onCallback;
+      if (handler != null) await handler(cb);
+      return;
+    }
+    final msg = u['message'] as Map<String, dynamic>?;
+    if (msg != null) await _handle(msg);
   }
 
   Future<void> _preCheckout(Map<String, dynamic> q) async {

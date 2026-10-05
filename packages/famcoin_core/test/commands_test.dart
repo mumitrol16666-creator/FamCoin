@@ -7,6 +7,7 @@ import 'package:famcoin_core/famcoin_core.dart';
 import 'package:test/test.dart';
 
 void main() {
+  occurrenceTests();
   List<Map<String, dynamic>> commands() => [
         {'type': 'addMoneyAccount', 'accountId': 'kaspi'},
         {'type': 'opening', 'id': 'o1', 'date': '2026-09-01', 'account': 'kaspi', 'amount': '10000000'},
@@ -73,6 +74,41 @@ void main() {
     );
   });
 
+  test('C08/T14 архивный счёт возвращается из архива: остаток и история целы, операции снова принимаются', () {
+    final l = Ledger();
+    for (final c in commands().take(2)) {
+      applyLedgerCommand(l, c);
+    }
+    applyLedgerCommand(l, {'type': 'archiveAccount', 'accountId': 'kaspi'});
+    applyLedgerCommand(l, {'type': 'archiveAccount', 'accountId': 'kaspi', 'archived': false});
+    expect(l.account('kaspi').archived, isFalse);
+    expect(l.balance('kaspi'), kzt(100000));
+    expect(l.transactions, hasLength(1));
+    applyLedgerCommand(l, {'type': 'expense', 'id': 'x', 'date': '2026-09-04', 'account': 'kaspi', 'splits': {'food': '10000'}});
+    expect(l.balance('kaspi'), kzt(100000) - 10000);
+    // Не денежный счёт и несуществующий не разархивируются.
+    expect(() => applyLedgerCommand(l, {'type': 'archiveAccount', 'accountId': 'nope', 'archived': false}), throwsA(isA<LedgerException>()));
+    expect(() => applyLedgerCommand(l, {'type': 'archiveAccount', 'accountId': 'expense:food', 'archived': false}), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'accountNotMoney')));
+  });
+
+  test('C06/T15 освобождение резерва: ноль, минус и слишком большая сумма отклоняются без изменений', () {
+    final l = Ledger();
+    for (final c in commands().take(2)) {
+      applyLedgerCommand(l, c);
+    }
+    applyLedgerCommand(l, {'type': 'reserve', 'goalId': 'trip', 'accountId': 'kaspi', 'amount': '5000000'});
+    for (final bad in ['-10000000', '0', '1000000000000001']) {
+      expect(
+        () => applyLedgerCommand(l, {'type': 'release', 'goalId': 'trip', 'accountId': 'kaspi', 'amount': bad}),
+        throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'invalidAmount')),
+        reason: bad,
+      );
+      expect(l.reserved(goalId: 'trip'), kzt(50000), reason: 'резерв не меняется после $bad');
+    }
+    applyLedgerCommand(l, {'type': 'release', 'goalId': 'trip', 'accountId': 'kaspi', 'amount': '1000000'});
+    expect(l.reserved(goalId: 'trip'), kzt(40000));
+  });
+
   test('некорректные данные — ошибка учёта, а не падение', () {
     final l = Ledger()..addMoneyAccount('kaspi');
     for (final bad in [
@@ -122,5 +158,60 @@ void main() {
     applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'cash'});
     applyLedgerCommand(l, {'type': 'opening', 'id': 'o3', 'date': '2026-09-01', 'account': 'cash', 'amount': '100'});
     expect(l.byId('o3')!.meta, isEmpty);
+  });
+}
+
+void occurrenceTests() {
+  group('R01 один срок платежа оплачивается один раз', () {
+    Ledger base() => Ledger()
+      ..addMoneyAccount('kaspi')
+      ..openingBalance(id: 'o', date: DateTime(2026, 9, 1), account: 'kaspi', amount: kzt(100000));
+    Map<String, dynamic> pay(String id, {String period = '2026-09'}) => {
+          'type': 'expense', 'id': id, 'date': '2026-09-10', 'account': 'kaspi', 'splits': {'home': '${kzt(10000)}'},
+          'meta': {'planned': 'rent', 'period': period},
+        };
+
+    test('вторая оплата того же срока отклоняется, другой срок и отмена — нет', () {
+      final l = base();
+      applyLedgerCommand(l, pay('a'));
+      expect(() => applyLedgerCommand(l, pay('b')), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'occurrencePaid')));
+      expect(l.balance('kaspi'), kzt(90000));
+      applyLedgerCommand(l, pay('c', period: '2026-10'));
+      l.reverse('a', newId: 'rev');
+      applyLedgerCommand(l, pay('d')); // после удаления оплаты срок снова свободен
+      expect(l.balance('kaspi'), kzt(80000));
+    });
+
+    test('восстановление удалённой оплаты не создаёт вторую оплату срока', () {
+      final l = base();
+      applyLedgerCommand(l, pay('a'));
+      l.reverse('a', newId: 'rev');
+      applyLedgerCommand(l, pay('b'));
+      expect(() => applyLedgerCommand(l, {'type': 'restore', 'txId': 'a', 'id': 'r'}), throwsA(isA<LedgerException>()));
+      expect(l.balance('kaspi'), kzt(90000));
+    });
+
+    test('платёж по кредиту: тот же срок дважды — отказ; без связи со сроком — можно сколько угодно', () {
+      final l = base();
+      applyLedgerCommand(l, {'type': 'openingDebt', 'id': 'd', 'date': '2026-09-01', 'debtId': 'red', 'amount': '${kzt(50000)}'});
+      Map<String, dynamic> loan(String id, [Map<String, Object?>? meta]) => {
+            'type': 'loanPayment', 'id': id, 'date': '2026-09-10', 'account': 'kaspi', 'debtId': 'red', 'principal': '${kzt(10000)}',
+            if (meta != null) 'meta': meta,
+          };
+      applyLedgerCommand(l, loan('p1', {'planned': 'red', 'period': '2026-09'}));
+      expect(() => applyLedgerCommand(l, loan('p2', {'planned': 'red', 'period': '2026-09'})), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'occurrencePaid')));
+      applyLedgerCommand(l, loan('p3'));
+      applyLedgerCommand(l, loan('p4'));
+      expect(l.balance(liabilityAccount('red')), kzt(20000));
+    });
+
+    test('повтор той же записи с тем же id остаётся идемпотентным, а не ошибкой срока', () {
+      final l = base();
+      applyLedgerCommand(l, pay('a'));
+      // Повтор команды (тот же id и содержание) — не новая оплата: журнал принимает его как повтор.
+      applyLedgerCommand(l, pay('a'));
+      expect(l.transactions.where((t) => t.meta['planned'] == 'rent'), hasLength(1));
+      expect(l.balance('kaspi'), kzt(90000));
+    });
   });
 }

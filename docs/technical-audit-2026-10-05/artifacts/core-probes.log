@@ -1,0 +1,23 @@
+00:00 +0: loading test/technical_audit_core_probe_test.dart
+00:00 +0: C01: repeated delete/restore leaves two active copies of one purchase
+C01: one 10,000 purchase restored as two: cash=80,000, expenses=20,000
+00:00 +1: C02a: received repayment can be restored after another repayment closed debt
+C02a: loan issued=50,000; accepted returns=100,000; receivable=-50,000; cash=150,000
+00:00 +2: C02b: restore write-off exceeds remaining debt (receivable=true)
+C02b: receivable=true, written off 100,000 against 50,000; remaining=-50,000
+00:00 +3: C02b: restore write-off exceeds remaining debt (receivable=false)
+C02b: receivable=false, written off 100,000 against 50,000; remaining=-50,000
+00:00 +4: C03: deleting repaid borrowing leaves negative liability
+C03: deleting 50,000 borrowing after repayment: liability=-50,000, cash=50,000
+00:00 +5: C04: restoration breaks link between purchase and deleted refund
+C04: purchase restored as e2; dependent refund cannot restore: purchaseCancelled
+00:00 +6: C05: nominal n-month loan schedule can extend by a whole extra month
+C05: 100,000 / 3 at 0%: 4 rows; payments [33333.33, 33333.33, 33333.33, 0.01]
+C05: early repayment 50,000 against 150,000, preserve term 3 months → offered 4 months
+00:00 +7: C06: negative release increases reservation above money balance
+C06: release -100,000 increases reserve 50,000→150,000 with cash=100,000
+C06: spending from reserve with negative amount also posts and increases reserve
+00:00 +8: C07: restored copy and original duplicates survive snapshot reconstruction
+00:00 +9: C08: archiveAccount archived=false cannot restore an archived account
+C08: archived=false fails accountArchived; 100,000 remains permanently archived through command API
+00:00 +10: All tests passed!

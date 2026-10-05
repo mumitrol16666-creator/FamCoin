@@ -1,6 +1,8 @@
 /// Формы действий бюджета: оплата срока, погашение долга, цели, счета.
 library;
 
+import 'dart:async';
+
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -29,6 +31,10 @@ class SubmitButton extends StatefulWidget {
 class _SubmitButtonState extends State<SubmitButton> {
   bool _busy = false;
 
+  /// Идентификаторы отправки живут, пока форма открыта: после потерянного
+  /// ответа повторное нажатие шлёт те же факт и ключ команды (APP-03).
+  final _attempt = SubmitAttempt();
+
   @override
   Widget build(BuildContext context) {
     return FilledButton(
@@ -37,7 +43,12 @@ class _SubmitButtonState extends State<SubmitButton> {
           : () async {
               setState(() => _busy = true);
               final nav = Navigator.of(context);
-              final ok = await widget.onSubmit();
+              _attempt.beginCall();
+              final ok = await runZoned(widget.onSubmit, zoneValues: {submitAttemptKey: _attempt});
+              // Новая отправка получит новые идентификаторы, если эта завершилась
+              // определённо: успехом или отказом. Неопределённый обрыв связи
+              // оставляет прежние — повтор не создаст второй факт.
+              if (ok || !_attempt.uncertain) _attempt.reset();
               if (!mounted) return;
               setState(() => _busy = false);
               if (ok) nav.pop();
@@ -56,14 +67,14 @@ String? _firstAccount(BuildContext context) {
 /// Оплата срока планового платежа (факт отдельно от плана, D14).
 /// [date] — дата оплаты (по умолчанию сегодня); из сверки месяца приходит дата
 /// срока: «уже оплачено» записывается фактом, а не только галочкой (D98).
-Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date, String? title}) {
+Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date, String? title, int? initialAmount, String? initialAccount}) {
   final l = context.l10n;
   final state = AppScope.of(context).state;
   final locale = Localizations.localeOf(context).toString();
   final p = due.planned;
-  final amount = TextEditingController(text: amountToField(p.amount));
+  final amount = TextEditingController(text: amountToField(initialAmount ?? p.amount));
   final interest = TextEditingController();
-  var account = state.payAccountFor(p) ?? _firstAccount(context);
+  var account = state.activeAccounts.any((a) => a.id == initialAccount) ? initialAccount : (state.payAccountFor(p) ?? _firstAccount(context));
   var payDate = date == null || date.isAfter(state.today) ? state.today : date;
   // Покупка из копилки (D90): накопленное вернётся на счёт оплаты той же командой.
   final fromPiggy = p.once == null ? 0 : state.purchaseSaved(p);
@@ -110,7 +121,7 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
         TextButton(
           onPressed: () async {
             final nav = Navigator.of(ctx);
-            if (await runAction(ctx, () => state.upsert(p.entityKind, p.id, p.toJson(paid: {...p.paid, due.period})))) nav.pop();
+            if (await runAction(ctx, () => state.markDuePaid(due))) nav.pop();
           },
           child: Text(l.markPaidOnly),
         ),
@@ -144,12 +155,12 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
 }
 
 /// Погашение банковского долга вне графика или досрочно.
-Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? principal}) {
+Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? principal, DateTime? date, String? initialAccount}) {
   final l = context.l10n;
   final state = AppScope.of(context).state;
   final principalField = TextEditingController(text: principal == null ? '' : amountToField(principal));
   final interest = TextEditingController();
-  var account = _firstAccount(context);
+  var account = state.activeAccounts.any((a) => a.id == initialAccount) ? initialAccount : _firstAccount(context);
   return showFormSheet<void>(
     context,
     title: '${l.pay}: ${debt.name}',
@@ -174,7 +185,7 @@ Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? princip
             final pr = parseAmount(principalField.text, allowZero: true) ?? 0;
             final i = parseAmount(interest.text, allowZero: true) ?? 0;
             if (pr + i == 0 || account == null) return false;
-            return runAction(ctx, () => state.payDebt(debtId: debt.id, account: account!, principal: pr, interest: i));
+            return runAction(ctx, () => state.payDebt(debtId: debt.id, account: account!, principal: pr, interest: i, date: date));
           },
         ),
       ]),
@@ -423,7 +434,8 @@ Future<bool> editPlannedFlow(BuildContext context, PlannedInfo p) async {
   final l = context.l10n;
   final r = await showPlannedSheet(context, initial: p);
   if (r == null || !context.mounted) return false;
-  final next = p.copyWith(name: r.name, amount: r.amount, day: r.day, category: r.category, every: r.every, weekday: r.weekday, monthOfYear: r.monthOfYear);
+  // Новые условия действуют с сегодняшнего дня; оплаченное прошлое не пересчитывается (R03).
+  final next = p.copyWith(name: r.name, amount: r.amount, day: r.day, category: r.category, every: r.every, weekday: r.weekday, monthOfYear: r.monthOfYear, effectiveFrom: state.today);
   final ok = await runAction(context, () => state.upsert(p.entityKind, p.id, next.toJson()));
   if (ok) messenger.showSnackBar(SnackBar(content: Text(l.paymentSaved)));
   return ok;

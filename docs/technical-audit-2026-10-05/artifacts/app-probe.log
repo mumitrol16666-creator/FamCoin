@@ -1,0 +1,36 @@
+Resolving dependencies...
+Downloading packages...
+  code_assets 1.2.1 (2.1.0 available)
+  flutter_lints 5.0.0 (6.0.0 available)
+  flutter_secure_storage 10.3.4 (11.2.0 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.3 available)
+  google_fonts 6.3.3 (9.0.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  jni 1.0.3 (1.1.0 available)
+  lints 5.1.1 (6.1.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.2 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  url_launcher 6.3.2 (6.3.3 available)
+  vector_math 2.4.0 (2.4.3 available)
+Got dependencies!
+15 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/technical_audit_app_probe_test.dart
+00:00 +0: APP-01 monthly aggregate ignores weekly/yearly frequency
+APP-01: October due = 20000 KZT; recurringPaymentsPerMonth = 125000 KZT.
+00:00 +1: APP-02 backdated installment starts from entry day instead of purchase day
+APP-02: purchase 2026-09-10; entered 2026-10-05; first due 2026-11-25, not 2026-10-25.
+00:00 +2: APP-03 accepted payment with lost response is charged twice by form retry
+APP-03: one intended 10000 KZT payment + lost reply + retry -> two expenses, cash 80000 instead of 90000.
+00:00 +3: APP-04 intercepted credit payment leaves the corresponding due open
+APP-04: Sept payment 10000 KZT recorded; debt falls to 90000, but Sept due remains unpaid 10000 KZT.
+00:00 +4: APP-05 family page ignores refund while analytics subtracts it
+APP-05: family page shared 10000 KZT; analytics shared 6000 KZT after a 4000 refund.
+00:01 +5: APP-06 family analytics excludes installment expenses even with who field
+APP-06: installment expense 120000 KZT assigned shared is absent from family analytics.
+00:01 +6: APP-07 dated purchase paid from goal transfers funds on a different day
+APP-07: Sept 30 saved-funded purchase: cash 0/piggy 50000 instead of cash 50000/piggy 0; release dated Oct 5.
+00:01 +7: All tests passed!

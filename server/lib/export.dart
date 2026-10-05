@@ -44,8 +44,23 @@ class ExportLinks {
 }
 
 /// Одна строка на операцию: дата, время, тип, категории, счёт, сумма,
-/// заметка, для кого, статус, номер. Разделитель `;` и BOM — так файл сразу
-/// правильно открывается в Excel с русской/казахской локалью.
+/// заметка, для кого, статус, номер, затем «На счёт» и «Комиссия». Разделитель
+/// `;` и BOM — так файл сразу правильно открывается в Excel с русской/казахской
+/// локалью.
+///
+/// Сумма — суммарное изменение денежных счетов операции со знаком: расход
+/// отрицательный, доход положительный. У перевода между своими счетами это
+/// изменение нулевое, поэтому для него (и для его отмены) иначе: «Счёт» —
+/// откуда ушли деньги, «На счёт» — куда пришли, «Сумма» — сколько переведено
+/// (без знака, комиссия в неё не входит), «Комиссия» — комиссия отдельно
+/// (у отмены перевода она отрицательная: комиссию вернули). У остальных
+/// операций «На счёт» пусто, а комиссия — по счёту категории «Комиссии», если
+/// она есть.
+///
+/// Приложение может передать свои подписи двух последних столбцов в [headers]
+/// (12 подписей); если подписей 10, а названия `csv:toAccount` и `csv:fee` в
+/// [names] не заданы, столбцы получают подписи «To account» и «Fee». Старый
+/// десятистолбцовый разбор файла продолжает работать: новые столбцы — в конце.
 String csvJournal(Map<String, Object?> snapshot, {required List<String> headers, required Map<String, String> names}) {
   final accounts = {
     for (final a in (snapshot['accounts'] as List).cast<Map<String, dynamic>>()) a['id'] as String: accountFromJson(a),
@@ -54,7 +69,9 @@ String csvJournal(Map<String, Object?> snapshot, {required List<String> headers,
   final reversed = {for (final t in txs) if (t.reverses != null) t.reverses!};
   String name(String key, String fallback) => names[key] ?? fallback;
 
-  final rows = <List<String>>[headers];
+  final byId = {for (final t in txs) t.id: t};
+  final fullHeaders = headers.length >= 12 ? headers : [...headers, name('csv:toAccount', 'To account'), name('csv:fee', 'Fee')];
+  final rows = <List<String>>[fullHeaders];
   for (final t in txs) {
     final cats = <String>[];
     String? money;
@@ -79,18 +96,29 @@ String csvJournal(Map<String, Object?> snapshot, {required List<String> headers,
         : reversed.contains(t.id)
             ? name('status:cancelled', 'cancelled')
             : name('status:active', 'active');
+    // Перевод между своими счетами и его отмена: две денежные проводки
+    // противоположных знаков. Направление — по знаку проводки, а не по порядку.
+    final origin = t.reverses == null ? null : byId[t.reverses!];
+    final moves = t.type == EventType.transfer || (t.type == EventType.reversal && origin?.type == EventType.transfer);
+    final cash = [for (final p in t.postings) if (accounts[p.accountId]?.isMoney ?? false) p];
+    final out = moves ? cash.where((p) => p.amount < 0).firstOrNull : null;
+    final into = moves ? cash.where((p) => p.amount > 0).firstOrNull : null;
+    final transfer = out != null && into != null && cash.length == 2;
+    final fee = t.postings.where((p) => p.accountId == 'expense:$categoryFees').fold<int>(0, (sum, p) => sum + p.amount);
     final who = t.meta['who'];
     rows.add([
       dateToJson(t.date),
       '${t.meta['time'] ?? ''}',
       name('type:${t.type.name}', t.type.name),
       cats.join(', '),
-      money == null ? '' : name(money, money),
-      _tenge(money == null ? firstAmount : moneyDelta),
+      transfer ? name(out.accountId, out.accountId) : (money == null ? '' : name(money, money)),
+      transfer ? _tenge(min(out.amount.abs(), into.amount.abs())) : _tenge(money == null ? firstAmount : moneyDelta),
       '${t.meta['note'] ?? ''}',
       who is String ? name('who:$who', who) : '',
       status,
       t.id,
+      transfer ? name(into.accountId, into.accountId) : '',
+      fee == 0 ? '' : _tenge(fee),
     ]);
   }
   final buf = StringBuffer('﻿');

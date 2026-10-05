@@ -1,0 +1,11 @@
+CREATE DATABASE
+ count 
+-------
+     2
+(1 row)
+
+ERROR:  function nonexistent_audit_function() does not exist
+LINE 1: SELECT nonexistent_audit_function();
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+psql exit: 0

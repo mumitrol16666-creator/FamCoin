@@ -1,0 +1,81 @@
+Unable to find image 'dart:stable' locally
+stable: Pulling from library/dart
+Digest: sha256:7efb22ee3003e3aaa7af34840bfacb2fc1b06e1ac1295237dfcca1552816588e
+Status: Downloaded newer image for dart:stable
+Resolving dependencies...
+Downloading packages...
+  frontend_server_client 4.0.0 (4.1.0 available)
+  lints 5.1.1 (6.1.0 available)
+  postgres 3.5.16 (3.5.19 available)
+Got dependencies!
+3 packages have newer versions incompatible with dependency constraints.
+Try `dart pub outdated` for more information.
+00:00 +0: loading test/statement_import_db_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: файл → сводка → «Записать» → операции в журнале, остаток как в банке → «Отменить импорт»
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:00 +1: та же выписка второй раз: новых операций нет, записывать нечего
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:00 +2: записанное вручную сверяется: совпавшее не задваивается, лишнее видно и выравнивается кнопкой
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:00 +3: всё уже записано, а остаток расходится — выровнять можно и без записи
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:00 +4: операцию из выписки поправили и удалили в приложении: отмена импорта это учитывает
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+import: выписка разобрана — строк 1, язык ru, итоги сошлись, виды {purchase: 1}
+00:01 +5: перенос дневного лимита начинается заново и возвращается при отмене
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:01 +6: плановый платёж из выписки отмечается оплаченным, платёж по кредиту не пишется; отмена снимает отметку
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:01 +7: деньги в копилке цели не считаются расхождением с банком и не выравниваются
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:01 +8: история продлевается назад второй выпиской; отменять импорты можно только с последнего
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+import: выписка разобрана — строк 2, язык ru, итоги сошлись, виды {purchase: 2}
+00:01 +9: несколько счетов: бот спрашивает, к какому относится выписка; счёт можно сменить
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:02 +10: длинная выписка пишется несколькими пачками и целиком отменяется
+import: выписка разобрана — строк 320, язык ru, итоги сошлись, виды {purchase: 320}
+00:03 +11: не тот файл, выписка не сошлась, чтение PDF выключено — понятный ответ и ничего в журнале
+import: выписка не разобрана — noTable 
+p0 y65 h9 | 40:xxxxxxx 80:x 90:xxxxxxx
+import: выписка не разобрана — mismatch 27992
+p0 y65 h9 | 40:ВЫПИСКА
+p0 y77 h9 | 40:по 55:Kaspi 85:Gold 110:за 125:период 160:с 170:99.99.99 215:по 230:99.99.99
+p0 y99 h9 | 40:xxxxxx 75:xxxx 100:xxxxxxxx
+p0 y111 h9 | 40:xxxxx 70:xxxxx: 105:*9999
+p0 y123 h9 | 40:xxxxx 70:xxxxx: 105:xx99999x999999999999
+p0 y145 h9 | 40:xxxxxxx 80:xxxxxxxxxx 135:xxxxxxxx 180:по 195:xxxxx:
+p0 y157 h9 | 40:Доступно 85:на 100:99.99.99 300:+ 310:999 330:999,99 365:₸
+p0 y169 h9 | 40:Пополнения 300:+ 310:99 325:999,99 360:₸
+p0 y181 h9 | 40:Переводы 300:- 310:99 325:999,99 360:₸
+p0 y193 h9 | 40:Покупки 300:- 310:99 325:999,99 360:₸
+p0 y205 h9 | 40:Доступно 85:на 100:99.99.99 300:+ 310:99 325:999,99 360:₸
+p0 y227 h9 | 40:xxxxx 70:на 85:снятие 120:xxxxxxxx 165:xxx 185:xxxxxxxx: 235:999 255:999,99 290:₸
+p0 y259 h9 | 40:Дата 110:Сумма 230:Операция 360:Детали
+p0 y277 h9 | 40:99.99.99 110:- 120:9 130:999,99 165:₸ 230:Покупка 360:xxxxxx 395:xx99
+p0 y295 h9 | 40:99.99.99 110:+ 120:99 135:999,99 170:₸ 230:Пополнение 360:xxxxxxx 400:x.
+p0 y313 h9 | 40:99.99.99 110:- 120:99 135:999,99 170:₸ 230:Перевод 360:xxxxxx 395:x.
+p0 y331 h9 | 40:99.99.99 110:- 120:99 135:999,99 170:₸ 230:Перевод 270:на 285:свой 360:На 375:Kaspi 405:xxxxxxx
+p0 y343 h9 | 230:счет
+p0 y361 h9 | 40:99.99.99 110:- 120:99 135:999,99 170:₸ 230:Покупка 360:xxxxxx 395:*xxxxxxx 440:xxxxxx
+p0 y373 h9 | 110:(- 125:99,99 155:xxx)
+p0 y391 h9 | 40:99.99.99 110:- 120:99 135:999,99 170:₸ 230:Снятие 360:xxxxxxxx 405:Kaspi
+p0 y409 h9 | 40:99.99.99 110:+ 120:99 135:999,99 170:₸ 230:Поступление 290:со 360:С 370:Kaspi 400:xxxxxxxx
+p0 y421 h9 | 230:своего 265:счета
+p0 y439 h9 | 40:99.99.99 110:- 120:999,99 155:₸ 230:Разное 360:xxxxxxxx 405:за 420:перевод
+p0 y457 h9 | 40:99.99.99 110:+ 120:9 130:999,99 165:₸ 230:Покупка 360:xxxxxx 395:xx99
+00:03 +12: чужой чат не может нажать кнопку импорта; «начать заново» стирает импорты
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:03 +13: обычный тариф: сводка и список доступны, запись — в Pro; после оформления та же кнопка записывает
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:03 +14: не больше двадцати файлов в сутки от одного человека — считая неразобранные
+import: выписка разобрана — строк 9, язык ru, итоги сошлись, виды {purchase: 3, other: 1, ownIn: 1, withdrawal: 1, ownOut: 1, transfer: 1, topup: 1}
+00:03 +15: подсказка бота упоминает выписку, только когда импорт включён
+00:03 +16: (tearDownAll)
+00:04 +16: All tests passed!

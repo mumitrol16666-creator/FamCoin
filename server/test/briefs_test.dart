@@ -47,6 +47,19 @@ void main() {
     expect(done, isNot(contains('Страховка')));
   });
 
+  test('R04: погашенная рассрочка не требует оплаты в утренней сводке; активная — требует', () {
+    final l = Ledger();
+    applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o', 'date': '2026-09-01', 'account': 'card', 'amount': '${kzt(100000)}'});
+    applyLedgerCommand(l, {'type': 'openingDebt', 'id': 'd', 'date': '2026-09-01', 'debtId': 'phone', 'amount': '${kzt(50000)}'});
+    const installment = {'name': 'Рассрочка', 'amount': '1000000', 'day': 5, 'category': 'other', 'paid': <String>[], 'debtId': 'phone'};
+    BriefInput input() => BriefInput(ledger: l, today: DateTime(2026, 10, 5), profile: const {}, planned: const [installment], limits: const [], locale: 'ru');
+    expect(morningBrief(input()).body, contains('Рассрочка'), reason: 'долг ещё есть');
+    applyLedgerCommand(l, {'type': 'loanPayment', 'id': 'p', 'date': '2026-09-20', 'account': 'card', 'debtId': 'phone', 'principal': '${kzt(50000)}'});
+    expect(morningBrief(input()).body, isNot(contains('Рассрочка')), reason: 'долг погашен');
+    expect(eveningBrief(input()).body, isNot(contains('Рассрочка')));
+  });
+
   test('утренняя сводка заканчивается советом дня (D97): на языке владельца, назавтра другой', () {
     final today = DateTime(2026, 10, 3);
     final ru = morningBrief(_input(today, const [])).body.split('\n').last;

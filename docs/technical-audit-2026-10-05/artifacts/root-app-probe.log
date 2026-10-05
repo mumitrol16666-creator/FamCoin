@@ -1,0 +1,12 @@
+00:00 +0: loading /Users/vladislav/.codex/worktrees/famcoin-technical-audit/Finance 2/app/test/technical_audit_root_probe_test.dart
+00:00 +0: ROOT-01 two devices paying different periods lose first paid marker
+ROOT-01: September and October both paid, total cash -20000 KZT; September becomes unpaid again.
+00:00 +1: ROOT-02 old weekly dues disappear from historical reconciliation
+ROOT-02: September summary 0/4 paid (20000 KZT), reconciliation pending list empty on December 1.
+00:00 +2: ROOT-03 editing weekday recreates overdue periods already paid
+ROOT-03: fully paid September Mondays -> change weekday to Tuesday -> 4 historical overdue payments (20000 KZT).
+00:00 +3: ROOT-04 application hides planned payments for fully repaid debt
+ROOT-04 app: debt=0, due list empty; plan remains stored (paired with server ROOT-04).
+00:00 +4: ROOT-04b calendar still requests payment for fully repaid debt
+ROOT-04b widget: debt=0 and dueItems empty, but October CalendarScreen contains unpaid DueTile for 10000 KZT and active quick-pay button.
+00:00 +5: All tests passed!

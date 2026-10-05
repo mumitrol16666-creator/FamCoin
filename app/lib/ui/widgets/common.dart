@@ -142,6 +142,10 @@ String? ledgerErrorText(AppLocalizations l, String? code) => switch (code) {
       'restoreNotReversed' => l.leRestoreNotReversed,
       'alreadyRestored' => l.leAlreadyRestored,
       'hasRefunds' => l.leHasRefunds,
+      'reverseBreaksDebt' => l.leReverseBreaksDebt,
+      'occurrencePaid' => l.leOccurrencePaid,
+      'writeOffExceeds' => l.leWriteOffExceeds,
+      'restoreSuperseded' => l.leRestoreSuperseded,
       _ => null,
     };
 
@@ -149,12 +153,29 @@ String? ledgerErrorText(AppLocalizations l, String? code) => switch (code) {
 Future<bool> runAction(BuildContext context, Future<void> Function() action) async {
   final messenger = ScaffoldMessenger.of(context);
   final l = context.l10n;
+  final attempt = Zone.current[submitAttemptKey];
   try {
     await action();
     return true;
   } on ReconciliationEditCancelled {
     return false;
   } catch (e) {
+    if (attempt is SubmitAttempt) {
+      // Связь оборвалась: неизвестно, дошла ли отправка. Повтор пойдёт с теми
+      // же идентификаторами и не создаст второй факт (APP-03).
+      attempt.uncertain = e is ApiException && (e.isNetwork || e.code == 'timeout');
+    }
+    // Срок уже оплачен с другого устройства: показываем состояние сервера.
+    if (e is ApiException && e.ledgerCode == 'occurrencePaid' && context.mounted) unawaited(AppScope.of(context).state.refresh());
+    if (e is AttemptChanged) {
+      // Важнее прежней «нет связи»: показывается сразу, а не в очереди за ней.
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(l.errAttemptChanged), duration: const Duration(seconds: 8)));
+      if (attempt is SubmitAttempt) attempt.reset();
+      if (context.mounted) unawaited(AppScope.of(context).state.refresh());
+      return false;
+    }
     messenger.showSnackBar(SnackBar(content: Text(errorText(l, e))));
     return false;
   }

@@ -36,6 +36,20 @@ String _clip(String text, int max) => text.length > max ? '${text.substring(0, m
 
 Map<String, String> _button(String text, String data) => {'text': text, 'callback_data': data};
 
+/// Не больше стольких предложений связать строку с платежом показывается
+/// кнопками и в тексте: остальные записываются обычными расходами.
+const _maxSuggestions = 4;
+const _maxCandidates = 2;
+
+/// Связи «строка выписки → срок платежа», подтверждённые человеком кнопкой.
+/// Живут в данных импорта, поэтому повторное построение плана (после
+/// «Записать», «Список», повторного нажатия) приходит к тому же результату.
+Map<int, DueMark> importLinks(Map<String, dynamic> data) => {
+      for (final e in (data['links'] as Map? ?? const {}).entries)
+        if (int.tryParse('${e.key}') != null && e.value is Map)
+          int.parse('${e.key}'): (kind: '${(e.value as Map)['kind']}', id: '${(e.value as Map)['id']}', period: '${(e.value as Map)['period']}'),
+    };
+
 /// Счета, на которые можно записать выписку: в тенге, не архивные, не копилки.
 List<ChatAccount> importAccounts(LedgerView v) => chatAccounts(v).where((a) => v.ledger.account(a.id).currency == 'KZT').toList();
 
@@ -118,6 +132,24 @@ String importSummaryText(BankStatement st, ImportPlan p, LedgerView v, String ac
       kk
           ? 'Несие төлемдерін жазбаймын — ${p.loans.length}, ${formatMoney(loanTotal)} ($loanNames): мұндай төлем қарыз бен пайызға бөлінеді, оны банк қолданбасынан көресіз. Қолданбада белгілеңіз: «Бюджет» → төлем → «Төлеу».'
           : 'Платежи по кредитам не записываю — ${p.loans.length}, ${formatMoney(loanTotal)} ($loanNames): такой платёж делится на долг и проценты, разбивка — в приложении банка. Отметьте его в приложении: «Бюджет» → платёж → «Оплатить».',
+      '',
+    ],
+    if (p.linked.isNotEmpty) ...[
+      kk
+          ? 'Өзіңіз байланыстырған төлемдер: ${p.linked.length}.'
+          : 'Связано вами с платежами: ${p.linked.length}.',
+      '',
+    ],
+    if (p.suggestions.isNotEmpty) ...[
+      kk
+          ? 'Мына жолдар жоспарлы төлемге ұқсайды (сомасы мен күні сәйкес), бірақ көрсетілген дүкен мен санат басқа. Растамайынша — әдеттегі шығыс ретінде жазамын:'
+          : 'Эти строки похожи на плановый платёж по сумме и дате, но магазин и категория другие. Пока вы не подтвердите — запишу как обычные расходы:',
+      for (final s in p.suggestions.take(_maxSuggestions))
+        '• ${escapeHtml(_clip(st.rows[s.n].details.isEmpty ? st.rows[s.n].operation : st.rows[s.n].details, 40))} ${formatMoney(st.rows[s.n].amount.abs())}, ${_date(st.rows[s.n].date)}'
+            ' — ${kk ? 'бұл' : 'возможно, это'} ${s.candidates.take(_maxCandidates).map((c) => '«${escapeHtml(_clip(c.name, 40))}» (${_date(c.date)})').join(kk ? ' немесе ' : ' или ')}',
+      if (p.suggestions.length > _maxSuggestions)
+        kk ? '… және тағы ${p.suggestions.length - _maxSuggestions}: оларды әдеттегі шығыс ретінде жазамын.' : '… и ещё ${p.suggestions.length - _maxSuggestions}: их запишу обычными расходами.',
+      kk ? 'Байланыстыру үшін төмендегі батырманы басыңыз.' : 'Чтобы связать с платежом, нажмите кнопку ниже.',
       '',
     ],
     if (p.changesOpening)
@@ -408,6 +440,12 @@ class StatementImport {
     return [
       [_button(kk ? '✅ Жазу (${p.ops.length})' : '✅ Записать (${p.ops.length})', 'i:$id:ok'), _button(kk ? '✖ Болдырмау' : '✖ Отмена', 'i:$id:no')],
       [if (p.ops.isNotEmpty) _button(kk ? '📋 Тізім' : '📋 Список', 'i:$id:list'), if (accounts > 1) account],
+      // Предложения связать строку с платежом: связь — только по кнопке.
+      for (final s in p.suggestions.take(_maxSuggestions))
+        for (var k = 0; k < min(s.candidates.length, _maxCandidates); k++)
+          [_button('🔗 ${_clip(st.rows[s.n].details.isEmpty ? st.rows[s.n].operation : st.rows[s.n].details, 18)} → ${_clip(s.candidates[k].name, 22)}', 'i:$id:lk:${s.n}.$k')],
+      for (final n in p.linked)
+        [_button('↩ ${kk ? 'Байланыс жоқ' : 'Не связывать'}: ${_clip(st.rows[n].details.isEmpty ? st.rows[n].operation : st.rows[n].details, 28)}', 'i:$id:ul:$n')],
     ];
   }
 
@@ -501,13 +539,13 @@ class StatementImport {
           parameters: {'id': id, 'd': data, 's': to},
         );
     Future<void> showSummary(String accountId) async {
-      final plan = planImport(st, v, accountId, id, today);
+      final plan = planImport(st, v, accountId, id, today, links: importLinks(data));
       await telegram.edit(chatId, messageId, importSummaryText(st, plan, v, accountId, pro: await _isPro(userId), today: today), buttons: _summaryButtons(id, st, plan, accounts.length, kk));
     }
 
     Future<void> showSaved(String accountId) async {
       final fresh = await ledger.view(userId) ?? v;
-      final now = planImport(st, fresh, accountId, id, today);
+      final now = planImport(st, fresh, accountId, id, today, links: importLinks(data));
       await telegram.edit(chatId, messageId, _savedText(st, data, fresh, accountId, now, today), buttons: _savedButtons(id, data, kk, now));
     }
 
@@ -526,8 +564,30 @@ class StatementImport {
       case 'back' when status == 'pending' && account != null:
         await showSummary(account);
         return null;
+      case 'lk' when status == 'pending' && account != null:
+        // `<строка>.<номер предложенного платежа>`: связь появляется только
+        // здесь, по нажатию человека, и только на то, что предлагал план.
+        final at = arg.split('.');
+        final n = at.length == 2 ? int.tryParse(at[0]) : null;
+        final k = at.length == 2 ? int.tryParse(at[1]) : null;
+        final suggestion = n == null ? null : planImport(st, v, account, id, today, links: importLinks(data)).suggestions.where((s) => s.n == n).firstOrNull;
+        if (n == null || k == null || suggestion == null || k < 0 || k >= suggestion.candidates.length) return gone;
+        final mark = suggestion.candidates[k].mark;
+        data['links'] = {
+          ...(data['links'] as Map? ?? const {}),
+          '$n': {'kind': mark.kind, 'id': mark.id, 'period': mark.period},
+        };
+        await save();
+        await showSummary(account);
+        return kk ? 'Байланыстырылды' : 'Связано';
+      case 'ul' when status == 'pending' && account != null:
+        final links = Map<String, dynamic>.from(data['links'] as Map? ?? const {})..remove(arg);
+        data['links'] = links;
+        await save();
+        await showSummary(account);
+        return kk ? 'Байланыс алынды' : 'Связь снята';
       case 'list' when status == 'pending' && account != null:
-        await telegram.send(chatId, importListText(st, planImport(st, v, account, id, today), v));
+        await telegram.send(chatId, importListText(st, planImport(st, v, account, id, today, links: importLinks(data)), v));
         return null;
       case 'no' when status == 'pending':
         await save(to: 'cancelled');
@@ -596,7 +656,7 @@ class StatementImport {
   /// Записывает план. Возвращает текст ошибки, если не записано ничего.
   Future<String?> _apply(String id, String userId, BankStatement st, String account, Map<String, dynamic> data, LedgerView v, DateTime today, Future<void> Function() persist) async {
     final kk = v.locale == 'kk';
-    final plan = planImport(st, v, account, id, today);
+    final plan = planImport(st, v, account, id, today, links: importLinks(data));
     final opening = openingCommands(plan, st, account, id);
     final paid = <String, Set<String>>{};
     final units = <List<Map<String, dynamic>>>[
@@ -671,7 +731,7 @@ class StatementImport {
     if (data['level'] != null) return gone;
     // Выравнивать можно, когда записывать больше нечего: и сразу после
     // записи, и когда вся выписка уже была в журнале.
-    final plan = planImport(st, v, account, id, today);
+    final plan = planImport(st, v, account, id, today, links: importLinks(data));
     if (!_canLevel(plan)) return gone;
     if (pending) {
       data['done'] = {'count': 0, 'expense': '0', 'income': '0'};

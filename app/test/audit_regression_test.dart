@@ -34,6 +34,9 @@ class FakeServer {
     api: ApiClient(baseUrl: 'http://fake.test', client: MockClient(_handle)),
   );
 
+  /// Второе устройство того же владельца с общим «сервером» (R01).
+  AppState newClient() => AppState(token: 'test-only', clock: () => now, api: ApiClient(baseUrl: 'http://fake.test', client: MockClient(_handle)));
+
   /// Настройки уведомлений, как их хранит сервер (D76): что прислала анкета.
   final notif = <String, dynamic>{};
 
@@ -128,7 +131,10 @@ class FakeServer {
         }
       }
     } on LedgerException catch (e) {
-      return http.Response(jsonEncode({'error': 'ledger', 'message': e.message}), 422);
+      return http.Response.bytes(
+        utf8.encode(jsonEncode({'error': 'ledger', 'message': e.message, 'code': e.code})),
+        422, headers: {'content-type': 'application/json; charset=utf-8'},
+      );
     }
     seen.add(id);
     revision++;
@@ -155,6 +161,9 @@ class FakeServer {
         entities.putIfAbsent(c['kind'] as String, () => {})[c['entityId'] as String] = Map<String, dynamic>.from(c['data'] as Map);
       case 'deleteEntity':
         entities[c['kind']]?.remove(c['entityId']);
+      case setPaidCommand:
+        final data = entities[c['kind']]?[c['entityId']];
+        if (data != null) entities[c['kind']]![c['entityId'] as String] = withPaidMark(data, c['period'] as String, paid: c['paid'] != false, clearGoal: c['clearGoal'] == true);
       case 'updateProfile':
         final patch = (c['profile'] as Map).cast<String, dynamic>();
         for (final k in patch.keys) {
@@ -577,6 +586,11 @@ void main() {
     expect(s.spentToday(), 0, reason: 'запланированная покупка не тратит дневной лимит');
     expect(s.monthReport.expense, kzt(55000));
     expect(f.entities['purchase']!.values.single.containsKey('goal'), isFalse);
+    // Составная оплата датируется одним днём (APP-07): перевод из копилки и расход.
+    final paidBuy = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    final fromPiggy = s.userTransactions.firstWhere((t) => t.type == EventType.transfer && t.postings.any((x) => x.amount < 0 && s.ledger.account(x.accountId).isMoney && x.accountId != 'cash'));
+    expect(fromPiggy.date, paidBuy.date);
+    expect(s.ledger.balance(goal.account!), 0);
 
     // Накоплено всё — откладывать больше не нужно.
     await s.addPurchase(name: 'Страховка', amount: kzt(30000), month: DateTime(2027, 2, 1), category: 'transport');

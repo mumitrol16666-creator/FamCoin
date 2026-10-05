@@ -38,8 +38,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
         final items = <(PlannedInfo, DateTime, bool, String)>[];
         final monthEnd = DateTime(month.year, month.month, daysInMonth);
         for (final p in state.planned) {
+          // Погашенный кредит больше не требует оплаты (R04); оплаченные сроки
+          // прошлого остаются в истории.
+          final active = state.isPlannedActive(p);
           for (final o in p.schedule.occurrences(month, monthEnd)) {
-            items.add((p, o.date, p.paid.contains(o.period), o.period));
+            final isPaid = p.paid.contains(o.period);
+            if (isPaid || active) items.add((p, o.date, isPaid, o.period));
           }
           // Оплаченный срок до даты добавления платежа (отмечали задним числом)
           // остаётся виден: в расписание он не входит из-за `start`.

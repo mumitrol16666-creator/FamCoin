@@ -18,6 +18,51 @@ void main() {
     return l;
   }
 
+  test('C04/T10 восстановленные покупка и возврат сохраняют связь', () {
+    final l = ledgerWithPurchase();
+    applyLedgerCommand(l, {'type': 'refund', 'id': 'r1', 'date': '2026-09-03',
+      'category': 'cafe', 'amount': '250000', 'toAccount': 'cash', 'meta': {'refundOf': 'e1'}});
+    l.reverse('r1', newId: 'r1-del');
+    l.reverse('e1', newId: 'e1-del');
+    l.restore('e1', newId: 'e2');
+    l.restore('r1', newId: 'r2');
+    expect(l.currentVersion('e1')!.id, 'e2');
+    expect(l.refundedFor('e2', 'expense:cafe'), 250000);
+    expect(l.balance('cash'), 10000000);
+    expect(l.balance('expense:cafe'), 0);
+    l.reverse('r2', newId: 'r2-del');
+    l.restore('r2', newId: 'r3');
+    expect(() => l.restore('r1', newId: 'duplicate-refund'),
+        throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'alreadyRestored')));
+    expect(l.balance('cash'), 10000000);
+  });
+
+  test('C04/T11 правка и восстановление не обнуляют лимит частичных возвратов', () {
+    final l = ledgerWithPurchase();
+    applyLedgerCommand(l, {'type': 'refund', 'id': 'r1', 'date': '2026-09-03',
+      'category': 'cafe', 'amount': '100000', 'toAccount': 'cash', 'meta': {'refundOf': 'e1'}});
+    l.reverse('e1', newId: 'first-delete');
+    l.restore('e1', newId: 'first-restore');
+    l.reverse('first-restore', newId: 'edit');
+    applyLedgerCommand(l, {'type': 'expense', 'id': 'e2', 'date': '2026-09-02',
+      'account': 'cash', 'splits': {'cafe': '300000'}, 'meta': {'edited': 'first-restore'}});
+    l.reverse('r1', newId: 'r1-del');
+    l.reverse('e2', newId: 'e2-del');
+    l.restore('e2', newId: 'e3');
+    l.restore('r1', newId: 'r2');
+    expect(l.purchaseRoot('e3'), 'e1');
+    expect(l.currentVersion('e1')!.id, 'e3');
+    expect(l.refundedFor('e3', 'expense:cafe'), 100000);
+    expect(() => applyLedgerCommand(l, {'type': 'refund', 'id': 'too-much',
+      'date': '2026-09-04', 'category': 'cafe', 'amount': '200001',
+      'toAccount': 'cash', 'meta': {'refundOf': 'e3'}}),
+      throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'refundExceeds')));
+    applyLedgerCommand(l, {'type': 'refund', 'id': 'remainder', 'date': '2026-09-04',
+      'category': 'cafe', 'amount': '200000', 'toAccount': 'cash', 'meta': {'refundOf': 'e3'}});
+    expect(l.balance('cash'), 10000000);
+    expect(l.balance('expense:cafe'), 0);
+  });
+
   test('после правки покупки возврат привязан к исходной версии', () {
     final l = ledgerWithPurchase();
     applyLedgerCommand(l, {'type': 'refund', 'id': 'r1', 'date': '2026-09-03', 'category': 'cafe', 'amount': '250000', 'toAccount': 'cash', 'meta': {'refundOf': 'e1'}});
