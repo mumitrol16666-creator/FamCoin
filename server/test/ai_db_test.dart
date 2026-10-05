@@ -212,6 +212,9 @@ void main() {
     expect(parseReply('{"answer": "Да.", "insufficient_data": true}')!.insufficientData, isTrue);
     expect(parseReply('Просто текст')!.text, 'Просто текст');
     expect(parseReply('{"other": 1}'), isNull);
+    // Кнопки-переходы (D108): только известные id, не больше двух.
+    expect(parseReply('{"answer": "Откройте календарь", "actions": ["calendar", "hack", "add_goal", "limits"]}')!.actions, ['calendar', 'add_goal']);
+    expect(parseReply('{"answer": "Да"}')!.actions, isEmpty);
     expect(parseReply('  '), isNull);
   });
 }

@@ -8,6 +8,7 @@
 library;
 
 export 'src/aggregates.dart';
+export 'src/ai_actions.dart';
 export 'src/commands.dart';
 export 'src/events.dart';
 export 'src/formulas/daily_guide.dart';

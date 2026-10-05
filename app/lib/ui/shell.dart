@@ -20,6 +20,12 @@ import 'budget/month_close_screen.dart';
 class Shell extends StatefulWidget {
   const Shell({super.key});
 
+  /// Переключить оболочку на вкладку «Операции» (кнопки консультанта, D108).
+  static void openJournal() => _ShellState._active?._setTab(1);
+
+  /// Открыть раздел «Аналитики» на текущем месяце.
+  static void openAnalytics(AnalyticsSection section) => _ShellState._active?._openAnalytics(section);
+
   @override
   State<Shell> createState() => _ShellState();
 }
@@ -27,6 +33,13 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   int _tab = 0;
   final _analyticsKey = GlobalKey<AnalyticsScreenState>();
+
+  /// Живая оболочка — для переходов извне (кнопки консультанта, D108).
+  static _ShellState? _active;
+
+  void _setTab(int i) {
+    if (mounted) setState(() => _tab = i);
+  }
 
   void _openAnalytics(AnalyticsSection section) {
     _analyticsKey.currentState?.openSection(section, currentMonth: true);
@@ -37,7 +50,14 @@ class _ShellState extends State<Shell> {
   static bool _linkHandled = false;
 
   @override
+  void dispose() {
+    if (_active == this) _active = null;
+    super.dispose();
+  }
+
+  @override
   void initState() {
+    _active = this;
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _openLink());
   }

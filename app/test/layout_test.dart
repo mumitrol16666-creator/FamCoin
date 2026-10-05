@@ -17,6 +17,7 @@ import 'package:famcoin/theme/app_theme.dart';
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
 import 'package:famcoin/ui/auth/login_screen.dart';
 import 'package:famcoin/ui/budget/budget_screen.dart';
+import 'package:famcoin/ui/budget/calendar_screen.dart';
 import 'package:famcoin/ui/budget/sheets.dart';
 import 'package:famcoin/ui/more/ai_screen.dart';
 import 'package:famcoin/ui/more/more_screen.dart';
@@ -701,6 +702,21 @@ void main() {
     expect(find.textContaining('50\u00A0100'), findsOneWidget);
     f.aiUnverified = const [];
     expect(tester.takeException(), isNull);
+
+    // Кнопки-переходы под ответом (D108): известный id — кнопка, нажатие открывает экран; чужой id не рисуется.
+    f.aiActions = ['calendar', 'secret_admin'];
+    await tester.enterText(find.byType(TextField), 'Когда следующий платёж?');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pumpAndSettle();
+    f.aiActions = const [];
+    expect(find.widgetWithText(ActionChip, 'Календарь платежей'), findsOneWidget);
+    expect(find.byType(ActionChip), findsOneWidget, reason: 'неизвестный id не превращается в кнопку');
+    await tester.tap(find.widgetWithText(ActionChip, 'Календарь платежей'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CalendarScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    Navigator.of(tester.element(find.byType(CalendarScreen))).pop();
+    await tester.pumpAndSettle();
 
     // Меню: что видит консультант и разбор прошлого месяца (составляется один раз).
     await tester.tap(find.byType(PopupMenuButton<VoidCallback>));
