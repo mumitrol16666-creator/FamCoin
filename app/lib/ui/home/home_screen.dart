@@ -787,14 +787,31 @@ class DueTile extends StatelessWidget {
     final state = AppScope.of(context).state;
     final overdue = due.date.isBefore(state.today);
     final p = due.planned;
+    // «Списалось» (Ж8): подписка или ровный платёж уже ушли со счёта сами —
+    // одно нажатие вместо листа оплаты.
+    final quick = state.canQuickPay(due);
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CategoryAvatar.of(categoryById(p.debtId != null ? debtsCategory : p.category)),
       title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        '${DateFormat.MMMMd(locale).format(due.date)}${overdue ? ' · ${l.overdue}' : ''}',
-        style: TextStyle(fontSize: 12, color: overdue ? fam.expense : fam.text2),
-      ),
+      subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+          '${DateFormat.MMMMd(locale).format(due.date)}${overdue ? ' · ${l.overdue}' : ''}',
+          style: TextStyle(fontSize: 12, color: overdue ? fam.expense : fam.text2),
+        ),
+        if (quick)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: SizedBox(
+              height: 30,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 12), textStyle: const TextStyle(fontSize: 12)),
+                onPressed: () => _quickPay(context, state),
+                child: Text(l.dueQuickPay),
+              ),
+            ),
+          ),
+      ]),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         MoneyText(p.amount, color: p.debtId != null ? fam.debt : null),
         const SizedBox(width: 4),
@@ -802,5 +819,23 @@ class DueTile extends StatelessWidget {
       ]),
       onTap: () => showPayDueSheet(context, due),
     );
+  }
+
+  /// Записать оплату без вопросов: сумма из плана, счёт — которым платили в
+  /// прошлый раз. Плашка с «Отменить» снимает запись и снова открывает срок.
+  Future<void> _quickPay(BuildContext context, AppState state) async {
+    final l = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final p = due.planned;
+    final account = state.payAccountFor(p);
+    if (account == null) return;
+    final ok = await runAction(context, () => state.payDue(due, account: account, amount: p.amount));
+    if (!ok) return;
+    final tx = state.userTransactions.where((t) => t.meta['planned'] == p.id && t.meta['period'] == due.period).firstOrNull;
+    messenger.showSnackBar(SnackBar(
+      content: Text(l.dueQuickPaid(p.name, formatMoney(p.amount))),
+      duration: const Duration(seconds: 6),
+      action: tx == null ? null : SnackBarAction(label: l.undo, onPressed: () => state.deleteTransaction(tx.id)),
+    ));
   }
 }

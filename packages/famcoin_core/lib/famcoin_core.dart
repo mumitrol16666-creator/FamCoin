@@ -24,6 +24,7 @@ export 'src/formulas/loans.dart';
 export 'src/ledger.dart';
 export 'src/money.dart';
 export 'src/reconciliation.dart';
+export 'src/schedule.dart';
 export 'src/serialization.dart';
 export 'src/tips.dart';
 export 'src/voice.dart';

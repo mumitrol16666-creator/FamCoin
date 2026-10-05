@@ -610,11 +610,14 @@ List<List<String>> chatKeyboard(bool kk) => [
     ];
 
 class ChatQuick {
-  const ChatQuick(this.id, this.name, this.category, this.amount);
+  const ChatQuick(this.id, this.name, this.category, this.amount, {this.account});
   final String id;
   final String name;
   final String category;
   final int amount;
+
+  /// Счёт плитки (Ж9); `null` — как у обычной записи из чата.
+  final String? account;
 }
 
 /// «Быстрые операции» владельца из приложения — те, у которых задана сумма
@@ -623,7 +626,7 @@ class ChatQuick {
 List<ChatQuick> chatQuicks(LedgerView v) => [
       for (final e in v.of('quick').entries)
         if (e.value['amount'] != null && parseMinor(e.value['amount']) > 0 && e.key.length <= 60)
-          ChatQuick(e.key, '${e.value['name'] ?? ''}'.trim(), e.value['category'] as String? ?? 'other', parseMinor(e.value['amount'])),
+          ChatQuick(e.key, '${e.value['name'] ?? ''}'.trim(), e.value['category'] as String? ?? 'other', parseMinor(e.value['amount']), account: e.value['account'] as String?),
     ];
 
 Buttons quickButtons(LedgerView v) => [
@@ -634,7 +637,7 @@ Buttons quickButtons(LedgerView v) => [
 ChatDraft? quickDraft(ChatQuick q, LedgerView v, DateTime now) {
   final accounts = chatAccounts(v);
   if (accounts.isEmpty) return null;
-  final account = _lastUsed(v, accounts) ?? accounts.where((a) => a.liquid).firstOrNull ?? accounts.first;
+  final account = accounts.where((a) => a.id == q.account).firstOrNull ?? _lastUsed(v, accounts) ?? accounts.where((a) => a.liquid).firstOrNull ?? accounts.first;
   return ChatDraft(
     kind: 'expense',
     amount: q.amount,

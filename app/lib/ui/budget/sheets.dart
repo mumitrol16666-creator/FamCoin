@@ -63,7 +63,7 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
   final p = due.planned;
   final amount = TextEditingController(text: amountToField(p.amount));
   final interest = TextEditingController();
-  var account = _firstAccount(context);
+  var account = state.payAccountFor(p) ?? _firstAccount(context);
   var payDate = date == null || date.isAfter(state.today) ? state.today : date;
   // Покупка из копилки (D90): накопленное вернётся на счёт оплаты той же командой.
   final fromPiggy = p.once == null ? 0 : state.purchaseSaved(p);
@@ -114,6 +114,30 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
           },
           child: Text(l.markPaidOnly),
         ),
+        // Правка и удаление платежа (Ж12): раньше удалить можно было только
+        // долгим нажатием в бюджете, а изменить — никак.
+        if (p.once == null)
+          Row(children: [
+            Expanded(
+              child: TextButton(
+                onPressed: () async {
+                  final nav = Navigator.of(ctx);
+                  if (await editPlannedFlow(ctx, p)) nav.pop();
+                },
+                child: Text(l.editPayment),
+              ),
+            ),
+            Expanded(
+              child: TextButton(
+                style: TextButton.styleFrom(foregroundColor: ctx.fam.expense),
+                onPressed: () async {
+                  final nav = Navigator.of(ctx);
+                  if (await deletePlannedFlow(ctx, p)) nav.pop();
+                },
+                child: Text(l.deletePaymentAction),
+              ),
+            ),
+          ]),
       ]),
     ),
   );
@@ -381,7 +405,29 @@ Future<void> addPlannedFlow(BuildContext context) async {
   final r = await showPlannedSheet(context);
   if (r == null || !context.mounted) return;
   final id = newId();
-  await runAction(context, () => state.upsert('planned', id, PlannedInfo(id, r.name, r.amount, r.day, r.category, null, const {}, start: state.plannedStart(r.day, paidThisMonth: r.paidThisMonth)).toJson()));
+  await runAction(context, () => state.upsert('planned', id, r.toInfo(state, id: id).toJson()));
+}
+
+/// Правка планового платежа (Ж12): сумма, число, частота, название, категория.
+/// Оплаченные сроки сохраняются. `true` — платёж изменён.
+Future<bool> editPlannedFlow(BuildContext context, PlannedInfo p) async {
+  final state = AppScope.of(context).state;
+  final messenger = ScaffoldMessenger.of(context);
+  final l = context.l10n;
+  final r = await showPlannedSheet(context, initial: p);
+  if (r == null || !context.mounted) return false;
+  final next = p.copyWith(name: r.name, amount: r.amount, day: r.day, category: r.category, every: r.every, weekday: r.weekday, monthOfYear: r.monthOfYear);
+  final ok = await runAction(context, () => state.upsert(p.entityKind, p.id, next.toJson()));
+  if (ok) messenger.showSnackBar(SnackBar(content: Text(l.paymentSaved)));
+  return ok;
+}
+
+/// Удаление планового платежа с подтверждением. `true` — удалён.
+Future<bool> deletePlannedFlow(BuildContext context, PlannedInfo p) async {
+  final state = AppScope.of(context).state;
+  final l = context.l10n;
+  if (!await confirm(context, title: l.deletePlanned, message: p.name, action: l.delete) || !context.mounted) return false;
+  return runAction(context, () => state.delete(p.entityKind, p.id));
 }
 
 /// Действия с разовой покупкой (D88, D90): купил, копить, убрать из плана.

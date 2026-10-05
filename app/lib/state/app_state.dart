@@ -690,25 +690,70 @@ class AppState extends ChangeNotifier {
   /// будущие до [until].
   List<DueItem> dueItems(DateTime until) {
     final items = <DueItem>[];
-    final todayIdx = today.year * 12 + today.month - 1;
+    // Дальше двух месяцев вперёд сроки не показываются.
+    final horizon = DateTime(today.year, today.month + 3, 0);
+    final end = until.isAfter(horizon) ? horizon : until;
     for (final p in planned) {
       if (!_plannedDebtActive(p)) continue; // долг уже закрыт (F10)
-      // Разовая покупка — один срок в своём месяце (и просрочка после него).
-      final from = p.onceMonth ?? p.start ?? monthStart;
-      // Не раньше 10 лет назад и не дальше двух месяцев вперёд.
-      final startIdx = (from.year * 12 + from.month - 1).clamp(todayIdx - 120, todayIdx + 2);
-      for (var i = startIdx; i <= todayIdx + 2; i++) {
-        final date = _onDay(i ~/ 12, i % 12 + 1, p.day);
-        if (date.isAfter(until)) break;
-        if (p.start != null && date.isBefore(p.start!)) continue;
-        final period = _period(date);
-        if (p.once != null && period != p.once) continue;
-        if (p.paid.contains(period)) continue;
-        items.add(DueItem(p, date, period));
+      // Сроки считает ядро (месяц, неделя, год, разовая покупка); просроченные
+      // остаются, пока не оплачены, но недельные — не глубже восьми недель.
+      for (final o in p.schedule.occurrences(p.schedule.scanFrom(today), end)) {
+        if (p.paid.contains(o.period)) continue;
+        items.add(DueItem(p, o.date, o.period));
       }
     }
     items.sort((a, b) => a.date.compareTo(b.date));
     return items;
+  }
+
+  /// Платёж за текущий период оплачен: для месячного — этот месяц, для
+  /// недельного — все сроки этого месяца, для годового — этот год.
+  bool paidThisPeriod(PlannedInfo p) {
+    if (p.every == everyYear) return p.paid.contains('${today.year}');
+    final inMonth = p.schedule.occurrences(monthStart, monthEnd.subtract(const Duration(days: 1)));
+    return inMonth.isNotEmpty && inMonth.every((o) => p.paid.contains(o.period));
+  }
+
+  /// Счёт для оплаты платежа без вопросов: тот, которым платили в прошлый
+  /// раз, иначе первый денежный счёт.
+  String? payAccountFor(PlannedInfo p) {
+    final active = {for (final a in activeAccounts) a.id};
+    for (final t in userTransactions) {
+      if (t.meta['planned'] != p.id) continue;
+      for (final post in t.postings) {
+        if (active.contains(post.accountId)) return post.accountId;
+      }
+    }
+    final liquid = activeAccounts.where((a) => a.liquid);
+    return (liquid.isNotEmpty ? liquid.first : activeAccounts.firstOrNull)?.id;
+  }
+
+  /// Можно ли закрыть срок одним нажатием «Списалось»: срок наступил, платёж
+  /// не по кредиту с процентами, на счёте хватает денег (иначе нужен лист
+  /// оплаты с предупреждением о минусе, D87).
+  bool canQuickPay(DueItem due) {
+    final p = due.planned;
+    if (p.once != null || due.date.isAfter(today)) return false;
+    if (p.debtId != null) {
+      final debt = bankDebt(p.debtId!);
+      if (debt == null || (debt.kind != 'installment' && debt.rate > 0)) return false;
+    }
+    final account = payAccountFor(p);
+    return account != null && ledger.balance(account) >= p.amount;
+  }
+
+  /// Сколько сроков плановых платежей в месяце: всего и оплачено.
+  (int total, int paid) paymentsInMonth(DateTime start) {
+    var total = 0, paid = 0;
+    final end = DateTime(start.year, start.month + 1, 0);
+    for (final p in planned) {
+      if (!_plannedDebtActive(p)) continue;
+      for (final o in p.schedule.occurrences(start, end)) {
+        total++;
+        if (p.paid.contains(o.period)) paid++;
+      }
+    }
+    return (total, paid);
   }
 
   List<DueItem> get upcoming => dueItems(today.add(const Duration(days: 31)));
@@ -1268,15 +1313,7 @@ class AppState extends ChangeNotifier {
     final pr = reportFor(DateTime(month.year, month.month - 1, 1));
     final current = start == monthStart;
     final days = current ? today.day : end.difference(start).inDays;
-    var total = 0, paid = 0;
-    for (final p in planned) {
-      if (!_plannedDebtActive(p)) continue;
-      final date = _onDay(start.year, start.month, p.day);
-      if (p.start != null && date.isBefore(p.start!)) continue;
-      if (p.once != null && p.once != _period(start)) continue;
-      total++;
-      if (p.paid.contains(_period(start))) paid++;
-    }
+    final (total, paid) = paymentsInMonth(start);
     return MonthSummary(
       month: start,
       current: current,
@@ -1714,8 +1751,8 @@ class AppState extends ChangeNotifier {
 
   /// С какой даты считать сроки нового платежа. Если дата в этом месяце уже
   /// прошла и платёж ещё не сделан — с начала месяца, чтобы срок был виден.
-  DateTime plannedStart(int day, {required bool paidThisMonth}) =>
-      day < today.day && !paidThisMonth ? monthStart : today;
+  DateTime plannedStart(int day, {required bool paidThisMonth, String every = everyMonth}) =>
+      every == everyMonth && day < today.day && !paidThisMonth ? monthStart : today;
 
   /// Команды существующего кредита: условия, остаток и плановый платёж.
   List<Map<String, dynamic>> newBankDebtCommands({required String name, required String kind, required int balance, required int payment, required int day, double rate = 0, bool paidThisMonth = true}) {

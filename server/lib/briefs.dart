@@ -14,11 +14,6 @@ class Brief {
   final String body;
 }
 
-DateTime _onDay(int year, int month, int day) {
-  final last = DateTime(year, month + 1, 0).day;
-  return DateTime(year, month, day.clamp(1, last));
-}
-
 String _period(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
 int _minor(Object? v) => v == null ? 0 : parseMinor(v);
@@ -26,18 +21,14 @@ int _minor(Object? v) => v == null ? 0 : parseMinor(v);
 /// Плановые платежи и разовые покупки, не оплаченные и попадающие в [from, until].
 List<(Map<String, dynamic>, DateTime)> _due(List<Map<String, dynamic>> planned, DateTime from, DateTime until) {
   final out = <(Map<String, dynamic>, DateTime)>[];
+  // Сроки считает ядро: ежемесячные, недельные, годовые и разовые покупки (D88).
+  final horizon = DateTime(from.year, from.month + 3, 0);
   for (final p in planned) {
-    final day = (p['day'] as num?)?.toInt() ?? 1;
     final paid = ((p['paid'] as List?) ?? const []).cast<String>();
-    final start = p['start'] == null ? null : dateFromJson(p['start']);
-    for (var m = 0; m <= 2; m++) {
-      final d = _onDay(from.year, from.month + m, day);
-      if (d.isBefore(from) || d.isAfter(until)) continue;
-      if (start != null && d.isBefore(start)) continue;
-      // Разовая покупка (D88) — только в своём месяце.
-      if (p['once'] != null && p['once'] != _period(d)) continue;
-      if (paid.contains(_period(d))) continue;
-      out.add((p, d));
+    final end = until.isBefore(horizon) ? until : horizon;
+    for (final o in PaySchedule.fromJson(p).occurrences(from, end)) {
+      if (paid.contains(o.period)) continue;
+      out.add((p, o.date));
     }
   }
   out.sort((a, b) => a.$2.compareTo(b.$2));

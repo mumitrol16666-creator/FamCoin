@@ -401,16 +401,11 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
       // Платёж по уже закрытому долгу не действует — как в приложении.
       if (debtId != null && !(v.of('debt').containsKey(debtId) && l.hasAccount(liabilityAccount(debtId)) && l.balance(liabilityAccount(debtId)) > 0)) continue;
       final paid = {...((data['paid'] as List?) ?? const []).cast<String>()};
-      final start = data['start'] is String ? dateFromJson(data['start']) : null;
-      final day = (data['day'] as num?)?.toInt() ?? 1;
-      for (var m = DateTime(st.from.year, st.from.month - 1); !m.isAfter(DateTime(st.to.year, st.to.month + 1)); m = DateTime(m.year, m.month + 1)) {
-        final lastDay = DateTime(m.year, m.month + 1, 0).day;
-        final date = DateTime(m.year, m.month, day < 1 ? 1 : (day > lastDay ? lastDay : day));
-        final period = dateToJson(date).substring(0, 7);
-        if (start != null && date.isBefore(start)) continue;
-        if (data['once'] != null && data['once'] != period) continue;
-        if (paid.contains(period)) continue;
-        dues.add(_Due(kind, e.key, data, amount, date, period));
+      // Сроки считает ядро: месяц, неделя, год и разовая покупка.
+      final scan = PaySchedule.fromJson(data).occurrences(DateTime(st.from.year, st.from.month - 1), DateTime(st.to.year, st.to.month + 2, 0));
+      for (final o in scan) {
+        if (paid.contains(o.period)) continue;
+        dues.add(_Due(kind, e.key, data, amount, o.date, o.period));
       }
     }
   }

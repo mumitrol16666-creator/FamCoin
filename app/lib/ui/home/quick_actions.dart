@@ -105,7 +105,8 @@ class QuickActionsRow extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     final accounts = state.activeAccounts;
     if (accounts.isEmpty) return addAccountFlow(context);
-    final account = (accounts.where((a) => a.liquid).firstOrNull ?? accounts.first).id;
+    // Счёт плитки (Ж9), если он ещё действует; иначе основной.
+    final account = accounts.where((a) => a.id == q.account).firstOrNull?.id ?? (accounts.where((a) => a.liquid).firstOrNull ?? accounts.first).id;
     // Крупная покупка (D74): спрашиваем, запланирована ли — тогда вне лимита.
     final kind = await askPlannedPurchase(context, state, amount);
     if (kind == null || !context.mounted) return;
@@ -178,6 +179,8 @@ Future<void> showQuickActionSheet(BuildContext context, {QuickAction? initial}) 
   final name = TextEditingController(text: initial?.name ?? '');
   final amount = TextEditingController(text: initial == null ? '' : amountToField(initial.amount));
   var category = initial?.category ?? 'cafe';
+  // Счёт, с которого плитка списывает: «Основной» — как раньше (Ж9).
+  String? account = state.activeAccounts.any((a) => a.id == initial?.account) ? initial?.account : null;
   return showFormSheet<void>(
     context,
     title: initial == null ? l.quickNew : l.edit,
@@ -190,6 +193,19 @@ Future<void> showQuickActionSheet(BuildContext context, {QuickAction? initial}) 
         Text(l.category, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
         const SizedBox(height: 6),
         CategoryPicker(options: ensureIncluded(state.visibleExpenseCategories, category), value: category, onChanged: (c) => set(() => category = c)),
+        if (state.activeAccounts.length > 1) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String?>(
+            key: const ValueKey('quick-account'),
+            initialValue: account,
+            decoration: InputDecoration(labelText: l.quickAccount),
+            items: [
+              DropdownMenuItem<String?>(value: null, child: Text(l.quickAccountMain)),
+              for (final a in state.activeAccounts) DropdownMenuItem<String?>(value: a.id, child: Text(a.name)),
+            ],
+            onChanged: (v) => set(() => account = v),
+          ),
+        ],
         const SizedBox(height: 8),
         Text(l.quickNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
         const SizedBox(height: 16),
@@ -199,7 +215,7 @@ Future<void> showQuickActionSheet(BuildContext context, {QuickAction? initial}) 
             final a = parseAmount(amount.text);
             if (a == null) return false;
             final n = name.text.trim().isEmpty ? categoryName(l, category) : name.text.trim();
-            return runAction(ctx, () => state.upsert('quick', initial?.id ?? newId(), QuickAction('', n, category, a).toJson()));
+            return runAction(ctx, () => state.upsert('quick', initial?.id ?? newId(), QuickAction('', n, category, a, account: account).toJson()));
           },
         ),
         if (initial != null)

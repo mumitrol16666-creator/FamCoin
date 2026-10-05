@@ -183,7 +183,7 @@ class GoalInfo {
 
 /// Плановый платёж: план не меняет баланс, факт оплаты проводится отдельно (D14).
 class PlannedInfo {
-  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once, this.goalId});
+  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once, this.goalId, this.every = everyMonth, this.weekday, this.monthOfYear});
   factory PlannedInfo.fromJson(String id, Map<String, dynamic> d) => PlannedInfo(
         id,
         d['name'] as String? ?? '',
@@ -195,6 +195,9 @@ class PlannedInfo {
         start: d['start'] == null ? null : dateFromJson(d['start']),
         once: d['once'] as String?,
         goalId: d['goal'] as String?,
+        every: d['every'] == everyWeek || d['every'] == everyYear ? d['every'] as String : everyMonth,
+        weekday: (d['weekday'] as num?)?.toInt(),
+        monthOfYear: (d['monthOfYear'] as num?)?.toInt(),
       );
   final String id;
   final String name;
@@ -220,6 +223,29 @@ class PlannedInfo {
   /// Цель-копилка, в которую откладывают на разовую покупку (D90).
   final String? goalId;
 
+  /// Как часто платёж повторяется: [everyMonth] (по умолчанию), [everyWeek]
+  /// или [everyYear]. Разовые покупки всегда месячные.
+  final String every;
+
+  /// День недели 1–7 для недельного платежа.
+  final int? weekday;
+
+  /// Месяц года 1–12 для годового платежа.
+  final int? monthOfYear;
+
+  /// Сроки платежа: общий расчёт ядра, тот же, что у сервера и бота.
+  PaySchedule get schedule => PaySchedule(every: every, day: day, weekday: weekday, monthOfYear: monthOfYear, once: once, start: start);
+
+  /// Копия с другими условиями; `paid`, `start`, долг и копилка сохраняются —
+  /// правка платежа не теряет историю оплат.
+  PlannedInfo copyWith({String? name, int? amount, int? day, String? category, String? every, int? weekday, int? monthOfYear}) => PlannedInfo(
+        id, name ?? this.name, amount ?? this.amount, day ?? this.day, category ?? this.category, debtId, paid,
+        start: start, once: once, goalId: goalId,
+        every: every ?? this.every,
+        weekday: every == null ? this.weekday : (every == everyWeek ? weekday : null),
+        monthOfYear: every == null ? this.monthOfYear : (every == everyYear ? monthOfYear : null),
+      );
+
   /// Вид справочника на сервере: разовые покупки хранятся отдельно.
   String get entityKind => once == null ? 'planned' : 'purchase';
 
@@ -238,6 +264,9 @@ class PlannedInfo {
         if (start != null) 'start': dateToJson(start!),
         if (once != null) 'once': once,
         if ((goal ?? (keepGoal ? goalId : null)) != null) 'goal': goal ?? goalId,
+        if (every != everyMonth) 'every': every,
+        if (every == everyWeek && weekday != null) 'weekday': weekday,
+        if (every == everyYear && monthOfYear != null) 'monthOfYear': monthOfYear,
       };
 }
 
@@ -259,14 +288,17 @@ class DebtInfo {
 /// Быстрая операция (D46): плитка на главной — категория, сумма, подпись.
 /// Один тап записывает расход на основной счёт сегодняшним числом.
 class QuickAction {
-  const QuickAction(this.id, this.name, this.category, this.amount);
+  const QuickAction(this.id, this.name, this.category, this.amount, {this.account});
   factory QuickAction.fromJson(String id, Map<String, dynamic> d) =>
-      QuickAction(id, d['name'] as String? ?? '', d['category'] as String? ?? 'other', _minor(d['amount']));
+      QuickAction(id, d['name'] as String? ?? '', d['category'] as String? ?? 'other', _minor(d['amount']), account: d['account'] as String?);
   final String id;
   final String name;
   final String category;
   final int amount;
-  Map<String, Object?> toJson() => {'name': name, 'category': category, 'amount': amount.toString()};
+
+  /// Счёт, с которого плитка списывает (Ж9); `null` — основной.
+  final String? account;
+  Map<String, Object?> toJson() => {'name': name, 'category': category, 'amount': amount.toString(), if (account != null) 'account': account};
 }
 
 class PersonDebt {

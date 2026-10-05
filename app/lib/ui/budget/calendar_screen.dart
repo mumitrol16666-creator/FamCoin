@@ -1,3 +1,4 @@
+import 'package:famcoin_core/famcoin_core.dart' show everyMonth;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -32,16 +33,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
         final month = state.monthOf(_offset);
         final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
         final period = '${month.year}-${month.month.toString().padLeft(2, '0')}';
-        // Сроки этого месяца: оплаченные и нет.
-        final items = <(PlannedInfo, DateTime, bool)>[];
+        // Сроки этого месяца: оплаченные и нет. Недельный платёж даёт несколько
+        // сроков, годовой — один в своём месяце; ключ срока у каждого свой.
+        final items = <(PlannedInfo, DateTime, bool, String)>[];
+        final monthEnd = DateTime(month.year, month.month, daysInMonth);
         for (final p in state.planned) {
-          final d = DateTime(month.year, month.month, p.day.clamp(1, daysInMonth));
-          if (p.start != null && d.isBefore(p.start!) && !p.paid.contains(period)) continue;
-          if (p.once != null && p.once != period) continue; // разовая покупка — только в своём месяце
-          items.add((p, d, p.paid.contains(period)));
+          for (final o in p.schedule.occurrences(month, monthEnd)) {
+            items.add((p, o.date, p.paid.contains(o.period), o.period));
+          }
+          // Оплаченный срок до даты добавления платежа (отмечали задним числом)
+          // остаётся виден: в расписание он не входит из-за `start`.
+          if (p.start != null && p.start!.isAfter(month) && p.once == null && p.every == everyMonth && p.paid.contains(period)) {
+            final d = DateTime(month.year, month.month, p.day.clamp(1, daysInMonth));
+            if (d.isBefore(p.start!)) items.add((p, d, true, period));
+          }
         }
         items.sort((a, b) => a.$2.compareTo(b.$2));
-        final byDay = <int, List<(PlannedInfo, DateTime, bool)>>{};
+        final byDay = <int, List<(PlannedInfo, DateTime, bool, String)>>{};
         for (final i in items) {
           byDay.putIfAbsent(i.$2.day, () => []).add(i);
         }
@@ -116,7 +124,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Column(children: [
-                    for (final (p, d, isPaid) in items)
+                    for (final (p, d, isPaid, itemPeriod) in items)
                       isPaid
                           ? ListTile(
                               contentPadding: EdgeInsets.zero,
@@ -125,7 +133,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               subtitle: Text('${DateFormat.MMMMd(locale).format(d)} · ${l.paidThisMonth}', style: TextStyle(fontSize: 12, color: fam.income)),
                               trailing: MoneyText(p.amount, color: fam.text2),
                             )
-                          : DueTile(due: DueItem(p, d, period), locale: locale),
+                          : DueTile(due: DueItem(p, d, itemPeriod), locale: locale),
                   ]),
                 ),
             ],
@@ -138,6 +146,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget _legend(BuildContext context, Color color, String text) => Row(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
         const SizedBox(width: 6),
-        Text(text, style: TextStyle(fontSize: 12, color: context.fam.text2)),
+        Flexible(child: Text(text, style: TextStyle(fontSize: 12, color: context.fam.text2))),
       ]);
 }

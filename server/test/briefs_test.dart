@@ -30,6 +30,23 @@ void main() {
     expect(morningBrief(_input(DateTime(2027, 4, 30), [tyres])).body, isNot(contains('Колёса')));
   });
 
+  test('утренняя сводка: недельный платёж напоминает в свой день недели, годовой — в свой день года', () {
+    // 2026-10-07 — среда; репетитор по средам, страховка 7 октября раз в год.
+    const tutor = {'name': 'Репетитор', 'amount': '500000', 'day': 1, 'every': 'week', 'weekday': 3, 'category': 'education', 'paid': <String>[]};
+    const insurance = {'name': 'Страховка', 'amount': '12000000', 'day': 7, 'every': 'year', 'monthOfYear': 10, 'category': 'other', 'paid': <String>[]};
+    final wed = morningBrief(_input(DateTime(2026, 10, 7), [tutor, insurance])).body;
+    expect(wed, allOf(contains('Сегодня к оплате:'), contains('Репетитор — 5 000 ₸'), contains('Страховка — 120 000 ₸')));
+    // Во вторник — «завтра» репетитор, страховка ещё впереди.
+    final tue = morningBrief(_input(DateTime(2026, 10, 6), [tutor, insurance])).body;
+    expect(tue, contains('Репетитор'));
+    // Отмечена оплатой этой недели (ключ — дата срока) и этого года — не напоминает.
+    final paidTutor = {...tutor, 'paid': ['2026-10-07']};
+    final paidInsurance = {...insurance, 'paid': ['2026']};
+    final done = morningBrief(_input(DateTime(2026, 10, 7), [paidTutor, paidInsurance])).body;
+    expect(done, isNot(contains('Репетитор')));
+    expect(done, isNot(contains('Страховка')));
+  });
+
   test('утренняя сводка заканчивается советом дня (D97): на языке владельца, назавтра другой', () {
     final today = DateTime(2026, 10, 3);
     final ru = morningBrief(_input(today, const [])).body.split('\n').last;

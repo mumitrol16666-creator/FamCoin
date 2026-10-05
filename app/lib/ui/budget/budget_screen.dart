@@ -1,3 +1,4 @@
+import 'package:famcoin_core/famcoin_core.dart' show everyYear;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -7,6 +8,7 @@ import '../../theme/app_theme.dart';
 import 'budget_forecast_card.dart';
 import '../widgets/common.dart';
 import 'calendar_screen.dart';
+import '../onboarding/onboarding_screen.dart' show scheduleLabel;
 import 'debt_screens.dart';
 import 'limits_section.dart';
 import 'goal_card.dart';
@@ -30,7 +32,6 @@ class BudgetScreen extends StatelessWidget {
       builder: (context, _) {
         final month = DateFormat.yMMMM(locale).format(state.today);
         final nextDue = state.dueItems(state.today.add(const Duration(days: 62)));
-        final period = '${state.today.year}-${state.today.month.toString().padLeft(2, '0')}';
         final people = state.personDebts;
         final purchaseGoals = state.purchases.map((p) => p.goalId).whereType<String>().toSet();
         final standaloneGoals = state.goals.where((g) => !purchaseGoals.contains(g.id)).toList();
@@ -66,26 +67,23 @@ class BudgetScreen extends StatelessWidget {
                     for (final p in state.planned.where((p) => p.once == null))
                       Builder(builder: (context) {
                         final next = nextDue.where((d) => d.planned.id == p.id).firstOrNull;
-                        final paidNow = p.paid.contains(period);
+                        final paidNow = state.paidThisPeriod(p);
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: CategoryAvatar.of(categoryById(p.debtId != null ? debtsCategory : p.category)),
                           title: Text(p.name),
                           subtitle: Text(
                             [
-                              l.everyMonthOn(p.day),
-                              if (paidNow) l.paidThisMonth,
+                              scheduleLabel(l, locale, p.every, p.day, p.weekday, p.monthOfYear),
+                              if (paidNow) (p.every == everyYear ? l.paidThisYear : l.paidThisMonth),
                               if (next != null) '${l.nextPayment}: ${DateFormat.MMMMd(locale).format(next.date)}',
                             ].join(' · '),
                             style: TextStyle(fontSize: 12, color: paidNow ? fam.income : fam.text2),
                           ),
                           trailing: MoneyText(p.amount),
-                          onTap: next == null ? null : () => showPayDueSheet(context, next),
-                          onLongPress: () async {
-                            if (await confirm(context, title: l.deletePlanned, action: l.delete) && context.mounted) {
-                              await runAction(context, () => state.delete('planned', p.id));
-                            }
-                          },
+                          // Нет ближайшего срока (всё оплачено) — нажатие открывает правку.
+                          onTap: () => next == null ? editPlannedFlow(context, p) : showPayDueSheet(context, next),
+                          onLongPress: () => deletePlannedFlow(context, p),
                         );
                       }),
                   ]),

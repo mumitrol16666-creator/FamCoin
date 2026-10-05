@@ -2,6 +2,7 @@ import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../state/app_scope.dart';
 import '../../state/app_state.dart';
 import '../../state/models.dart';
@@ -18,15 +19,6 @@ class OnboardingScreen extends StatefulWidget {
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
-}
-
-class _PlannedDraft {
-  _PlannedDraft(this.name, this.amount, this.day, this.category, this.paidThisMonth);
-  final String name;
-  final int amount;
-  final int day;
-  final String category;
-  final bool paidThisMonth;
 }
 
 /// Кредит, рассрочка или кредитка, введённые в анкете.
@@ -72,7 +64,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String _accType = 'card';
   final _accBalance = TextEditingController();
   // 4–7
-  final _planned = <_PlannedDraft>[];
+  final _planned = <PlannedResult>[];
   final _debts = <BankDebtDraft>[];
   final _people = <_PersonDraft>[];
   final _limits = <_LimitDraft>[];
@@ -115,8 +107,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return [
       ...accountCmds,
       for (final m in _members) {'type': 'upsertEntity', 'kind': 'member', 'entityId': m.id, 'data': m.toJson()},
-      for (final p in _planned)
-        {'type': 'upsertEntity', 'kind': 'planned', 'entityId': newId(), 'data': PlannedInfo('', p.name, p.amount, p.day, p.category, null, const {}, start: state.plannedStart(p.day, paidThisMonth: p.paidThisMonth)).toJson()},
+      for (final p in _planned) {'type': 'upsertEntity', 'kind': 'planned', 'entityId': newId(), 'data': p.toInfo(state).toJson()},
       for (final d in _debts) ...state.newBankDebtCommands(name: d.name, kind: d.kind, balance: d.balance, payment: d.payment, day: d.day, rate: d.rate, paidThisMonth: d.paidThisMonth),
       for (final p in _people)
         p.oweMe
@@ -355,13 +346,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _plannedStep() {
     final l = context.l10n;
-    return _list<_PlannedDraft>(
+    return _list<PlannedResult>(
       _planned,
-      (p) => _two(p.name, '${categoryName(l, p.category)} · ${l.everyMonthOn(p.day)}', MoneyText(p.amount)),
+      (p) => _two(p.name, '${categoryName(l, p.category)} · ${scheduleLabel(l, Localizations.localeOf(context).toString(), p.every, p.day, p.weekday, p.monthOfYear)}', MoneyText(p.amount)),
       l.addPayment,
       () async {
         final r = await showPlannedSheet(context);
-        if (r != null) setState(() => _planned.add(_PlannedDraft(r.name, r.amount, r.day, r.category, r.paidThisMonth)));
+        if (r != null) setState(() => _planned.add(r));
       },
     );
   }
@@ -548,7 +539,7 @@ Future<Member?> showMemberSheet(BuildContext context) {
 }
 
 class PlannedResult {
-  PlannedResult(this.name, this.amount, this.day, this.category, {this.paidThisMonth = true});
+  PlannedResult(this.name, this.amount, this.day, this.category, {this.paidThisMonth = true, this.every = everyMonth, this.weekday, this.monthOfYear});
   final String name;
   final int amount;
   final int day;
@@ -556,45 +547,110 @@ class PlannedResult {
 
   /// Если дата в этом месяце уже прошла: платёж за этот месяц сделан?
   final bool paidThisMonth;
+
+  /// [everyMonth], [everyWeek] или [everyYear] (Ж7).
+  final String every;
+  final int? weekday;
+  final int? monthOfYear;
+
+  /// Новый платёж: с какой даты считать сроки, решает состояние.
+  PlannedInfo toInfo(AppState state, {String id = ''}) => PlannedInfo(id, name, amount, day, category, null, const {},
+      start: state.plannedStart(day, paidThisMonth: paidThisMonth, every: every), every: every, weekday: weekday, monthOfYear: monthOfYear);
 }
 
-Future<PlannedResult?> showPlannedSheet(BuildContext context) {
+/// Подпись частоты платежа: «каждое 10-е число», «Каждую неделю · пн»,
+/// «Раз в год · 15 ноября».
+String scheduleLabel(AppLocalizations l, String locale, String every, int day, int? weekday, int? monthOfYear) => switch (every) {
+      everyWeek => l.everyWeekOn(DateFormat.E(locale).format(DateTime(2024, 1, weekday ?? 1))),
+      everyYear => l.everyYearOn(DateFormat.MMMMd(locale).format(DateTime(2024, monthOfYear ?? 1, day))),
+      _ => l.everyMonthOn(day),
+    };
+
+/// Форма планового платежа: название, сумма, частота, день, категория.
+/// С [initial] — правка: у платежа по кредиту меняются только сумма и число
+/// (название и категорию задаёт кредит), оплаченные сроки не теряются.
+Future<PlannedResult?> showPlannedSheet(BuildContext context, {PlannedInfo? initial}) {
   final l = context.l10n;
-  final name = TextEditingController();
-  final amount = TextEditingController();
-  var day = 10;
-  var category = 'home';
+  final locale = Localizations.localeOf(context).toString();
+  final name = TextEditingController(text: initial?.name ?? '');
+  final amount = TextEditingController(text: initial == null ? '' : amountToField(initial.amount));
+  var day = initial?.day ?? 10;
+  var category = initial?.category ?? 'home';
+  var every = initial?.every ?? everyMonth;
+  var weekday = initial?.weekday ?? 1;
+  var monthOfYear = initial?.monthOfYear ?? AppScope.of(context).state.today.month;
   var paidThisMonth = true;
+  final isDebt = initial?.debtId != null;
   final todayDay = AppScope.of(context).state.today.day;
   return showFormSheet<PlannedResult>(
     context,
-    title: l.addPayment,
+    title: initial == null ? l.addPayment : l.editPaymentTitle,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextField(controller: name, autofocus: true, decoration: InputDecoration(labelText: l.paymentName, hintText: l.paymentNameHint)),
+        if (isDebt) ...[
+          Text(initial!.name, style: Theme.of(ctx).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(l.paymentDebtNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+        ] else
+          TextField(controller: name, autofocus: initial == null, decoration: InputDecoration(labelText: l.paymentName, hintText: l.paymentNameHint)),
         const SizedBox(height: 12),
         AmountField(controller: amount, label: l.amount),
+        if (!isDebt && initial?.once == null) ...[
+          const SizedBox(height: 12),
+          Text(l.payEvery, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 4, children: [
+            for (final (k, t) in [(everyMonth, l.everyMonthChip), (everyWeek, l.everyWeekChip), (everyYear, l.everyYearChip)])
+              ChoiceChip(label: Text(t), selected: every == k, onSelected: (_) => set(() => every = k)),
+          ]),
+        ],
         const SizedBox(height: 12),
-        DayPicker(value: day, label: l.dayOfMonth, onChanged: (d) => set(() => day = d)),
-        if (day < todayDay) PaidThisMonthSwitch(value: paidThisMonth, onChanged: (v) => set(() => paidThisMonth = v)),
-        const SizedBox(height: 12),
-        CategoryPicker(
-          options: expenseCategories,
-          value: category,
-          onChanged: (c) => set(() => category = c),
-          onAdd: () async {
-            final id = await showCategorySheet(ctx);
-            if (id != null) set(() => category = id);
-          },
-        ),
+        if (every == everyWeek)
+          Wrap(spacing: 8, runSpacing: 4, children: [
+            for (var w = 1; w <= 7; w++)
+              ChoiceChip(label: Text(DateFormat.E(locale).format(DateTime(2024, 1, w))), selected: weekday == w, onSelected: (_) => set(() => weekday = w)),
+          ])
+        else ...[
+          if (every == everyYear) ...[
+            DropdownButtonFormField<int>(
+              isExpanded: true,
+              initialValue: monthOfYear,
+              decoration: InputDecoration(labelText: l.monthOfYearLabel),
+              items: [for (var m = 1; m <= 12; m++) DropdownMenuItem(value: m, child: Text(toBeginningOfSentenceCase(DateFormat.MMMM(locale).format(DateTime(2024, m)))))],
+              onChanged: (v) => v == null ? null : set(() => monthOfYear = v),
+            ),
+            const SizedBox(height: 12),
+          ],
+          DayPicker(value: day, label: l.dayOfMonth, onChanged: (d) => set(() => day = d)),
+        ],
+        if (initial == null && every == everyMonth && day < todayDay) PaidThisMonthSwitch(value: paidThisMonth, onChanged: (v) => set(() => paidThisMonth = v)),
+        if (!isDebt && initial?.once == null) ...[
+          const SizedBox(height: 12),
+          CategoryPicker(
+            options: expenseCategories,
+            value: category,
+            onChanged: (c) => set(() => category = c),
+            onAdd: () async {
+              final id = await showCategorySheet(ctx);
+              if (id != null) set(() => category = id);
+            },
+          ),
+        ],
         const SizedBox(height: 20),
         FilledButton(
           onPressed: () {
             final a = parseAmount(amount.text);
-            if (name.text.trim().isEmpty || a == null) return;
-            Navigator.pop(ctx, PlannedResult(name.text.trim(), a, day, category, paidThisMonth: day < todayDay ? paidThisMonth : true));
+            if ((!isDebt && name.text.trim().isEmpty) || a == null) return;
+            Navigator.pop(
+              ctx,
+              PlannedResult(isDebt ? initial!.name : name.text.trim(), a, day, category,
+                  paidThisMonth: initial == null && every == everyMonth && day < todayDay ? paidThisMonth : true,
+                  every: every,
+                  weekday: every == everyWeek ? weekday : null,
+                  monthOfYear: every == everyYear ? monthOfYear : null),
+            );
           },
-          child: Text(l.add),
+          child: Text(initial == null ? l.add : l.save),
         ),
       ]),
     ),
