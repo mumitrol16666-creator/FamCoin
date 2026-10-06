@@ -126,7 +126,7 @@ class PersonDebtScreen extends StatelessWidget {
   const PersonDebtScreen({super.key, required this.person});
   final String person;
 
-  Future<void> _pickDue(BuildContext context, AppState state, PersonDebt d, DateTime? current) async {
+  static Future<void> _pickDue(BuildContext context, AppState state, PersonDebt d, DateTime? current) async {
     final messenger = ScaffoldMessenger.of(context);
     final l = context.l10n;
     final first = state.today;
@@ -181,29 +181,25 @@ class PersonDebtScreen extends StatelessWidget {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(d.oweMe ? l.oweMe : l.iOwe, style: TextStyle(fontSize: 12, color: fam.text2)),
                     BigMoney(d.amount, color: d.oweMe ? fam.income : fam.expense),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     // Срок возврата (D133): мой долг со сроком попадает в платежи и прогноз.
                     if (!d.oweMe) ...[
-                      Builder(builder: (context) {
-                        final plan = state.personDuePlan(d.person);
-                        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(
-                            plan?.onDate == null ? l.debtDueOwedNone : l.debtDueFor(DateFormat.yMMMMd(Localizations.localeOf(context).toString()).format(plan!.onDate!)),
-                            style: TextStyle(fontSize: 12, color: plan?.onDate != null && plan!.onDate!.isBefore(state.today) ? fam.expense : fam.text2),
-                          ),
-                          Wrap(children: [
-                            TextButton(onPressed: () => _pickDue(context, state, d, plan?.onDate), child: Text(plan == null ? l.debtDueSet : l.debtDueChange)),
-                            if (plan != null) TextButton(onPressed: () => runAction(context, () => state.setPersonDue(d, null)), child: Text(l.debtDueRemove)),
-                          ]),
-                        ]);
-                      }),
-                      const SizedBox(height: 4),
+                      _DueRow(debt: d),
+                      const SizedBox(height: 12),
                     ],
-                    FilledButton(onPressed: () => showPersonRepaySheet(context, d), child: Text(d.oweMe ? l.returnedToMe : l.iReturned)),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: () => _writeOff(context, state, d),
-                      child: Text(d.oweMe ? l.writeOffDebt : l.debtForgivenAction),
+                    // Главное действие — крупно, на всю ширину.
+                    FilledButton(
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      onPressed: () => showPersonRepaySheet(context, d),
+                      child: Text(d.oweMe ? l.returnedToMe : l.iReturned),
+                    ),
+                    // Редкое действие — тише, под главным и по центру.
+                    Center(
+                      child: TextButton(
+                        style: TextButton.styleFrom(foregroundColor: fam.text2),
+                        onPressed: () => _writeOff(context, state, d),
+                        child: Text(d.oweMe ? l.writeOffDebt : l.debtForgivenAction),
+                      ),
                     ),
                   ]),
                 ),
@@ -219,6 +215,52 @@ class PersonDebtScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Строка срока возврата долга: дата (красная, если срок прошёл) и действия
+/// «Назначить» / «Изменить» и «Убрать» — в одной аккуратной строке, а не россыпью кнопок.
+class _DueRow extends StatelessWidget {
+  const _DueRow({required this.debt});
+  final PersonDebt debt;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final fam = context.fam;
+    final state = AppScope.of(context).state;
+    final plan = state.personDuePlan(debt.person);
+    final date = plan?.onDate;
+    final overdue = date != null && date.isBefore(state.today);
+    final text = date == null ? l.debtDueOwedNone : l.debtDueFor(DateFormat.yMMMMd(Localizations.localeOf(context).toString()).format(date));
+    // Дата сверху, действия под ней справа: в одну строку они не помещаются на
+    // узком экране и при крупном шрифте.
+    return Container(
+      decoration: BoxDecoration(border: Border.all(color: fam.line), borderRadius: BorderRadius.circular(12)),
+      padding: const EdgeInsets.fromLTRB(12, 10, 4, 4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(padding: const EdgeInsets.only(top: 1), child: Icon(Icons.event_outlined, size: 20, color: overdue ? fam.expense : fam.text2)),
+          const SizedBox(width: 10),
+          Expanded(child: Padding(padding: const EdgeInsets.only(right: 8), child: Text(text, style: TextStyle(fontSize: 13, color: overdue ? fam.expense : (date == null ? fam.text2 : null))))),
+        ]),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+            TextButton(
+              onPressed: () => PersonDebtScreen._pickDue(context, state, debt, date),
+              child: Text(date == null ? l.debtDueSet : l.debtDueChange),
+            ),
+            if (plan != null)
+              IconButton(
+                tooltip: l.debtDueRemove,
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => runAction(context, () => state.setPersonDue(debt, null)),
+              ),
+          ]),
+        ),
+      ]),
     );
   }
 }

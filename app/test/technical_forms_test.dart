@@ -9,6 +9,7 @@ import 'package:famcoin/l10n/app_localizations_kk.dart';
 import 'package:famcoin/l10n/app_localizations_ru.dart';
 import 'package:famcoin/ui/budget/budget_screen.dart';
 import 'package:famcoin/ui/budget/calendar_screen.dart';
+import 'package:famcoin/ui/budget/debt_screens.dart';
 import 'package:famcoin/ui/more/accounts_screen.dart';
 import 'package:famcoin/ui/budget/sheets.dart';
 import 'package:famcoin/ui/more/family_screen.dart';
@@ -614,6 +615,46 @@ void main() {
       expect(s.dueItems(DateTime(2026, 10, 31)).length, 3, reason: 'кредит за сентябрь и октябрь + возврат тёще');
       expect(s.activePlanned.map((p) => p.name), ['Кредит']);
       expect(s.recurringMonthly, kzt(10000));
+    });
+  });
+
+  group('экран долга человеку: расстановка кнопок', () {
+    for (final (name, size, scale) in [('360×800', const Size(360, 800), 1.0), ('320×694 и текст 200 %', const Size(320, 694), 2.0)]) {
+      testWidgets('долг со сроком, $name: дата, «Изменить», крестик, главная и тихая кнопки — без переполнений', (tester) async {
+        final f = await pumpApp(tester, home: const PersonDebtScreen(person: 'Теща'), size: size, textScale: scale);
+        final s = f.state;
+        await s.addPersonDebt(kind: 'borrow', amount: kzt(80000), person: 'Теща', account: 'cash', date: s.today, dueDate: DateTime(2026, 10, 20));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Вернуть до:'), findsOneWidget);
+        expect(find.text('Изменить срок'), findsOneWidget);
+        expect(find.byTooltip('Убрать срок'), findsOneWidget);
+        expect(find.widgetWithText(FilledButton, 'Я вернул'), findsOneWidget, reason: 'главное действие — залитая кнопка');
+        expect(find.widgetWithText(TextButton, 'Закрыть без оплаты'), findsOneWidget, reason: 'редкое действие — тихая текстовая');
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('срок убирается крестиком, без срока — «Назначить срок» и подсказка про прогноз', (tester) async {
+      final f = await pumpApp(tester, home: const PersonDebtScreen(person: 'Теща'), size: const Size(390, 844));
+      final s = f.state;
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(80000), person: 'Теща', account: 'cash', date: s.today, dueDate: DateTime(2026, 10, 20));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Убрать срок'));
+      await tester.pumpAndSettle();
+      expect(s.personDuePlan('Теща'), isNull);
+      expect(find.text('Назначить срок'), findsOneWidget);
+      expect(find.textContaining('в прогнозе этот долг пока не учтён'), findsOneWidget);
+      expect(find.byTooltip('Убрать срок'), findsNothing);
+    });
+
+    testWidgets('мне должны: строки срока нет, есть «Мне вернули» и «Списать долг»', (tester) async {
+      final f = await pumpApp(tester, home: const PersonDebtScreen(person: 'Друг'), size: const Size(390, 844));
+      final s = f.state;
+      await s.addPersonDebt(kind: 'lendOut', amount: kzt(50000), person: 'Друг', account: 'cash', date: s.today);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Вернуть до'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Мне вернули'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Списать долг'), findsOneWidget);
     });
   });
 }
