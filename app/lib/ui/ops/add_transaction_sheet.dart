@@ -24,7 +24,7 @@ enum FieldsKind { expense, income, transfer, debt }
 /// прокрутки; заполненная форма не закрывается без подтверждения.
 /// [kind] и [account] открывают форму сразу на нужной вкладке и со счётом
 /// (например, «Перевести» на экране счёта или копилки).
-Future<void> showAddTransactionSheet(BuildContext context, {VoiceDraft? draft, FieldsKind? kind, String? account}) {
+Future<void> showAddTransactionSheet(BuildContext context, {VoiceDraft? draft, FieldsKind? kind, String? account, String? debtKind}) {
   final state = AppScope.of(context).state;
   if (state.activeAccounts.isEmpty) return addAccountFlow(context);
   return showModalBottomSheet(
@@ -34,15 +34,16 @@ Future<void> showAddTransactionSheet(BuildContext context, {VoiceDraft? draft, F
     // Смахивание вниз закрывало бы форму мимо проверки черновика — закрытие
     // только крестиком, кнопкой «назад» или нажатием на затемнение.
     enableDrag: false,
-    builder: (_) => _AddSheet(draft: draft, kind: kind, account: account),
+    builder: (_) => _AddSheet(draft: draft, kind: kind, account: account, debtKind: debtKind),
   );
 }
 
 class _AddSheet extends StatefulWidget {
-  const _AddSheet({this.draft, this.kind, this.account});
+  const _AddSheet({this.draft, this.kind, this.account, this.debtKind});
   final VoiceDraft? draft;
   final FieldsKind? kind;
   final String? account;
+  final String? debtKind;
 
   @override
   State<_AddSheet> createState() => _AddSheetState();
@@ -89,7 +90,7 @@ class _AddSheetState extends State<_AddSheet> {
               IconButton(tooltip: l.tipClose, onPressed: _close, icon: const Icon(Icons.close)),
             ]),
           ),
-          Expanded(child: TransactionFields(draft: widget.draft, initialKind: widget.kind, initialAccount: widget.account, scrollController: controller, dirty: _dirty)),
+          Expanded(child: TransactionFields(draft: widget.draft, initialKind: widget.kind, initialAccount: widget.account, initialDebtKind: widget.debtKind, scrollController: controller, dirty: _dirty)),
         ]),
       ),
     );
@@ -100,11 +101,14 @@ class _AddSheetState extends State<_AddSheet> {
 /// и как самостоятельная форма (Q02), и как редактируемый черновик после
 /// голоса (S38): один и тот же код правки, чтобы не расходились два места.
 class TransactionFields extends StatefulWidget {
-  const TransactionFields({super.key, this.draft, this.initialKind, this.initialAccount, this.scrollController, this.showVoiceChip = true, this.dirty});
+  const TransactionFields({super.key, this.draft, this.initialKind, this.initialAccount, this.initialDebtKind, this.scrollController, this.showVoiceChip = true, this.dirty});
 
   /// Вкладка и счёт, с которых форма открывается; без них — расход с основного счёта.
   final FieldsKind? initialKind;
   final String? initialAccount;
+
+  /// Какой личный долг выбран при открытии вкладки «Долг»: lendOut, borrow и т. д.
+  final String? initialDebtKind;
 
   /// Черновик из голосового ввода: поля заполняются, но не сохраняются
   /// до нажатия «Сохранить».
@@ -138,11 +142,15 @@ class _TransactionFieldsState extends State<TransactionFields> {
   bool _whoTouched = false;
 
   /// lendOut, borrow, repaymentReceived, repaymentMade.
-  String _debtKind = 'lendOut';
+  late String _debtKind = widget.initialDebtKind ?? 'lendOut';
 
   /// Старый долг (D102): денег на счёте уже нет — записывается только остаток
   /// долга, счёт не нужен.
   bool _oldDebt = false;
+
+  /// Когда вернуть (D133): для «Взял в долг» — срок попадает в платежи и прогноз,
+  /// для «Дал в долг» — виден на экране долга. `null` — без срока.
+  DateTime? _dueDate;
 
   /// Покупка в рассрочку (Ж1): расход сейчас, долг на остаток, график в
   /// календаре — одной пачкой команд.
@@ -320,7 +328,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
                 dense: true,
                 leading: Icon(!early && chosen == d ? Icons.radio_button_checked : Icons.radio_button_off, color: !early && chosen == d ? ctx.scheme.primary : ctx.fam.text2),
                 title: Text('${DateFormat.MMMMd(locale).format(d.date)}${d.date.isBefore(AppScope.of(ctx).state.today) ? ' · ${l.overdue}' : ''}'),
-                subtitle: Text(formatMoney(d.planned.amount)),
+                subtitle: Text(formatMoney(d.payAmount)),
                 onTap: () => set(() {
                   chosen = d;
                   early = false;
@@ -470,9 +478,9 @@ class _TransactionFieldsState extends State<TransactionFields> {
           await state.addTransfer(amount: amount, from: account, to: _to!, date: _date, time: time, id: _txId, commandId: _commandId);
         case FieldsKind.debt:
           if (oldDebt) {
-            await state.addOldPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), date: _date, id: _txId, commandId: _commandId);
+            await state.addOldPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), date: _date, dueDate: _isNewDebt ? _dueDate : null, id: _txId, commandId: _commandId);
           } else {
-            await state.addPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), account: account, date: _date, time: time, id: _txId, commandId: _commandId);
+            await state.addPersonDebt(kind: _debtKind, amount: amount, person: _person.text.trim(), account: account, date: _date, time: time, dueDate: _isNewDebt ? _dueDate : null, id: _txId, commandId: _commandId);
           }
       }
     } on ReconciliationEditCancelled {
@@ -739,6 +747,32 @@ class _TransactionFieldsState extends State<TransactionFields> {
               subtitle: Text(note, style: TextStyle(fontSize: 12, color: fam.text2)),
               onTap: () => setState(() => _oldDebt = old),
             ),
+        ],
+        if (_isNewDebt) ...[
+          label(l.debtDueLabel),
+          Wrap(spacing: 8, runSpacing: 4, children: [
+            ChoiceChip(label: Text(l.debtDueNone), selected: _dueDate == null, onSelected: (_) => setState(() => _dueDate = null)),
+            ChoiceChip(
+              label: Text(l.debtDueWeek),
+              selected: _dueDate == state.today.add(const Duration(days: 7)),
+              onSelected: (_) => setState(() => _dueDate = state.today.add(const Duration(days: 7))),
+            ),
+            ChoiceChip(
+              label: Text(l.debtDueMonth),
+              selected: _dueDate == DateTime(state.today.year, state.today.month + 1, state.today.day),
+              onSelected: (_) => setState(() => _dueDate = DateTime(state.today.year, state.today.month + 1, state.today.day)),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.calendar_month_outlined, size: 16),
+              label: Text(_dueDate == null || _dueDate == state.today.add(const Duration(days: 7)) || _dueDate == DateTime(state.today.year, state.today.month + 1, state.today.day) ? l.debtDuePick : DateFormat.yMMMd(locale).format(_dueDate!)),
+              onPressed: () async {
+                final picked = await showDatePicker(context: context, initialDate: _dueDate ?? state.today.add(const Duration(days: 7)), firstDate: state.today, lastDate: DateTime(state.today.year + 10));
+                if (picked != null) setState(() => _dueDate = DateTime(picked.year, picked.month, picked.day));
+              },
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text(_debtKind == 'borrow' ? l.debtDueNoteBorrow : l.debtDueNoteLend, style: TextStyle(fontSize: 12, color: fam.text2)),
         ],
         if (!(_isNewDebt && _oldDebt)) ...[
           const SizedBox(height: 14),

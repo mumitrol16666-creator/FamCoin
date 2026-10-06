@@ -5,6 +5,7 @@ import 'package:famcoin_core/famcoin_core.dart';
 import 'package:test/test.dart';
 
 void main() {
+  onDateTests();
   scheduleVersionTests();
   List<String> p(PaySchedule s, DateTime a, DateTime b) => [for (final o in s.occurrences(a, b)) o.toString()];
 
@@ -100,6 +101,38 @@ void scheduleVersionTests() {
       final v1 = PaySchedule(day: 5, start: DateTime(2026, 3, 1));
       final v2 = PaySchedule(day: 20, start: DateTime(2026, 6, 1), previous: v1);
       expect(v2.scanFrom(DateTime(2026, 10, 5)), DateTime(2026, 3, 1));
+    });
+  });
+}
+
+void onDateTests() {
+  group('срок возврата личного долга (onDate)', () {
+    final s = PaySchedule(onDate: DateTime(2026, 10, 20));
+    test('один срок в точную дату, ключ — дата; вне промежутка срока нет', () {
+      expect([for (final o in s.occurrences(DateTime(2026, 10, 1), DateTime(2026, 10, 31))) o.toString()], ['2026-10-20@2026-10-20']);
+      expect(s.occurrences(DateTime(2026, 11, 1), DateTime(2026, 11, 30)), isEmpty);
+      expect(s.occurrences(DateTime(2026, 10, 20), DateTime(2026, 10, 20)), hasLength(1), reason: 'границы включительно');
+    });
+
+    test('просрочка видна в обзоре, пока срок не оплачен: scanFrom начинается со срока', () {
+      expect(s.scanFrom(DateTime(2026, 12, 1)), DateTime(2026, 10, 20));
+    });
+
+    test('toJson / fromJson сохраняют дату', () {
+      final back = PaySchedule.fromJson(s.toJson().cast<String, dynamic>());
+      expect(back.onDate, DateTime(2026, 10, 20));
+    });
+
+    test('plannedDebtActive: пока должен я — срок действует, после погашения — нет', () {
+      final l = Ledger()
+        ..addMoneyAccount('cash')
+        ..openingBalance(id: 'o', date: DateTime(2026, 10, 1), account: 'cash', amount: kzt(100000));
+      l.borrow(id: 'b', date: DateTime(2026, 10, 2), account: 'cash', person: 'Теща', amount: kzt(80000));
+      expect(plannedDebtActive(l, null, person: 'Теща'), isTrue);
+      expect(plannedDebtActive(l, null, person: 'Другой'), isFalse, reason: 'долга нет');
+      l.repaymentMade(id: 'r', date: DateTime(2026, 10, 10), account: 'cash', person: 'Теща', principal: kzt(80000));
+      expect(plannedDebtActive(l, null, person: 'Теща'), isFalse);
+      expect(plannedDebtActive(l, null), isTrue, reason: 'платёж без долга всегда действует');
     });
   });
 }

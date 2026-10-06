@@ -239,7 +239,7 @@ class GoalInfo {
 
 /// Плановый платёж: план не меняет баланс, факт оплаты проводится отдельно (D14).
 class PlannedInfo {
-  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once, this.goalId, this.every = everyMonth, this.weekday, this.monthOfYear, this.previous});
+  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once, this.goalId, this.every = everyMonth, this.weekday, this.monthOfYear, this.previous, this.person, this.onDate});
   factory PlannedInfo.fromJson(String id, Map<String, dynamic> d) => PlannedInfo(
         id,
         d['name'] as String? ?? '',
@@ -255,6 +255,8 @@ class PlannedInfo {
         weekday: (d['weekday'] as num?)?.toInt(),
         monthOfYear: (d['monthOfYear'] as num?)?.toInt(),
         previous: d['prev'] is Map ? PaySchedule.fromJson((d['prev'] as Map).cast<String, dynamic>()) : null,
+        person: d['person'] as String?,
+        onDate: d['onDate'] is String ? dateFromJson(d['onDate']) : null,
       );
   final String id;
   final String name;
@@ -294,8 +296,14 @@ class PlannedInfo {
   /// и их отметки «оплачено» остаются в силе, а новые правила действуют с [start].
   final PaySchedule? previous;
 
+  /// Срок возврата личного долга (D133): кому должен я и до какой даты. Это
+  /// не обычный платёж: сумма — текущий остаток долга, оплата — возврат долга.
+  final String? person;
+  final DateTime? onDate;
+  bool get isPersonDue => person != null;
+
   /// Сроки платежа: общий расчёт ядра, тот же, что у сервера и бота.
-  PaySchedule get schedule => PaySchedule(every: every, day: day, weekday: weekday, monthOfYear: monthOfYear, once: once, start: start, previous: previous);
+  PaySchedule get schedule => PaySchedule(every: every, day: day, weekday: weekday, monthOfYear: monthOfYear, once: once, start: start, previous: previous, onDate: onDate);
 
   /// Копия с другими условиями; `paid`, `start`, долг и копилка сохраняются —
   /// правка платежа не теряет историю оплат.
@@ -319,6 +327,8 @@ class PlannedInfo {
       weekday: nextWeekday,
       monthOfYear: nextMonth,
       previous: versioned ? schedule : previous,
+      person: person,
+      onDate: onDate,
     );
   }
 
@@ -344,6 +354,8 @@ class PlannedInfo {
         if (every == everyWeek && weekday != null) 'weekday': weekday,
         if (every == everyYear && monthOfYear != null) 'monthOfYear': monthOfYear,
         if (previous != null) 'prev': previous!.toJson(),
+        if (person != null) 'person': person,
+        if (onDate != null) 'onDate': dateToJson(onDate!),
       };
 }
 
@@ -387,7 +399,12 @@ class PersonDebt {
 
 /// Один срок планового платежа.
 class DueItem {
-  const DueItem(this.planned, this.date, this.period);
+  const DueItem(this.planned, this.date, this.period, {int? amount}) : _amount = amount;
+  final int? _amount;
+
+  /// Сколько платить по сроку: у возврата личного долга — остаток долга сейчас,
+  /// у остальных — сумма платежа.
+  int get payAmount => _amount ?? planned.amount;
   final PlannedInfo planned;
   final DateTime date;
   final String period;

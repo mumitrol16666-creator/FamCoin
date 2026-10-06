@@ -1,5 +1,6 @@
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../state/app_scope.dart';
 import '../../state/app_state.dart';
@@ -125,6 +126,22 @@ class PersonDebtScreen extends StatelessWidget {
   const PersonDebtScreen({super.key, required this.person});
   final String person;
 
+  Future<void> _pickDue(BuildContext context, AppState state, PersonDebt d, DateTime? current) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l = context.l10n;
+    final first = state.today;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current != null && !current.isBefore(first) ? current : first.add(const Duration(days: 7)),
+      firstDate: first,
+      lastDate: DateTime(first.year + 10),
+    );
+    if (picked == null || !context.mounted) return;
+    if (await runAction(context, () => state.setPersonDue(d, DateTime(picked.year, picked.month, picked.day)))) {
+      messenger.showSnackBar(SnackBar(content: Text(l.debtDueSaved)));
+    }
+  }
+
   Future<void> _writeOff(BuildContext context, AppState state, PersonDebt d) async {
     final l = context.l10n;
     final messenger = ScaffoldMessenger.of(context);
@@ -165,6 +182,23 @@ class PersonDebtScreen extends StatelessWidget {
                     Text(d.oweMe ? l.oweMe : l.iOwe, style: TextStyle(fontSize: 12, color: fam.text2)),
                     BigMoney(d.amount, color: d.oweMe ? fam.income : fam.expense),
                     const SizedBox(height: 8),
+                    // Срок возврата (D133): мой долг со сроком попадает в платежи и прогноз.
+                    if (!d.oweMe) ...[
+                      Builder(builder: (context) {
+                        final plan = state.personDuePlan(d.person);
+                        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(
+                            plan?.onDate == null ? l.debtDueOwedNone : l.debtDueFor(DateFormat.yMMMMd(Localizations.localeOf(context).toString()).format(plan!.onDate!)),
+                            style: TextStyle(fontSize: 12, color: plan?.onDate != null && plan!.onDate!.isBefore(state.today) ? fam.expense : fam.text2),
+                          ),
+                          Wrap(children: [
+                            TextButton(onPressed: () => _pickDue(context, state, d, plan?.onDate), child: Text(plan == null ? l.debtDueSet : l.debtDueChange)),
+                            if (plan != null) TextButton(onPressed: () => runAction(context, () => state.setPersonDue(d, null)), child: Text(l.debtDueRemove)),
+                          ]),
+                        ]);
+                      }),
+                      const SizedBox(height: 4),
+                    ],
                     FilledButton(onPressed: () => showPersonRepaySheet(context, d), child: Text(d.oweMe ? l.returnedToMe : l.iReturned)),
                     const SizedBox(height: 8),
                     OutlinedButton(

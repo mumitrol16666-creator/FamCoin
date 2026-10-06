@@ -32,7 +32,7 @@ DateTime dayOfMonth(int year, int month, int day) {
 }
 
 class PaySchedule {
-  const PaySchedule({this.every = everyMonth, this.day = 1, this.weekday, this.monthOfYear, this.once, this.start, this.previous});
+  const PaySchedule({this.every = everyMonth, this.day = 1, this.weekday, this.monthOfYear, this.once, this.start, this.previous, this.onDate});
 
   /// Читает поля записи справочника (`planned` / `purchase`): `every`, `day`,
   /// `weekday`, `monthOfYear`, `once`, `start`. Старые записи без `every` —
@@ -47,6 +47,7 @@ class PaySchedule {
       once: d['once'] as String?,
       start: d['start'] is String ? dateFromJson(d['start']) : null,
       previous: d['prev'] is Map ? PaySchedule.fromJson((d['prev'] as Map).cast<String, dynamic>()) : null,
+      onDate: d['onDate'] is String ? dateFromJson(d['onDate']) : null,
     );
   }
 
@@ -59,6 +60,7 @@ class PaySchedule {
         if (once != null) 'once': once,
         if (start != null) 'start': dateToJson(start!),
         if (previous != null) 'prev': previous!.toJson(),
+        if (onDate != null) 'onDate': dateToJson(onDate!),
       };
 
   /// [everyMonth], [everyWeek] или [everyYear]; у разовой покупки — месяц.
@@ -80,6 +82,10 @@ class PaySchedule {
   /// У версии с [previous] — дата, с которой действуют эти правила.
   final DateTime? start;
 
+  /// Один срок в точную дату — срок возврата личного долга: ключ `ГГГГ-ММ-ДД`.
+  /// Просрочка остаётся, пока долг не погашен.
+  final DateTime? onDate;
+
   /// Прежняя версия расписания (R03): смена дня или частоты платежа не должна
   /// заново создавать сроки в оплаченном прошлом. Прежние правила действуют до
   /// дня перед [start] этой версии, их ключи «оплачено» остаются верными.
@@ -97,6 +103,7 @@ class PaySchedule {
   }
 
   DateTime _ownScanFrom(DateTime today) {
+    if (onDate != null) return onDate!;
     final onceMonth = once == null ? null : DateTime(int.parse(once!.substring(0, 4)), int.parse(once!.substring(5, 7)), 1);
     final base = onceMonth ?? start ?? DateTime(today.year, today.month, 1);
     final floor = switch (every) {
@@ -123,6 +130,10 @@ class PaySchedule {
 
   List<Occurrence> _own(DateTime from, DateTime to) {
     final out = <Occurrence>[];
+    if (onDate != null) {
+      if (!onDate!.isBefore(from) && !onDate!.isAfter(to)) out.add(Occurrence(onDate!, dateToJson(onDate!)));
+      return out;
+    }
     void add(DateTime date, String period) {
       if (date.isBefore(from) || date.isAfter(to)) return;
       if (start != null && date.isBefore(start!)) return;
@@ -159,8 +170,11 @@ class PaySchedule {
 /// Платёж по кредиту действует, пока долг не погашен (R04). Одно правило для
 /// приложения, календаря, утренней сводки и сопоставления выписки; оплаченные
 /// сроки прошлого остаются в истории, будущие после погашения не требуются.
-bool plannedDebtActive(Ledger l, String? debtId) =>
-    debtId == null || (l.hasAccount(liabilityAccount(debtId)) && l.balance(liabilityAccount(debtId)) > 0);
+bool plannedDebtActive(Ledger l, String? debtId, {String? person}) {
+  // Срок возврата личного долга действует, пока человеку что-то должен я.
+  final id = person ?? debtId;
+  return id == null || (l.hasAccount(liabilityAccount(id)) && l.balance(liabilityAccount(id)) > 0);
+}
 
 /// Команда справочника «отметить срок» (R01): добавляет или снимает один ключ
 /// в списке `paid` записи платежа, не трогая остальные отметки. Полная замена

@@ -72,7 +72,7 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
   final state = AppScope.of(context).state;
   final locale = Localizations.localeOf(context).toString();
   final p = due.planned;
-  final amount = TextEditingController(text: amountToField(initialAmount ?? p.amount));
+  final amount = TextEditingController(text: amountToField(initialAmount ?? due.payAmount));
   final interest = TextEditingController();
   var account = state.activeAccounts.any((a) => a.id == initialAccount) ? initialAccount : (state.payAccountFor(p) ?? _firstAccount(context));
   var payDate = date == null || date.isAfter(state.today) ? state.today : date;
@@ -80,7 +80,7 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
   final fromPiggy = p.once == null ? 0 : state.purchaseSaved(p);
   return showFormSheet<void>(
     context,
-    title: title ?? '${l.pay}: ${p.name}',
+    title: title ?? (p.person != null ? plannedTitle(l, p) : '${l.pay}: ${p.name}'),
     titleAction: p.debtId == null ? null : InfoTip(l.repaymentNote, title: l.repayHelpTitle),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -129,15 +129,17 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
         // долгим нажатием в бюджете, а изменить — никак.
         if (p.once == null)
           Row(children: [
-            Expanded(
-              child: TextButton(
-                onPressed: () async {
-                  final nav = Navigator.of(ctx);
-                  if (await editPlannedFlow(ctx, p)) nav.pop();
-                },
-                child: Text(l.editPayment),
+            // У срока возврата долга условия не правятся: дата меняется на экране долга.
+            if (p.person == null)
+              Expanded(
+                child: TextButton(
+                  onPressed: () async {
+                    final nav = Navigator.of(ctx);
+                    if (await editPlannedFlow(ctx, p)) nav.pop();
+                  },
+                  child: Text(l.editPayment),
+                ),
               ),
-            ),
             Expanded(
               child: TextButton(
                 style: TextButton.styleFrom(foregroundColor: ctx.fam.expense),

@@ -115,6 +115,7 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
     case 'repaymentReceived':
       l.repaymentReceived(id: s('id'), date: date(), account: s('account'), person: s('person'), principal: m('principal'), interest: mo('interest'), meta: meta());
     case 'repaymentMade':
+      l.requireOccurrenceFree(meta(), exceptTxId: so('id'));
       l.repaymentMade(id: s('id'), date: date(), account: s('account'), person: s('person'), principal: m('principal'), interest: mo('interest'), fees: mo('fees'), meta: meta());
     case 'creditReceived':
       l.creditReceived(id: s('id'), date: date(), account: s('account'), debtId: s('debtId'), amount: m('amount'));

@@ -7,6 +7,7 @@ import 'package:famcoin/state/app_scope.dart';
 import 'package:famcoin/state/models.dart';
 import 'package:famcoin/l10n/app_localizations_kk.dart';
 import 'package:famcoin/l10n/app_localizations_ru.dart';
+import 'package:famcoin/ui/budget/budget_screen.dart';
 import 'package:famcoin/ui/budget/calendar_screen.dart';
 import 'package:famcoin/ui/more/accounts_screen.dart';
 import 'package:famcoin/ui/budget/sheets.dart';
@@ -481,6 +482,138 @@ void main() {
       expect(s.ledger.balance(piggy), kzt(20000), reason: 'из копилки ушло 10 000');
       expect(s.ledger.balance('cash'), kzt(100000) - kzt(30000) + kzt(10000));
       expect(s.monthReport.expense, 0, reason: 'перевод — не расход');
+    });
+  });
+
+  group('«Долги» → «Добавить»', () {
+    testWidgets('предлагает выбор: взял в долг, дал в долг, кредит; «Я взял в долг» открывает вкладку «Долг» с этим видом', (tester) async {
+      final f = await pumpApp(tester, home: const BudgetScreen(), size: const Size(390, 844));
+      await tester.pumpAndSettle();
+      // «Добавить» в заголовке раздела «Долги».
+      await tester.scrollUntilVisible(find.text('Долги'), 300, scrollable: find.byType(Scrollable).first);
+      final header = find.ancestor(of: find.text('Долги'), matching: find.byType(Row)).first;
+      await tester.tap(find.descendant(of: header, matching: find.text('Добавить')));
+      await tester.pumpAndSettle();
+      expect(find.text('Что добавить?'), findsOneWidget);
+      expect(find.text('Я взял в долг'), findsOneWidget);
+      expect(find.text('Я дал в долг'), findsOneWidget);
+      expect(find.text('Кредит, рассрочка или кредитная карта'), findsOneWidget);
+      await tester.tap(find.text('Я взял в долг'));
+      await tester.pumpAndSettle();
+      expect(find.text('Записать операцию'), findsOneWidget);
+      // Форма открыта на «Долг», выбрано «Взял в долг»: ⓘ называет именно этот случай.
+      final chip = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Взял в долг'));
+      expect(chip.selected, isTrue);
+      expect(f.state.personDebts, isEmpty);
+    });
+
+    testWidgets('пункт «Кредит…» открывает прежнюю форму кредита', (tester) async {
+      await pumpApp(tester, home: const BudgetScreen(), size: const Size(390, 844));
+      await tester.pumpAndSettle();
+      // «Добавить» в заголовке раздела «Долги».
+      await tester.scrollUntilVisible(find.text('Долги'), 300, scrollable: find.byType(Scrollable).first);
+      final header = find.ancestor(of: find.text('Долги'), matching: find.byType(Row)).first;
+      await tester.tap(find.descendant(of: header, matching: find.text('Добавить')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Кредит, рассрочка или кредитная карта'));
+      await tester.pumpAndSettle();
+      expect(find.text('Добавить кредит'), findsWidgets);
+    });
+  });
+
+  group('D133 срок возврата личного долга', () {
+    testWidgets('«＋» → Долг → Взял в долг → «Через неделю»: долг со сроком попадает в ближайшие платежи', (tester) async {
+      final f = await pumpWith(tester, (c) => showAddTransactionSheet(c, kind: FieldsKind.debt, debtKind: 'borrow'));
+      final s = f.state;
+      await openForm(tester);
+      await tester.enterText(find.byType(TextField).first, '80000');
+      await tester.enterText(find.widgetWithText(TextField, 'Имя'), 'Теща');
+      await tester.pump();
+      await tester.dragUntilVisible(find.text('Через неделю'), find.byType(ListView).last, const Offset(0, -200));
+      // Список строится лениво: до чипа докручиваем в несколько шагов.
+      for (var i = 0; i < 3; i++) {
+        await tester.ensureVisible(find.text('Через неделю'));
+        await tester.pump();
+      }
+      expect(find.text('Когда вернуть'), findsOneWidget);
+      await tester.tap(find.text('Через неделю'));
+      await tester.pump();
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Сохранить'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+      await tester.pumpAndSettle();
+      final plan = s.personDuePlan('Теща')!;
+      expect(plan.onDate, DateTime(2026, 10, 5), reason: '28 сентября + 7 дней');
+      final due = s.dueItems(DateTime(2026, 10, 31)).single;
+      expect(due.payAmount, kzt(80000));
+      expect(due.planned.isPersonDue, isTrue);
+      expect(f.entities['planned']!.values.single['person'], 'Теща', reason: 'сервер получил срок');
+      // Срок — 5 октября: в сентябрьском прогнозе его нет, а в октябрьском — есть.
+      expect(s.monthEndForecast.remainingObligations, 0);
+      f.now = DateTime(2026, 10, 3);
+      s.checkDayChange();
+      expect(s.monthEndForecast.remainingObligations, kzt(80000), reason: 'прогноз видит возврат долга');
+      // Постоянные платежи его не содержат.
+      expect(s.recurringMonthly, 0);
+      expect(s.activePlanned, isEmpty);
+    });
+
+    test('без срока обязательства нет; новый долг без срока снимает устаревший прошедший срок', () async {
+      final f = FakeServer();
+      await f.init();
+      final s = f.state;
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(20000), person: 'Друг', account: 'cash', date: s.today);
+      expect(s.personDuePlan('Друг'), isNull);
+      expect(s.dueItems(DateTime(2026, 12, 31)), isEmpty);
+      // Срок в прошлом, долг ещё есть; новый заём без срока снимает его.
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(10000), person: 'Друг', account: 'cash', date: s.today, dueDate: DateTime(2026, 9, 30));
+      expect(s.personDuePlan('Друг')!.amount, kzt(30000), reason: 'сумма срока — весь остаток долга');
+      f.now = DateTime(2026, 10, 15);
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(5000), person: 'Друг', account: 'cash', date: s.today);
+      expect(s.personDuePlan('Друг'), isNull, reason: 'прошедший срок снят, просрочка по старому договору не висит');
+    });
+
+    test('частичный возврат уменьшает сумму срока; оплата срока — возврат долга и закрывает срок; полный возврат гасит срок', () async {
+      final f = FakeServer();
+      await f.init();
+      final s = f.state;
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(80000), person: 'Теща', account: 'cash', date: s.today, dueDate: DateTime(2026, 10, 20));
+      await s.addPersonDebt(kind: 'repaymentMade', amount: kzt(30000), person: 'Теща', account: 'cash', date: s.today);
+      expect(s.dueItems(DateTime(2026, 10, 31)).single.payAmount, kzt(50000));
+      final due = s.dueItems(DateTime(2026, 10, 31)).single;
+      await s.payDue(due, account: 'cash', amount: due.payAmount, date: s.today);
+      final pay = s.userTransactions.firstWhere((t) => t.type == EventType.repaymentMade && t.meta['planned'] != null);
+      expect(pay.meta['period'], '2026-10-20');
+      expect(s.personDebts, isEmpty, reason: 'долг возвращён целиком');
+      expect(s.dueItems(DateTime(2026, 10, 31)), isEmpty);
+      expect(s.planned.single.paid, {'2026-10-20'});
+      // Отмена оплаты возвращает и долг, и срок.
+      await s.deleteTransaction(pay.id);
+      expect(s.dueItems(DateTime(2026, 10, 31)).single.payAmount, kzt(50000));
+    });
+
+    test('срок назначается и убирается на экране долга', () async {
+      final f = FakeServer();
+      await f.init();
+      final s = f.state;
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(40000), person: 'Брат', account: 'cash', date: s.today);
+      expect(s.dueItems(DateTime(2026, 12, 31)), isEmpty);
+      await s.setPersonDue(s.personDebts.single, DateTime(2026, 11, 1));
+      expect(s.dueItems(DateTime(2026, 12, 31)).single.date, DateTime(2026, 11, 1));
+      await s.setPersonDue(s.personDebts.single, DateTime(2026, 11, 15));
+      expect(s.dueItems(DateTime(2026, 12, 31)).single.date, DateTime(2026, 11, 15), reason: 'перенос, а не второй срок');
+      await s.setPersonDue(s.personDebts.single, null);
+      expect(s.dueItems(DateTime(2026, 12, 31)), isEmpty);
+    });
+
+    test('срок возврата не мешает платежам по кредитам и не попадает в «Обязательные платежи»', () async {
+      final f = FakeServer();
+      await f.init();
+      final s = f.state;
+      await s.sendBatch(s.newBankDebtCommands(name: 'Кредит', kind: 'loan', balance: kzt(100000), payment: kzt(10000), day: 25, paidThisMonth: false));
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(80000), person: 'Теща', account: 'cash', date: s.today, dueDate: DateTime(2026, 10, 20));
+      expect(s.dueItems(DateTime(2026, 10, 31)).length, 3, reason: 'кредит за сентябрь и октябрь + возврат тёще');
+      expect(s.activePlanned.map((p) => p.name), ['Кредит']);
+      expect(s.recurringMonthly, kzt(10000));
     });
   });
 }

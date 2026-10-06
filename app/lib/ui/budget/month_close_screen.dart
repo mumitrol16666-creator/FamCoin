@@ -156,9 +156,9 @@ class _MonthCloseScreenState extends State<MonthCloseScreen> {
                               for (final d in due) ...[
                                 ListTile(
                                   contentPadding: EdgeInsets.zero,
-                                  title: Text(d.planned.name),
+                                  title: Text(plannedTitle(l, d.planned)),
                                   subtitle: Text(DateFormat.yMd(locale).format(d.date)),
-                                  trailing: MoneyText(d.planned.amount),
+                                  trailing: MoneyText(d.payAmount),
                                 ),
                                 Align(
                                   alignment: Alignment.centerRight,

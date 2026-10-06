@@ -240,7 +240,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'unpaidCount': due.length,
       'notEnoughMoneyNowBy': _t(ex.shortfall),
       'unpaid': [
-        for (final d in due.take(10)) {'name': d.planned.name, 'amount': _t(d.planned.amount), 'date': _dayText(d.date, l)},
+        for (final d in due.take(10)) {'name': d.planned.person != null ? 'Возврат долга: ${d.planned.person}' : d.planned.name, 'amount': _t(d.payAmount), 'date': _dayText(d.date, l)},
       ],
     },
     // Лимиты категорий — плоским списком с готовым остатком: чем меньше

@@ -796,7 +796,7 @@ class DueTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CategoryAvatar.of(categoryById(p.debtId != null ? debtsCategory : p.category)),
-      title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Text(plannedTitle(l, p), maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(
           '${DateFormat.MMMMd(locale).format(due.date)}${overdue ? ' · ${l.overdue}' : ''}',
@@ -816,7 +816,7 @@ class DueTile extends StatelessWidget {
           ),
       ]),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        MoneyText(p.amount, color: p.debtId != null ? fam.debt : null),
+        MoneyText(due.payAmount, color: p.debtId != null || p.person != null ? fam.debt : null),
         const SizedBox(width: 4),
         const Icon(Icons.chevron_right, size: 18),
       ]),
@@ -832,11 +832,11 @@ class DueTile extends StatelessWidget {
     final p = due.planned;
     final account = state.payAccountFor(p);
     if (account == null) return;
-    final ok = await runAction(context, () => state.payDue(due, account: account, amount: p.amount));
+    final ok = await runAction(context, () => state.payDue(due, account: account, amount: due.payAmount));
     if (!ok) return;
     final tx = state.userTransactions.where((t) => t.meta['planned'] == p.id && t.meta['period'] == due.period).firstOrNull;
     messenger.showSnackBar(SnackBar(
-      content: Text(l.dueQuickPaid(p.name, formatMoney(p.amount))),
+      content: Text(l.dueQuickPaid(plannedTitle(l, p), formatMoney(due.payAmount))),
       duration: const Duration(seconds: 6),
       action: tx == null ? null : SnackBarAction(label: l.undo, onPressed: () => state.deleteTransaction(tx.id)),
     ));

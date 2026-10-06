@@ -12,6 +12,7 @@ import '../onboarding/onboarding_screen.dart' show scheduleLabel;
 import 'debt_screens.dart';
 import 'limits_section.dart';
 import 'goal_card.dart';
+import '../ops/add_transaction_sheet.dart';
 import 'sheets.dart';
 
 /// S12 — планирование: лимиты, обязательные платежи, покупки, цели и долги.
@@ -58,13 +59,13 @@ class BudgetScreen extends StatelessWidget {
               const LimitsSection(),
 
               SectionHeader(l.planned, action: l.calendar, onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen()))),
-              if (state.planned.every((p) => p.once != null))
+              if (state.planned.every((p) => p.once != null || p.person != null))
                 EmptyHint(l.noPlanned, icon: Icons.event_repeat_outlined)
               else
                 AppCard(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Column(children: [
-                    for (final p in state.planned.where((p) => p.once == null))
+                    for (final p in state.planned.where((p) => p.once == null && p.person == null))
                       Builder(builder: (context) {
                         final next = nextDue.where((d) => d.planned.id == p.id).firstOrNull;
                         final paidNow = state.paidThisPeriod(p);
@@ -141,7 +142,7 @@ class BudgetScreen extends StatelessWidget {
               if (standaloneGoals.isEmpty) EmptyHint(purchaseGoals.isEmpty ? l.noGoals : l.purchaseGoalsNote, icon: Icons.flag_outlined),
               for (final g in standaloneGoals) GoalCard(goal: g),
 
-              SectionHeader(l.debts, action: l.add, onAction: () => addBankDebtFlow(context)),
+              SectionHeader(l.debts, action: l.add, onAction: () => _addDebtChoice(context)),
               if (state.bankDebts.isEmpty && people.isEmpty)
                 EmptyHint(l.noDebts, icon: Icons.handshake_outlined)
               else
@@ -184,4 +185,34 @@ class BudgetScreen extends StatelessWidget {
     );
   }
 
+}
+
+
+/// «Добавить» в «Долгах»: кредит и долг человеку — разные вещи (банк с графиком
+/// платежей против «взял у друга»), и раньше предлагался только кредит.
+Future<void> _addDebtChoice(BuildContext context) {
+  final l = context.l10n;
+  Widget option(BuildContext ctx, IconData icon, String title, String note, VoidCallback onTap) => ListTile(
+        leading: CircleAvatar(child: Icon(icon)),
+        title: Text(title),
+        subtitle: Text(note),
+        onTap: () {
+          Navigator.pop(ctx);
+          onTap();
+        },
+      );
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (ctx) => SafeArea(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text(l.debtAddTitle, style: Theme.of(ctx).textTheme.titleLarge))),
+        option(ctx, Icons.person_add_alt_1_outlined, l.debtAddBorrow, l.debtAddBorrowNote, () => showAddTransactionSheet(context, kind: FieldsKind.debt, debtKind: 'borrow')),
+        option(ctx, Icons.volunteer_activism_outlined, l.debtAddLend, l.debtAddLendNote, () => showAddTransactionSheet(context, kind: FieldsKind.debt, debtKind: 'lendOut')),
+        option(ctx, Icons.account_balance_outlined, l.debtAddBank, l.debtAddBankNote, () => addBankDebtFlow(context)),
+        const SizedBox(height: 8),
+      ]),
+    ),
+  );
 }

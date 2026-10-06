@@ -21,6 +21,10 @@ extension L10nX on BuildContext {
 }
 
 /// Подпись категории по её идентификатору; история хранит id, не текст.
+/// Название платежа для показа: у срока возврата личного долга — «Вернуть долг:
+/// имя», у остальных — их название.
+String plannedTitle(AppLocalizations l, PlannedInfo p) => p.person != null ? l.debtDueTitle(p.person!) : p.name;
+
 String categoryName(AppLocalizations l, String id) => switch (id) {
       'food' => l.catFood,
       'cafe' => l.catCafe,

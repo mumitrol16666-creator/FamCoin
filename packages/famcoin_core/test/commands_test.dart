@@ -205,6 +205,18 @@ void occurrenceTests() {
       expect(l.balance(liabilityAccount('red')), kzt(20000));
     });
 
+    test('возврат личного долга: тот же срок дважды — отказ', () {
+      final l = base();
+      applyLedgerCommand(l, {'type': 'borrow', 'id': 'b', 'date': '2026-09-02', 'account': 'kaspi', 'person': 'Теща', 'amount': '${kzt(30000)}'});
+      Map<String, dynamic> back(String id) => {
+            'type': 'repaymentMade', 'id': id, 'date': '2026-09-20', 'account': 'kaspi', 'person': 'Теща', 'principal': '${kzt(10000)}',
+            'meta': {'planned': 'pd:Теща', 'period': '2026-09-20'},
+          };
+      applyLedgerCommand(l, back('r1'));
+      expect(() => applyLedgerCommand(l, back('r2')), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'occurrencePaid')));
+      expect(l.balance(liabilityAccount('Теща')), kzt(20000));
+    });
+
     test('повтор той же записи с тем же id остаётся идемпотентным, а не ошибкой срока', () {
       final l = base();
       applyLedgerCommand(l, pay('a'));

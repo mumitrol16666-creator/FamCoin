@@ -446,6 +446,9 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
       final amount = int.tryParse('${data['amount']}') ?? 0;
       final debtId = data['debtId'] as String?;
       if (amount <= 0) continue;
+      // Срок возврата личного долга (D133) — не платёж магазину или банку: строка
+      // выписки не должна связываться с ним по сумме.
+      if (data['person'] != null) continue;
       // Платёж по уже закрытому долгу не действует — как в приложении.
       if (debtId != null && !(v.of('debt').containsKey(debtId) && l.hasAccount(liabilityAccount(debtId)) && l.balance(liabilityAccount(debtId)) > 0)) continue;
       final paid = {...((data['paid'] as List?) ?? const []).cast<String>()};

@@ -648,12 +648,12 @@ class AppState extends ChangeNotifier {
   LimitExplain get limitExplain {
     final until = nextIncomeDate;
     final due = dueItems(until.subtract(const Duration(days: 1)));
-    final unpaid = due.fold<int>(0, (sum, d) => sum + d.planned.amount);
+    final unpaid = due.fold<int>(0, (sum, d) => sum + d.payAmount);
     return LimitExplain(
       liquid: ledger.liquid(),
       reserves: liquidReserves,
       obligations: unpaid,
-      overdue: due.where((d) => d.date.isBefore(today)).fold<int>(0, (sum, d) => sum + d.planned.amount),
+      overdue: due.where((d) => d.date.isBefore(today)).fold<int>(0, (sum, d) => sum + d.payAmount),
       days: daysToIncome < 1 ? 1 : daysToIncome,
       until: until,
       byMonthEnd: !hasPayDay,
@@ -706,7 +706,7 @@ class AppState extends ChangeNotifier {
       // остаются, пока не оплачены, но недельные — не глубже восьми недель.
       for (final o in p.schedule.occurrences(p.schedule.scanFrom(today), end)) {
         if (p.paid.contains(o.period)) continue;
-        items.add(DueItem(p, o.date, o.period));
+        items.add(DueItem(p, o.date, o.period, amount: _dueAmount(p)));
       }
     }
     items.sort((a, b) => a.date.compareTo(b.date));
@@ -722,12 +722,24 @@ class AppState extends ChangeNotifier {
     for (final p in planned) {
       if (!_plannedDebtActive(p)) continue;
       for (final o in p.schedule.occurrences(from, to)) {
-        if (!p.paid.contains(o.period)) items.add(DueItem(p, o.date, o.period));
+        if (!p.paid.contains(o.period)) items.add(DueItem(p, o.date, o.period, amount: _dueAmount(p)));
       }
     }
     items.sort((a, b) => a.date.compareTo(b.date));
     return items;
   }
+
+  /// Сумма срока: остаток долга человеку (не больше записанной суммы) для
+  /// срока возврата личного долга, иначе `null` — сумма платежа.
+  int? _dueAmount(PlannedInfo p) {
+    final person = p.person;
+    if (person == null) return null;
+    final owed = ledger.hasAccount(liabilityAccount(person)) ? ledger.balance(liabilityAccount(person)) : 0;
+    return owed < p.amount || p.amount <= 0 ? owed : p.amount;
+  }
+
+  /// Срок возврата долга человеку, если задан.
+  PlannedInfo? personDuePlan(String person) => planned.where((p) => p.person == person).firstOrNull;
 
   /// Платёж по расписанию действует в списках, календаре и сводках (R04):
   /// платёж по кредиту, который уже погашен, больше не требуется.
@@ -766,7 +778,7 @@ class AppState extends ChangeNotifier {
       if (debt == null || (debt.kind != 'installment' && debt.rate > 0)) return false;
     }
     final account = payAccountFor(p);
-    return account != null && ledger.balance(account) >= p.amount;
+    return account != null && ledger.balance(account) >= due.payAmount;
   }
 
   /// Сколько сроков плановых платежей в месяце: всего и оплачено.
@@ -787,7 +799,7 @@ class AppState extends ChangeNotifier {
 
   /// C0: обязательства до следующего дохода, ещё не оплаченные.
   int get obligationsUntilIncome =>
-      dueItems(nextIncomeDate.subtract(const Duration(days: 1))).fold(0, (s, d) => s + d.planned.amount);
+      dueItems(nextIncomeDate.subtract(const Duration(days: 1))).fold(0, (s, d) => s + d.payAmount);
 
   int get liquidReserves {
     var sum = 0;
@@ -1155,25 +1167,60 @@ class AppState extends ChangeNotifier {
   /// Старый личный долг (D102): денег на счёте уже нет (или они давно отданы),
   /// поэтому записывается только остаток долга на человека, без движения по
   /// счёту — так же, как долги в анкете первого запуска.
-  Future<void> addOldPersonDebt({required String kind, required int amount, required String person, required DateTime date, String? id, String? commandId}) => send({
-        'type': kind == 'borrow' ? 'openingDebt' : 'openingReceivable',
-        'id': id ?? newId(),
-        'date': _date(date),
-        if (kind == 'borrow') 'debtId': person else 'person': person,
-        'amount': amount.toString(),
-      }, commandId: commandId);
+  Future<void> addOldPersonDebt({required String kind, required int amount, required String person, required DateTime date, DateTime? dueDate, String? id, String? commandId}) {
+    final command = {
+      'type': kind == 'borrow' ? 'openingDebt' : 'openingReceivable',
+      'id': id ?? newId(),
+      'date': _date(date),
+      if (kind == 'borrow') 'debtId': person else 'person': person,
+      'amount': amount.toString(),
+    };
+    final due = kind == 'borrow' ? personDueCommands(person, amount, dueDate) : const <Map<String, dynamic>>[];
+    return due.isEmpty ? send(command, commandId: commandId) : sendBatch([command, ...due], commandId: commandId);
+  }
 
-  Future<void> addPersonDebt({required String kind, required int amount, required String person, required String account, required DateTime date, String? time, String? id, String? commandId}) {
+  /// Запись «срок возврата»: id и данные плана для человека.
+  static String personDueId(String person) => 'pd:${person.length > 80 ? person.substring(0, 80) : person}';
+
+  /// Команды срока возврата долга человеку (D133). [added] — сумма нового долга,
+  /// прибавляется к уже записанному остатку. Есть дата — срок создаётся или
+  /// переносится на неё; даты нет, а прежний срок уже прошёл — он снимается, чтобы
+  /// не висела просрочка по долгу, у которого новый договор без срока.
+  List<Map<String, dynamic>> personDueCommands(String person, int added, DateTime? dueDate) {
+    final id = personDueId(person);
+    final existing = personDuePlan(person);
+    if (dueDate == null) {
+      if (existing?.onDate != null && existing!.onDate!.isBefore(today)) return [{'type': 'deleteEntity', 'kind': 'planned', 'entityId': id}];
+      return const [];
+    }
+    final owed = ledger.hasAccount(liabilityAccount(person)) ? ledger.balance(liabilityAccount(person)) : 0;
+    final plan = PlannedInfo(id, person, owed + added, 1, 'other', null, const {}, person: person, onDate: dueDate);
+    return [{'type': 'upsertEntity', 'kind': 'planned', 'entityId': id, 'data': plan.toJson()}];
+  }
+
+  /// Назначить, перенести или убрать срок возврата долга человеку (экран долга).
+  Future<void> setPersonDue(PersonDebt d, DateTime? date) {
+    if (date == null) {
+      return send({'type': 'deleteEntity', 'kind': 'planned', 'entityId': personDueId(d.person)});
+    }
+    final plan = PlannedInfo(personDueId(d.person), d.person, d.amount, 1, 'other', null, const {}, person: d.person, onDate: date);
+    return send({'type': 'upsertEntity', 'kind': 'planned', 'entityId': plan.id, 'data': plan.toJson()});
+  }
+
+  Future<void> addPersonDebt({required String kind, required int amount, required String person, required String account, required DateTime date, String? time, DateTime? dueDate, String? id, String? commandId}) {
     final isRepayment = kind == 'repaymentReceived' || kind == 'repaymentMade';
-    return send({
+    final command = {
       'type': kind,
       'id': id ?? newId(),
       'date': _date(date),
       'account': account,
       'person': person,
       if (isRepayment) 'principal': amount.toString() else 'amount': amount.toString(),
-      if (time != null) 'meta': {'time': time},
-    }, commandId: commandId);
+      if (time != null || (dueDate != null && kind == 'lendOut')) 'meta': {if (time != null) 'time': time, if (dueDate != null && kind == 'lendOut') 'dueDate': _date(dueDate)},
+    };
+    // Взял в долг со сроком (или без) — срок возврата становится обязательством.
+    final due = kind == 'borrow' ? personDueCommands(person, amount, dueDate) : const <Map<String, dynamic>>[];
+    return due.isEmpty ? send(command, commandId: commandId) : sendBatch([command, ...due], commandId: commandId);
   }
 
   Future<void> payDebt({required String debtId, required String account, required int principal, int interest = 0, DateTime? date}) =>
@@ -1186,7 +1233,10 @@ class AppState extends ChangeNotifier {
     final p = due.planned;
     final d = _date(date ?? today);
     final link = {'planned': p.id, 'period': due.period};
-    final fact = p.debtId != null
+    // Срок возврата личного долга: оплата — возврат долга человеку.
+    final fact = p.person != null
+        ? {'type': 'repaymentMade', 'id': newId(), 'date': d, 'account': account, 'person': p.person, 'principal': amount.toString(), 'meta': link}
+        : p.debtId != null
         ? {'type': 'loanPayment', 'id': newId(), 'date': d, 'account': account, 'debtId': p.debtId, 'principal': (amount - interest).toString(), 'interest': interest.toString(), 'meta': link}
         : {'type': 'expense', 'id': newId(), 'date': d, 'account': account, 'splits': {p.category: amount.toString()}, 'meta': {'who': 'shared', 'note': p.name, ...link}};
     // Покупка из копилки (D90): накопленное возвращается на счёт оплаты,
@@ -1432,6 +1482,7 @@ class AppState extends ChangeNotifier {
   /// Плановый платёж ещё актуален: не привязан к долгу либо привязанный долг
   /// ещё не закрыт.
   bool _plannedDebtActive(PlannedInfo p) {
+    if (p.person != null) return plannedDebtActive(ledger, null, person: p.person);
     if (p.debtId == null) return true;
     final debt = bankDebt(p.debtId!);
     return debt != null && _debtStillOwed(debt);
@@ -1441,7 +1492,7 @@ class AppState extends ChangeNotifier {
   /// (F10). Строки списка и его сумма должны показывать одно и то же
   /// (повторный аудит, F01): `recurringMonthly` — это сумма именно этого
   /// списка, не всех `planned` без разбора.
-  List<PlannedInfo> get activePlanned => planned.where((p) => p.once == null && _plannedDebtActive(p)).toList();
+  List<PlannedInfo> get activePlanned => planned.where((p) => p.once == null && p.person == null && _plannedDebtActive(p)).toList();
 
   /// Что платёж стоит в среднем за месяц (APP-01): месячный — его сумма,
   /// недельный — сумма × 52 / 12, годовой — сумма / 12. Простая сумма
@@ -1503,7 +1554,7 @@ class AppState extends ChangeNotifier {
   /// ожидаемые повседневные траты по уже сложившемуся среднему, плюс
   /// ожидаемый остаток дохода месяца.
   MonthForecast get monthEndForecast {
-    final remaining = dueItems(monthEnd.subtract(const Duration(days: 1))).fold(0, (s, d) => s + d.planned.amount);
+    final remaining = dueItems(monthEnd.subtract(const Duration(days: 1))).fold(0, (s, d) => s + d.payAmount);
     final elapsed = today.day;
     final avgDaily = elapsed <= 0 ? 0 : spentBetween(monthStart, today) ~/ elapsed;
     final daysLeft = monthEnd.difference(today).inDays - 1;

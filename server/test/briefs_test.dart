@@ -10,6 +10,7 @@ BriefInput _input(DateTime today, List<Map<String, dynamic>> planned) {
 }
 
 void main() {
+  personDueBriefTests();
   const rent = {'name': 'Аренда', 'amount': '15000000', 'day': 31, 'category': 'home', 'paid': <String>[]};
   const tyres = {'name': 'Колёса', 'amount': '10000000', 'day': 31, 'category': 'transport', 'paid': <String>[], 'once': '2027-03'};
 
@@ -106,5 +107,24 @@ void main() {
     expect(body, allOf(contains('• Продукты: 2 180 ₸'), contains('• Собака: 1 300 ₸'), contains('Лимит «Продукты» превышен')));
     expect(body, isNot(contains('food')));
     expect(eveningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 2), profile: const {}, planned: const [], limits: const [], locale: 'kk')).body, contains('Азық-түлік'));
+  });
+}
+
+void personDueBriefTests() {
+  test('D133: срок возврата личного долга напоминает с остатком долга, а после возврата замолкает', () {
+    final l = Ledger();
+    applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o', 'date': '2026-09-01', 'account': 'card', 'amount': '${kzt(100000)}'});
+    applyLedgerCommand(l, {'type': 'borrow', 'id': 'b', 'date': '2026-10-02', 'account': 'card', 'person': 'Теща', 'amount': '${kzt(80000)}'});
+    const due = {'name': 'Теща', 'amount': '8000000', 'day': 1, 'category': 'other', 'paid': <String>[], 'person': 'Теща', 'onDate': '2026-10-20'};
+    BriefInput input(DateTime day) => BriefInput(ledger: l, today: day, profile: const {}, planned: const [due], limits: const [], locale: 'ru');
+    final body = morningBrief(input(DateTime(2026, 10, 20))).body;
+    expect(body, allOf(contains('Долг: Теща'), contains('80 000 ₸')));
+    // Часть вернули — в напоминании остаток.
+    applyLedgerCommand(l, {'type': 'repaymentMade', 'id': 'r', 'date': '2026-10-10', 'account': 'card', 'person': 'Теща', 'principal': '${kzt(30000)}'});
+    expect(morningBrief(input(DateTime(2026, 10, 20))).body, contains('50 000 ₸'));
+    // Вернули всё — напоминания нет.
+    applyLedgerCommand(l, {'type': 'repaymentMade', 'id': 'r2', 'date': '2026-10-12', 'account': 'card', 'person': 'Теща', 'principal': '${kzt(50000)}'});
+    expect(morningBrief(input(DateTime(2026, 10, 20))).body, isNot(contains('Теща')));
   });
 }
