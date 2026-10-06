@@ -181,26 +181,46 @@ class PersonDebtScreen extends StatelessWidget {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(d.oweMe ? l.oweMe : l.iOwe, style: TextStyle(fontSize: 12, color: fam.text2)),
                     BigMoney(d.amount, color: d.oweMe ? fam.income : fam.expense),
-                    const SizedBox(height: 12),
+                    // Сколько взято и сколько уже возвращено: видно, что дальше будут платежи.
+                    Builder(builder: (context) {
+                      final p = state.personDebtProgress(d.person, oweMe: d.oweMe);
+                      if (p.taken <= 0 || p.repaid <= 0) return const SizedBox(height: 12);
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 6, bottom: 12),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          UsageBar(value: p.repaid > p.taken ? p.taken : p.repaid, max: p.taken, color: fam.income),
+                          const SizedBox(height: 4),
+                          Text(
+                            d.oweMe ? l.debtProgressLent(moneyInText(p.taken), moneyInText(p.repaid)) : l.debtProgressOwe(moneyInText(p.taken), moneyInText(p.repaid)),
+                            style: TextStyle(fontSize: 12, color: fam.text2),
+                          ),
+                        ]),
+                      );
+                    }),
                     // Срок возврата (D133): мой долг со сроком попадает в платежи и прогноз.
                     if (!d.oweMe) ...[
                       _DueRow(debt: d),
                       const SizedBox(height: 12),
                     ],
-                    // Главное действие — крупно, на всю ширину.
+                    // Главное действие — платёж (часть долга), крупно, на всю ширину.
+                    // «Вернул» без уточнения читалось как «вернул всё».
                     FilledButton(
                       style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                       onPressed: () => showPersonRepaySheet(context, d),
-                      child: Text(d.oweMe ? l.returnedToMe : l.iReturned),
+                      child: Text(d.oweMe ? l.debtReceiveAction : l.debtPayAction),
                     ),
-                    // Редкое действие — тише, под главным и по центру.
-                    Center(
-                      child: TextButton(
+                    // Вернуть всё и закрыть без оплаты — реже, тише и под главным.
+                    Wrap(alignment: WrapAlignment.center, children: [
+                      TextButton(
+                        onPressed: () => showPersonRepaySheet(context, d, all: true),
+                        child: Text(d.oweMe ? l.debtReceiveAll(moneyInText(d.amount)) : l.debtPayAll(moneyInText(d.amount))),
+                      ),
+                      TextButton(
                         style: TextButton.styleFrom(foregroundColor: fam.text2),
                         onPressed: () => _writeOff(context, state, d),
                         child: Text(d.oweMe ? l.writeOffDebt : l.debtForgivenAction),
                       ),
-                    ),
+                    ]),
                   ]),
                 ),
               SectionHeader(l.history),

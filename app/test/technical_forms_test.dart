@@ -628,7 +628,7 @@ void main() {
         expect(find.textContaining('Вернуть до:'), findsOneWidget);
         expect(find.text('Изменить срок'), findsOneWidget);
         expect(find.byTooltip('Убрать срок'), findsOneWidget);
-        expect(find.widgetWithText(FilledButton, 'Я вернул'), findsOneWidget, reason: 'главное действие — залитая кнопка');
+        expect(find.widgetWithText(FilledButton, 'Внести платёж'), findsOneWidget, reason: 'главное действие — залитая кнопка');
         expect(find.widgetWithText(TextButton, 'Закрыть без оплаты'), findsOneWidget, reason: 'редкое действие — тихая текстовая');
         expect(tester.takeException(), isNull);
       });
@@ -653,8 +653,73 @@ void main() {
       await s.addPersonDebt(kind: 'lendOut', amount: kzt(50000), person: 'Друг', account: 'cash', date: s.today);
       await tester.pumpAndSettle();
       expect(find.textContaining('Вернуть до'), findsNothing);
-      expect(find.widgetWithText(FilledButton, 'Мне вернули'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Записать возврат'), findsOneWidget);
       expect(find.widgetWithText(TextButton, 'Списать долг'), findsOneWidget);
+    });
+  });
+
+  group('долг человеку: платёж частями', () {
+    testWidgets('основная кнопка — «Внести платёж», поле пустое; «Вернуть всё» и «Закрыть без оплаты» — рядом, тише', (tester) async {
+      final f = await pumpApp(tester, home: const PersonDebtScreen(person: 'Maestro'), size: const Size(390, 844));
+      final s = f.state;
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(50000), person: 'Maestro', account: 'cash', date: s.today);
+      await s.addPersonDebt(kind: 'repaymentMade', amount: kzt(5000), person: 'Maestro', account: 'cash', date: s.today);
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(33000), person: 'Maestro', account: 'cash', date: s.today);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Взято 83'), findsOneWidget, reason: 'взято всего 83 000');
+      expect(find.textContaining('возвращено 5'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Внести платёж'), findsOneWidget);
+      expect(find.textContaining('Вернуть всё · 78'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Закрыть без оплаты'), findsOneWidget);
+      expect(find.text('Я вернул'), findsNothing, reason: 'двусмысленной подписи больше нет');
+      await tester.tap(find.widgetWithText(FilledButton, 'Внести платёж'));
+      await tester.pumpAndSettle();
+      final field = tester.widget<TextField>(find.byType(TextField).last);
+      expect(field.controller!.text, isEmpty, reason: 'вся сумма не подставляется: платят частями');
+      expect(find.textContaining('Как в прошлый раз: 5'), findsOneWidget);
+      expect(find.textContaining('Всё: 78'), findsOneWidget);
+    });
+
+    testWidgets('платёж частью: запись, остаток и подтверждение; «Как в прошлый раз» подставляет прошлую сумму', (tester) async {
+      final f = await pumpApp(tester, home: const PersonDebtScreen(person: 'Maestro'), size: const Size(390, 844));
+      final s = f.state;
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(50000), person: 'Maestro', account: 'cash', date: s.today);
+      await s.addPersonDebt(kind: 'repaymentMade', amount: kzt(5000), person: 'Maestro', account: 'cash', date: s.today);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Внести платёж'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Как в прошлый раз'));
+      await tester.pump();
+      expect(tester.widget<TextField>(find.byType(TextField).last).controller!.text.replaceAll(' ', ''), '5000');
+      await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+      await tester.pumpAndSettle();
+      expect(s.personDebts.single.amount, kzt(40000));
+      expect(find.textContaining('Остаток долга: 40'), findsOneWidget);
+    });
+
+    testWidgets('«Вернуть всё» открывает платёж с полной суммой; сохранение закрывает долг', (tester) async {
+      final f = await pumpApp(tester, home: const PersonDebtScreen(person: 'Maestro'), size: const Size(390, 844));
+      final s = f.state;
+      await s.addPersonDebt(kind: 'borrow', amount: kzt(50000), person: 'Maestro', account: 'cash', date: s.today);
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Вернуть всё'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(find.byType(TextField).last).controller!.text.replaceAll(' ', ''), '50000');
+      await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+      await tester.pumpAndSettle();
+      expect(s.personDebts, isEmpty);
+      expect(find.text('Долг возвращён полностью'), findsOneWidget);
+    });
+
+    test('прогресс: списание и закрытие без оплаты не считаются возвращёнными', () async {
+      final f = FakeServer();
+      await f.init();
+      final s = f.state;
+      await s.addPersonDebt(kind: 'lendOut', amount: kzt(50000), person: 'Друг', account: 'cash', date: s.today);
+      await s.addPersonDebt(kind: 'repaymentReceived', amount: kzt(10000), person: 'Друг', account: 'cash', date: s.today);
+      await s.writeOffDebt(s.personDebts.single);
+      final p = s.personDebtProgress('Друг', oweMe: true);
+      expect((p.taken, p.repaid, p.lastPayment), (kzt(50000), kzt(10000), kzt(10000)));
     });
   });
 }

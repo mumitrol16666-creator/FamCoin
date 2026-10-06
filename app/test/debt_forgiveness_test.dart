@@ -20,7 +20,7 @@ void main() {
       await tester.pumpAndSettle();
       final cash = s.ledger.balance('cash');
       final revision = s.revision;
-      expect(find.text(l.iReturned), findsOneWidget);
+      expect(find.text(l.debtPayAction), findsOneWidget);
       await tester.tap(find.text(l.debtForgivenAction));
       await tester.pumpAndSettle();
       expect(find.text(l.debtForgivenTitle('Друг')), findsOneWidget);

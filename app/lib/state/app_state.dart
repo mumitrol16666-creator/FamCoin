@@ -738,6 +738,27 @@ class AppState extends ChangeNotifier {
     return owed < p.amount || p.amount <= 0 ? owed : p.amount;
   }
 
+  /// Сколько взято (выдано) и сколько возвращено по долгу человеку за всё время:
+  /// для строки «Взято … · возвращено …» и шкалы. Списание и закрытие без оплаты
+  /// в «возвращено» не входят — деньги не возвращались.
+  ({int taken, int repaid, int lastPayment}) personDebtProgress(String person, {required bool oweMe}) {
+    final account = oweMe ? receivableAccount(person) : liabilityAccount(person);
+    if (!ledger.hasAccount(account)) return (taken: 0, repaid: 0, lastPayment: 0);
+    final repayType = oweMe ? EventType.repaymentReceived : EventType.repaymentMade;
+    var taken = 0, repaid = 0, last = 0;
+    for (final t in ledger.transactions) {
+      if (t.type == EventType.reversal || ledger.isReversed(t.id)) continue;
+      final moved = t.amountOn(account);
+      if (t.type == repayType) {
+        repaid += -moved;
+        last = -moved; // транзакции идут по порядку: остаётся последний платёж
+      } else if (moved > 0) {
+        taken += moved;
+      }
+    }
+    return (taken: taken, repaid: repaid, lastPayment: last);
+  }
+
   /// Срок возврата долга человеку, если задан.
   PlannedInfo? personDuePlan(String person) => planned.where((p) => p.person == person).firstOrNull;
 

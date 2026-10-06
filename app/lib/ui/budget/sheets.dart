@@ -196,18 +196,30 @@ Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? princip
 }
 
 /// Возврат личного долга в любую сторону.
-Future<void> showPersonRepaySheet(BuildContext context, PersonDebt debt) {
+Future<void> showPersonRepaySheet(BuildContext context, PersonDebt debt, {bool all = false}) {
   final l = context.l10n;
   final state = AppScope.of(context).state;
-  final amount = TextEditingController(text: amountToField(debt.amount));
+  final messenger = ScaffoldMessenger.of(context);
+  // Платёж по частям — обычное дело, поэтому поле пустое: подставленная вся сумма
+  // выглядела как «вернул всё». Всю сумму и прошлый платёж можно выбрать кнопками.
+  final amount = TextEditingController(text: all ? amountToField(debt.amount) : '');
+  final progress = state.personDebtProgress(debt.person, oweMe: debt.oweMe);
   var account = _firstAccount(context);
   return showFormSheet<void>(
     context,
-    title: debt.oweMe ? '${l.returnedToMe}: ${debt.person}' : '${l.iReturned}: ${debt.person}',
+    title: debt.oweMe ? l.debtReceiveSheetTitle(debt.person) : l.debtPaySheetTitle(debt.person),
     titleAction: InfoTip(debt.oweMe ? l.repaymentReceivedNote : l.repaymentNote, title: l.repayHelpTitle),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        AmountField(controller: amount, label: l.amount),
+        Text('${l.balanceLeft}: ${formatMoney(debt.amount)}', style: TextStyle(color: ctx.fam.text2)),
+        const SizedBox(height: 12),
+        AmountField(controller: amount, label: l.amount, hint: l.debtAmountHint, autofocus: !all),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 4, children: [
+          if (progress.lastPayment > 0 && progress.lastPayment < debt.amount)
+            ActionChip(label: Text(l.debtChipLast(formatMoney(progress.lastPayment))), onPressed: () => set(() => amount.text = amountToField(progress.lastPayment))),
+          ActionChip(label: Text(l.debtChipAll(formatMoney(debt.amount))), onPressed: () => set(() => amount.text = amountToField(debt.amount))),
+        ]),
         const SizedBox(height: 12),
         AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
         const SizedBox(height: 20),
@@ -216,7 +228,7 @@ Future<void> showPersonRepaySheet(BuildContext context, PersonDebt debt) {
           onSubmit: () async {
             final a = parseAmount(amount.text);
             if (a == null || account == null) return false;
-            return runAction(
+            final ok = await runAction(
               ctx,
               () => state.addPersonDebt(
                 kind: debt.oweMe ? 'repaymentReceived' : 'repaymentMade',
@@ -226,6 +238,11 @@ Future<void> showPersonRepaySheet(BuildContext context, PersonDebt debt) {
                 date: state.today,
               ),
             );
+            if (ok) {
+              final left = debt.amount - a;
+              messenger.showSnackBar(SnackBar(content: Text(left <= 0 ? l.debtClosedSnack : l.debtLeftSnack(formatMoney(left)))));
+            }
+            return ok;
           },
         ),
       ]),
