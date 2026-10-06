@@ -76,7 +76,7 @@ class AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProvi
             onSelectDay: (d) => setState(() => _selectedDay = d),
           ),
           ExpensesTab(offset: _offset, onOffset: _onOffset),
-          BudgetScreen(embedded: true, onOpenReport: () => _openMonth(0)),
+          const BudgetScreen(embedded: true),
           const CapitalTab(),
           HistoryTab(onOpenMonth: _openMonth),
         ]),

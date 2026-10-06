@@ -13,9 +13,8 @@ export 'budget_pages.dart';
 /// ([budget_pages.dart]); здесь — только краткая сводка на кнопке и значок,
 /// если что-то требует внимания (превышены лимиты, есть просроченные платежи).
 class BudgetScreen extends StatelessWidget {
-  const BudgetScreen({super.key, this.embedded = false, this.onOpenReport});
+  const BudgetScreen({super.key, this.embedded = false});
   final bool embedded;
-  final VoidCallback? onOpenReport;
 
   @override
   Widget build(BuildContext context) {
@@ -116,15 +115,6 @@ class BudgetScreen extends StatelessWidget {
                   child: Text(toBeginningOfSentenceCase(month), style: Theme.of(context).textTheme.titleLarge),
                 ),
               Text(l.budgetPurpose, style: TextStyle(color: fam.text2)),
-              if (onOpenReport != null)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.bar_chart_outlined),
-                  title: Text(l.openReport),
-                  subtitle: Text(l.analyticsPurpose),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: onOpenReport,
-                ),
               const SizedBox(height: 8),
               // Две колонки на обычном экране; одна — на узком или при крупном шрифте.
               LayoutBuilder(builder: (context, c) {

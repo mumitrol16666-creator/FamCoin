@@ -24,7 +24,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Планы, лимиты и будущие платежи').hitTestable(), findsOneWidget);
-    await tester.tap(find.text('Открыть отчёт').hitTestable());
+    // Отчёт месяца — на вкладке «Обзор» (отдельной ссылки в «Бюджете» нет).
+    expect(find.text('Открыть отчёт'), findsNothing);
+    final overview = find.descendant(of: find.byType(TabBar), matching: find.text('Обзор'));
+    await tester.ensureVisible(overview);
+    await tester.tap(overview);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.byType(OverviewTab).hitTestable(), findsOneWidget);
