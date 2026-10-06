@@ -460,4 +460,27 @@ void main() {
       expect(s.accountInfo('cash')!.archived, isTrue, reason: 'второй активный счёт не открывается обходом');
     });
   });
+
+  group('перевод из копилки', () {
+    testWidgets('кнопка «Перевести отсюда» на экране копилки открывает перевод с неё на обычный счёт', (tester) async {
+      late String piggy;
+      final f = await pumpWith(tester, (c) => Navigator.push(c, MaterialPageRoute<void>(builder: (_) => AccountScreen(accountId: piggy))));
+      final s = f.state;
+      await s.sendBatch(s.newGoalCommands(name: 'Отпуск', target: kzt(200000)));
+      piggy = s.goals.single.account!;
+      await s.depositToGoal(s.goals.single, from: 'cash', amount: kzt(30000));
+      await openForm(tester);
+      await tester.tap(find.text('Перевести отсюда'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Перевод между своими счетами', skipOffstage: false), findsOneWidget, reason: 'открыта вкладка «Перевод»');
+      await tester.enterText(find.byType(TextField).first, '10000');
+      await tester.pump();
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Сохранить'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+      await tester.pumpAndSettle();
+      expect(s.ledger.balance(piggy), kzt(20000), reason: 'из копилки ушло 10 000');
+      expect(s.ledger.balance('cash'), kzt(100000) - kzt(30000) + kzt(10000));
+      expect(s.monthReport.expense, 0, reason: 'перевод — не расход');
+    });
+  });
 }

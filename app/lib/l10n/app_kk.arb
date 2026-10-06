@@ -1453,5 +1453,6 @@
   "@reportWrittenOff": {"placeholders": {"amount": {"type": "String"}}},
   "reportForgiven": "Төлемсіз жабылған қарыздар: {amount}",
   "@reportForgiven": {"placeholders": {"amount": {"type": "String"}}},
-  "csvFee": "Комиссия"
+  "csvFee": "Комиссия",
+  "transferFromHere": "Осыдан аудару"
 }

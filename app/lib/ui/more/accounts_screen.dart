@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../budget/sheets.dart';
+import '../ops/add_transaction_sheet.dart';
 import '../ops/transaction_tile.dart';
 import '../widgets/common.dart';
 
@@ -131,6 +132,13 @@ class AccountScreen extends StatelessWidget {
                     Text('${l.reserve}: ${formatMoney(reserved)} · ${l.free}: ${formatMoney(balance - reserved)}', style: TextStyle(fontSize: 12, color: fam.text2)),
                 ]),
               ),
+              if (!info.archived)
+                // Перевод отсюда (со счёта или из копилки): люди ищут его именно здесь.
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.swap_horiz),
+                  label: Text(l.transferFromHere),
+                  onPressed: () => showAddTransactionSheet(context, kind: FieldsKind.transfer, account: accountId),
+                ),
               if (!info.archived)
                 OutlinedButton.icon(
                   icon: const Icon(Icons.tune),

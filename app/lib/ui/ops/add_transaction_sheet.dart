@@ -22,7 +22,9 @@ enum FieldsKind { expense, income, transfer, debt }
 
 /// Q02 — ручная операция. Кнопка «Сохранить» закреплена внизу и видна без
 /// прокрутки; заполненная форма не закрывается без подтверждения.
-Future<void> showAddTransactionSheet(BuildContext context, {VoiceDraft? draft}) {
+/// [kind] и [account] открывают форму сразу на нужной вкладке и со счётом
+/// (например, «Перевести» на экране счёта или копилки).
+Future<void> showAddTransactionSheet(BuildContext context, {VoiceDraft? draft, FieldsKind? kind, String? account}) {
   final state = AppScope.of(context).state;
   if (state.activeAccounts.isEmpty) return addAccountFlow(context);
   return showModalBottomSheet(
@@ -32,13 +34,15 @@ Future<void> showAddTransactionSheet(BuildContext context, {VoiceDraft? draft}) 
     // Смахивание вниз закрывало бы форму мимо проверки черновика — закрытие
     // только крестиком, кнопкой «назад» или нажатием на затемнение.
     enableDrag: false,
-    builder: (_) => _AddSheet(draft: draft),
+    builder: (_) => _AddSheet(draft: draft, kind: kind, account: account),
   );
 }
 
 class _AddSheet extends StatefulWidget {
-  const _AddSheet({this.draft});
+  const _AddSheet({this.draft, this.kind, this.account});
   final VoiceDraft? draft;
+  final FieldsKind? kind;
+  final String? account;
 
   @override
   State<_AddSheet> createState() => _AddSheetState();
@@ -85,7 +89,7 @@ class _AddSheetState extends State<_AddSheet> {
               IconButton(tooltip: l.tipClose, onPressed: _close, icon: const Icon(Icons.close)),
             ]),
           ),
-          Expanded(child: TransactionFields(draft: widget.draft, scrollController: controller, dirty: _dirty)),
+          Expanded(child: TransactionFields(draft: widget.draft, initialKind: widget.kind, initialAccount: widget.account, scrollController: controller, dirty: _dirty)),
         ]),
       ),
     );
@@ -96,7 +100,11 @@ class _AddSheetState extends State<_AddSheet> {
 /// и как самостоятельная форма (Q02), и как редактируемый черновик после
 /// голоса (S38): один и тот же код правки, чтобы не расходились два места.
 class TransactionFields extends StatefulWidget {
-  const TransactionFields({super.key, this.draft, this.scrollController, this.showVoiceChip = true, this.dirty});
+  const TransactionFields({super.key, this.draft, this.initialKind, this.initialAccount, this.scrollController, this.showVoiceChip = true, this.dirty});
+
+  /// Вкладка и счёт, с которых форма открывается; без них — расход с основного счёта.
+  final FieldsKind? initialKind;
+  final String? initialAccount;
 
   /// Черновик из голосового ввода: поля заполняются, но не сохраняются
   /// до нажатия «Сохранить».
@@ -115,13 +123,13 @@ class TransactionFields extends StatefulWidget {
 }
 
 class _TransactionFieldsState extends State<TransactionFields> {
-  FieldsKind _kind = FieldsKind.expense;
+  late FieldsKind _kind = widget.initialKind ?? FieldsKind.expense;
   final _amount = TextEditingController();
   final _note = TextEditingController();
   final _person = TextEditingController();
   String _category = 'food';
   String _source = 'salary';
-  String? _account;
+  late String? _account = widget.initialAccount;
   String? _to;
   String _who = 'me';
 
@@ -545,7 +553,14 @@ class _TransactionFieldsState extends State<TransactionFields> {
             ButtonSegment(value: k, label: Text(t, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
         ],
         selected: {_kind},
-        onSelectionChanged: (s) => setState(() => _kind = s.first),
+        onSelectionChanged: (s) => setState(() {
+          _kind = s.first;
+          // Копилка выбирается только как сторона перевода: расход, доход и долг
+          // идут со своего обычного счёта.
+          if (_kind != FieldsKind.transfer && !accounts.any((a) => a.id == _account)) {
+            _account = (accounts.where((a) => a.liquid).firstOrNull ?? accounts.first).id;
+          }
+        }),
       ),
       if (missingHints.isNotEmpty) ...[
         const SizedBox(height: 10),
@@ -653,7 +668,8 @@ class _TransactionFieldsState extends State<TransactionFields> {
           ]),
         ],
         const SizedBox(height: 14),
-        AccountPicker(key: ValueKey('from$_account'), accounts: accounts, value: _account, label: l.fromAccount, onChanged: (v) => setState(() => _account = v)),
+        // Из копилки тоже можно перевести: деньги вернутся на выбранный счёт.
+        AccountPicker(key: ValueKey('from$_account'), accounts: [...accounts, ...state.piggyAccounts], value: _account, label: l.fromAccount, onChanged: (v) => setState(() => _account = v)),
         const SizedBox(height: 12),
         if (others.isEmpty)
           InfoBanner(state.pro ? l.needSecondAccount : l.proGateAccounts, color: fam.warnBg)
