@@ -76,9 +76,13 @@ class AdminService {
         SELECT u.id, u.email, u.locale, u.plan, u.created_at, u.last_seen_at,
                u.locked_until > now(), u.failed_attempts, u.telegram_chat_id IS NOT NULL,
                (SELECT count(*) FROM transactions t WHERE t.user_id = u.id),
-               (u.profile->>'onboarded') = 'true', u.pro_until
+               (u.profile->>'onboarded') = 'true', u.pro_until,
+               u.profile->>'firstName', u.profile->>'lastName', u.display_name, u.profile->>'mode'
         FROM users u
         WHERE @q = '' OR u.email ILIKE '%' || @q || '%'
+           OR (u.profile->>'firstName') ILIKE '%' || @q || '%'
+           OR (u.profile->>'lastName') ILIKE '%' || @q || '%'
+           OR u.display_name ILIKE '%' || @q || '%'
         ORDER BY u.created_at DESC LIMIT 200'''),
       parameters: {'q': query.trim()},
     );
@@ -91,6 +95,9 @@ class AdminService {
           'locked': r[6] == true, 'failedAttempts': r[7], 'telegram': r[8] == true,
           'transactions': r[9], 'onboarded': r[10] == true,
           'proUntil': (r[11] as DateTime?)?.toIso8601String(),
+          // Имя и фамилия из анкеты, имя из Telegram и режим учёта: по ним
+          // видно, кто это, даже если вход был через Telegram без почты.
+          'firstName': r[12], 'lastName': r[13], 'telegramName': r[14], 'mode': r[15],
         },
     ];
   }

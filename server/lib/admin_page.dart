@@ -27,7 +27,7 @@ button.b.p{background:var(--primary);color:#fff;border-color:var(--primary)}butt
 <main>
 <div id="login" class="card"><h2>Вход</h2><p class="muted">Пароль администратора из .env на сервере.</p><input id="pw" type="password" placeholder="Пароль" autofocus><br><br><button class="b p" id="loginBtn">Войти</button><p id="loginErr" class="muted"></p></div>
 <div id="stats" hidden></div>
-<div id="users" hidden><div class="card"><input id="q" placeholder="Поиск по email"></div><div class="card" id="usersList"></div></div>
+<div id="users" hidden><div class="card"><input id="q" placeholder="Поиск по имени, фамилии или email"></div><div class="card" id="usersList"></div></div>
 <div id="payments" hidden><div class="card" id="paymentsList"></div></div>
 <div id="audit" hidden><div class="card" id="auditList"></div></div>
 </main>
@@ -45,7 +45,9 @@ async function stats(){const s=await api('/stats');const max=Math.max(1,...s.byD
 ${[['Пользователей',s.users],['Новых за неделю',s.newWeek],['Активных за сутки',s.activeDay],['Pro',s.pro],['Операций всего',s.transactions],['Команд за сутки',s.commandsDay],['Привязан Telegram',s.telegram],['Размер базы',s.dbSize]].map(([k,v])=>`<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('')}</div>
 <div class="card"><b>Активность за 14 дней</b> <span class="muted">(команд в день; регистрации подписаны)</span><div class="bars" style="margin-top:10px">${s.byDay.map(d=>`<div title="${d.date}: команд ${d.commands}, регистраций ${d.signups}" style="height:${Math.round(d.commands/max*100)}%"></div>`).join('')}</div>
 <div class="muted" style="display:flex;justify-content:space-between;font-size:11px"><span>${s.byDay[0].date}</span><span>${s.byDay.at(-1).date}</span></div></div>`}
-async function users(){const q=$('#q').value;const list=await api('/users?q='+encodeURIComponent(q));$('#usersList').innerHTML=list.length?`<table><tr><th>Email</th><th>Тариф</th><th>Регистрация</th><th>Был</th><th>Операций</th><th>Статус</th><th></th></tr>${list.map(u=>`<tr>
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function users(){const q=$('#q').value;const list=await api('/users?q='+encodeURIComponent(q));$('#usersList').innerHTML=list.length?`<table><tr><th>Имя</th><th>Email</th><th>Тариф</th><th>Регистрация</th><th>Был</th><th>Операций</th><th>Статус</th><th></th></tr>${list.map(u=>`<tr>
+<td>${esc([u.firstName,u.lastName].filter(Boolean).join(' ')||'—')}${u.telegramName&&u.telegramName!==[u.firstName,u.lastName].filter(Boolean).join(' ')?`<br><span class="muted">Telegram: ${esc(u.telegramName)}</span>`:''}<br><span class="muted">${u.mode==='family'?'семейный':'личный'} режим</span></td>
 <td>${u.email}<br><span class="muted">${u.locale} · ${u.onboarded?'анкета пройдена':'анкета не пройдена'}${u.telegram?' · TG':''}</span></td>
 <td>${u.plan==='pro'?`<span class="tag pro">Pro</span><br><span class="muted">${u.proUntil?'до '+fmtD(u.proUntil):'бессрочно'}</span>`:'обычный'}</td><td>${fmt(u.createdAt)}</td><td>${fmt(u.lastSeenAt)}</td><td>${u.transactions}</td>
 <td>${u.locked?'<span class="tag bad">заблокирован</span>':u.failedAttempts?`<span class="muted">ошибок: ${u.failedAttempts}</span>`:'<span class="tag ok">ок</span>'}</td>
