@@ -690,6 +690,10 @@ void main() {
     expect((context['incomes'] as List).single, allOf(containsPair('type', 'income'), containsPair('amount', 8000), containsPair('note', 'уроки'), contains('date')));
     expect(context['tracking'], containsPair('daysOfHistory', 1), reason: 'учёт начат сегодня — консультант это видит');
     expect((context['monthEndBalanceForecast'] as Map)['roughEstimate'], isNotNull);
+    // Слагаемые прогноза нужны для сценариев «а если»: итог сходится с их суммой.
+    final fc = context['monthEndBalanceForecast'] as Map;
+    expect(fc['estimate'], closeTo((fc['freeMoneyNow'] as num) - (fc['unpaidPaymentsUntilMonthEnd'] as num) - (fc['expectedRegularSpendUntilMonthEnd'] as num) + (fc['expectedIncomeUntilMonthEnd'] as num), 1), reason: 'estimate = слагаемые');
+    expect(fc['daysLeftInMonth'], isA<int>());
     expect((context['observations'] as Map)['incomeDaySpendRatio'], isNull, reason: 'меньше трёх доходов — не закономерность');
     expect(context.keys.where((k) => k.toLowerCase().contains('birth') || k.toLowerCase().contains('lastname')), isEmpty, reason: 'кроме имени, личных данных в сводке нет');
     expect(tester.takeException(), isNull);

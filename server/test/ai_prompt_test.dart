@@ -30,6 +30,12 @@ void main() {
     expect(system, contains('ни доходом, ни расходом'));
   });
 
+  test('сценарии «а если»: итог по слагаемым прогноза, без двойного учёта дохода и займов', () {
+    for (final fact in ['freeMoneyNow', 'unpaidPaymentsUntilMonthEnd', 'expectedRegularSpendUntilMonthEnd', 'не прибавляй его второй раз', 'ОДИН итог', '«и в итоге»']) {
+      expect(system, contains(fact), reason: fact);
+    }
+  });
+
   test('платежи раз в неделю и год, рассрочка, возврат из архива описаны', () {
     for (final fact in ['«В рассрочку»', 'раз в год', '«Вернуть из архива»', '«Уточнить остаток»', '«Списалось»']) {
       expect(system, contains(fact), reason: fact);

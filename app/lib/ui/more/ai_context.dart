@@ -263,7 +263,14 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'estimate': _t(forecast.estimate),
       'rangeLow': _t(forecast.rangeLow),
       'rangeHigh': _t(forecast.rangeHigh),
-      'note': 'Оценка свободных денег на конец месяца; диапазон — сценарий, а не вероятность',
+      // Слагаемые оценки: по ним считаются сценарии «а если доход будет такой».
+      // estimate = freeMoneyNow − unpaidPaymentsUntilMonthEnd − expectedRegularSpendUntilMonthEnd + expectedIncomeUntilMonthEnd.
+      'freeMoneyNow': _t(forecast.current),
+      'unpaidPaymentsUntilMonthEnd': _t(forecast.remainingObligations),
+      'expectedRegularSpendUntilMonthEnd': _t(forecast.expectedRegularSpend),
+      'expectedIncomeUntilMonthEnd': _t(forecast.expectedIncome),
+      'daysLeftInMonth': s.daysInMonth - s.today.day,
+      'note': 'Оценка свободных денег на конец месяца; диапазон — сценарий, а не вероятность. estimate = freeMoneyNow − unpaidPaymentsUntilMonthEnd − expectedRegularSpendUntilMonthEnd + expectedIncomeUntilMonthEnd; expectedIncomeUntilMonthEnd — доход, который приложение ожидает получить до конца месяца (средний доход минус уже полученный). Уже полученный доход входит в freeMoneyNow',
     },
     'capital': {'money': _t(worth.money), 'owedToMe': _t(worth.receivables), 'debts': _t(worth.liabilities), 'capital': _t(worth.capital)},
     'bankDebts': debt.totalDebt == 0
