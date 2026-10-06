@@ -679,10 +679,19 @@ class AccountPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ledger = AppScope.of(context).state.ledger;
+    final muted = context.fam.text2;
+    // Остаток рядом с названием: выбирать счёт, не зная, сколько на нём, неудобно.
+    Widget row(AccountInfo a) => Row(children: [
+          Expanded(child: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 8),
+          Text(formatMoney(ledger.hasAccount(a.id) ? ledger.balance(a.id) : 0), style: TextStyle(fontSize: 13, color: muted)),
+        ]);
     return DropdownButtonFormField<String>(
+      isExpanded: true,
       initialValue: accounts.any((a) => a.id == value) ? value : null,
       decoration: InputDecoration(labelText: label ?? context.l10n.account),
-      items: [for (final a in accounts) DropdownMenuItem(value: a.id, child: Text(a.name))],
+      items: [for (final a in accounts) DropdownMenuItem(value: a.id, child: row(a))],
       onChanged: (v) => v == null ? null : onChanged(v),
     );
   }
