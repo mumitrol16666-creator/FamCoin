@@ -12,6 +12,7 @@ import 'ui/auth/pin_screen.dart';
 import 'ui/onboarding/onboarding_screen.dart';
 import 'ui/shell.dart';
 import 'ui/widgets/common.dart';
+import 'ui/widgets/content_width.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -119,6 +120,9 @@ class _FamCoinAppState extends State<FamCoinApp> with WidgetsBindingObserver {
             darkTheme: buildTheme(Brightness.dark, season: season),
             themeMode: settings.themeMode,
             navigatorObservers: [routeObserver],
+            // Узкая колонка на экранах «планшетной» ширины (мелкий масштаб экрана
+            // на телефоне): карточки не растягиваются на весь экран.
+            builder: (context, child) => ContentWidthCap(child: child ?? const SizedBox.shrink()),
             home: _state == null
                 ? const LoginScreen()
                 : settings.locked
