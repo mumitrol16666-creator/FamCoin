@@ -1,21 +1,17 @@
-import 'package:famcoin_core/famcoin_core.dart' show everyYear;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../state/app_scope.dart';
-import '../../state/models.dart';
 import '../../theme/app_theme.dart';
-import 'budget_forecast_card.dart';
 import '../widgets/common.dart';
-import 'calendar_screen.dart';
-import '../onboarding/onboarding_screen.dart' show scheduleLabel;
-import 'debt_screens.dart';
-import 'limits_section.dart';
-import 'goal_card.dart';
-import '../ops/add_transaction_sheet.dart';
-import 'sheets.dart';
+import 'budget_pages.dart';
 
-/// S12 — планирование: лимиты, обязательные платежи, покупки, цели и долги.
+export 'budget_pages.dart';
+
+/// S12 — «Бюджет» (D135): набор кнопок по направлениям — лимиты, платежи,
+/// покупки, цели, долги, прогноз. Содержимое каждого лежит на своём экране
+/// ([budget_pages.dart]); здесь — только краткая сводка на кнопке и значок,
+/// если что-то требует внимания (превышены лимиты, есть просроченные платежи).
 class BudgetScreen extends StatelessWidget {
   const BudgetScreen({super.key, this.embedded = false, this.onOpenReport});
   final bool embedded;
@@ -32,187 +28,178 @@ class BudgetScreen extends StatelessWidget {
       listenable: state,
       builder: (context, _) {
         final month = DateFormat.yMMMM(locale).format(state.today);
-        final nextDue = state.dueItems(state.today.add(const Duration(days: 62)));
+        void open(Widget page) => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
+
+        // Лимиты.
+        final limits = state.limits;
+        final limitsTotal = limits.fold(0, (s, x) => s + x.amount);
+        final limitsSpent = limits.fold(0, (s, x) => s + state.spentInCategory(x.category));
+        final limitsOver = limits.where((x) => state.spentInCategory(x.category) > x.amount).length;
+
+        // Платежи.
+        final due = state.dueItems(state.today.add(const Duration(days: 62)));
+        final paymentsCount = state.planned.where((p) => p.once == null && p.person == null).length;
+        final overdue = due.where((d) => d.date.isBefore(state.today)).length;
+        final next = due.where((d) => !d.date.isBefore(state.today)).firstOrNull ?? due.firstOrNull;
+
+        // Покупки и цели.
+        final purchases = state.purchases;
+        final purchaseGoals = purchases.map((p) => p.goalId).whereType<String>().toSet();
+        final goals = state.goals.where((g) => !purchaseGoals.contains(g.id)).toList();
+        final goalsSaved = goals.fold(0, (s, g) => s + state.goalSaved(g));
+        final goalsTarget = goals.fold(0, (s, g) => s + g.target);
+
+        // Долги.
         final people = state.personDebts;
-        final purchaseGoals = state.purchases.map((p) => p.goalId).whereType<String>().toSet();
-        final standaloneGoals = state.goals.where((g) => !purchaseGoals.contains(g.id)).toList();
+        final int owe = state.totalBankDebt + people.where((p) => !p.oweMe).fold<int>(0, (s, p) => s + p.amount);
+        final int lent = people.where((p) => p.oweMe).fold<int>(0, (s, p) => s + p.amount);
+
+        // Прогноз.
+        final forecast = state.monthEndForecast.estimate;
+
+        final tiles = <_Tile>[
+          _Tile(
+            icon: Icons.speed_outlined,
+            title: l.limits,
+            summary: limits.isEmpty ? l.budgetTileLimitsNone : l.budgetTileLimits(moneyInText(limitsSpent), moneyInText(limitsTotal)),
+            badge: limitsOver > 0 ? l.budgetTileOver(limitsOver) : null,
+            onTap: () => open(const BudgetLimitsPage()),
+          ),
+          _Tile(
+            icon: Icons.event_repeat_outlined,
+            title: l.budgetTilePayments,
+            summary: paymentsCount == 0 && next == null
+                ? l.budgetTilePaymentsNone
+                : next == null
+                    ? l.budgetTilePaymentsCount(paymentsCount)
+                    : l.budgetTilePaymentsNext(DateFormat.MMMd(locale).format(next.date), moneyInText(next.payAmount)),
+            badge: overdue > 0 ? l.budgetTileOverdue(overdue) : null,
+            onTap: () => open(const BudgetPaymentsPage()),
+          ),
+          _Tile(
+            icon: Icons.shopping_bag_outlined,
+            title: l.purchases,
+            summary: purchases.isEmpty ? l.budgetTilePurchasesNone : l.budgetTilePurchases(purchases.length),
+            onTap: () => open(const BudgetPurchasesPage()),
+          ),
+          _Tile(
+            icon: Icons.flag_outlined,
+            title: l.goals,
+            summary: goals.isEmpty ? l.budgetTileGoalsNone : l.budgetTileGoals(moneyInText(goalsSaved), moneyInText(goalsTarget)),
+            onTap: () => open(const BudgetGoalsPage()),
+          ),
+          _Tile(
+            icon: Icons.handshake_outlined,
+            title: l.debts,
+            summary: owe == 0 && lent == 0
+                ? l.budgetTileDebtsNone
+                : [if (owe > 0) l.budgetTileDebtsOwe(moneyInText(owe)), if (lent > 0) l.budgetTileDebtsLent(moneyInText(lent))].join('\n'),
+            onTap: () => open(const BudgetDebtsPage()),
+          ),
+          _Tile(
+            icon: Icons.insights_outlined,
+            title: l.budgetTileForecast,
+            summary: l.budgetTileForecastValue(moneyInText(forecast)),
+            summaryColor: forecast < 0 ? fam.expense : null,
+            onTap: () => open(const BudgetForecastPage()),
+          ),
+        ];
 
         return Scaffold(
           appBar: embedded ? null : AppBar(title: Text('${l.navBudget} · $month')),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
             children: [
-              if (embedded) Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(toBeginningOfSentenceCase(month), style: Theme.of(context).textTheme.titleLarge),
-              ),
+              if (embedded)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(toBeginningOfSentenceCase(month), style: Theme.of(context).textTheme.titleLarge),
+                ),
               Text(l.budgetPurpose, style: TextStyle(color: fam.text2)),
-              if (onOpenReport != null) ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.bar_chart_outlined),
-                title: Text(l.openReport),
-                subtitle: Text(l.analyticsPurpose),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: onOpenReport,
-              ),
-
-              const LimitsSection(),
-
-              SectionHeader(l.planned, action: l.calendar, onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen()))),
-              if (state.planned.every((p) => p.once != null || p.person != null))
-                EmptyHint(l.noPlanned, icon: Icons.event_repeat_outlined)
-              else
-                AppCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Column(children: [
-                    for (final p in state.planned.where((p) => p.once == null && p.person == null))
-                      Builder(builder: (context) {
-                        final next = nextDue.where((d) => d.planned.id == p.id).firstOrNull;
-                        final paidNow = state.paidThisPeriod(p);
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CategoryAvatar.of(categoryById(p.debtId != null ? debtsCategory : p.category)),
-                          title: Text(p.name),
-                          subtitle: Text(
-                            [
-                              scheduleLabel(l, locale, p.every, p.day, p.weekday, p.monthOfYear),
-                              if (paidNow) (p.every == everyYear ? l.paidThisYear : l.paidThisMonth),
-                              if (next != null) '${l.nextPayment}: ${DateFormat.MMMMd(locale).format(next.date)}',
-                            ].join(' · '),
-                            style: TextStyle(fontSize: 12, color: paidNow ? fam.income : fam.text2),
-                          ),
-                          trailing: MoneyText(p.amount),
-                          // Нет ближайшего срока (всё оплачено) — нажатие открывает правку.
-                          onTap: () => next == null ? editPlannedFlow(context, p) : showPayDueSheet(context, next),
-                          onLongPress: () => deletePlannedFlow(context, p),
-                        );
-                      }),
-                  ]),
+              if (onOpenReport != null)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.bar_chart_outlined),
+                  title: Text(l.openReport),
+                  subtitle: Text(l.analyticsPurpose),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: onOpenReport,
                 ),
-              OutlinedButton.icon(onPressed: () => addPlannedFlow(context), icon: const Icon(Icons.add), label: Text(l.addPayment)),
-
-              // Разовые покупки (D88): колёса к зиме, страховка, отпуск — не
-              // ежемесячный платёж и не обязательно копилка, а «в марте уйдёт 100 000».
-              SectionHeader(l.purchases, action: l.add, onAction: () => addPurchaseFlow(context)),
-              if (state.purchases.isEmpty)
-                EmptyHint(l.noPurchases, icon: Icons.shopping_bag_outlined)
-              else
-                AppCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Column(children: [
-                    for (final p in state.purchases)
-                      Builder(builder: (context) {
-                        final m = p.onceMonth!;
-                        final name = toBeginningOfSentenceCase(DateFormat.yMMMM(locale).format(m));
-                        final overdue = m.isBefore(state.monthStart);
-                        final saving = state.purchaseGoal(p) != null;
-                        final saved = state.purchaseSaved(p);
-                        final monthly = state.purchaseMonthly(p);
-                        final when = overdue
-                            ? l.purchaseOverdue(name)
-                            : m == state.monthStart
-                                ? l.purchaseThisMonth(name)
-                                : saving
-                                    ? name
-                                    : l.purchaseBy(name, moneyInText(monthly));
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CategoryAvatar.of(categoryById(p.category)),
-                          title: Text(p.name),
-                          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(when, style: TextStyle(fontSize: 12, color: overdue ? fam.expense : fam.text2)),
-                            // Копят в копилку (D90): сколько уже есть и сколько осталось откладывать.
-                            if (saving) ...[
-                              Text(
-                                '${l.purchaseProgress(moneyInText(saved), moneyInText(p.amount))} · ${monthly == 0 ? l.purchaseReady : l.purchaseMore(moneyInText(monthly))}',
-                                style: TextStyle(fontSize: 12, color: fam.text2),
-                              ),
-                              const SizedBox(height: 4),
-                              UsageBar(value: saved, max: p.amount, color: context.scheme.primary),
-                            ],
-                          ]),
-                          trailing: MoneyText(p.amount),
-                          onTap: () => showPurchaseSheet(context, p),
-                        );
-                      }),
-                  ]),
-                ),
-
-              SectionHeader(l.goals, action: l.add, onAction: () => showGoalSheet(context)),
-              if (standaloneGoals.isEmpty) EmptyHint(purchaseGoals.isEmpty ? l.noGoals : l.purchaseGoalsNote, icon: Icons.flag_outlined),
-              for (final g in standaloneGoals) GoalCard(goal: g),
-
-              SectionHeader(l.debts, action: l.add, onAction: () => _addDebtChoice(context)),
-              if (state.bankDebts.isEmpty && people.isEmpty)
-                EmptyHint(l.noDebts, icon: Icons.handshake_outlined)
-              else
-                AppCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Column(children: [
-                    for (final d in state.bankDebts)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: CategoryAvatar(d.kind == 'creditCard' ? Icons.credit_card_outlined : Icons.account_balance_outlined),
-                        title: Text(d.name),
-                        subtitle: Text('${debtKindName(l, d.kind)}${d.rate > 0 ? ' · ${d.rate}%' : ''}', style: TextStyle(fontSize: 12, color: fam.text2)),
-                        trailing: MoneyText(state.debtBalance(d.id), color: fam.debt),
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BankDebtScreen(debtId: d.id))),
-                      ),
-                    for (final p in people)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: CircleAvatar(child: Text(p.person.characters.first.toUpperCase())),
-                        title: Text(p.person),
-                        subtitle: Text(p.oweMe ? l.oweMe : l.iOwe, style: TextStyle(fontSize: 12, color: fam.text2)),
-                        trailing: MoneyText(p.amount, color: p.oweMe ? fam.income : fam.expense),
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PersonDebtScreen(person: p.person))),
-                      ),
-                  ]),
-                ),
-              if (state.bankDebts.where((d) => state.debtBalance(d.id) > 0).length > 1)
-                OutlinedButton(
-                  onPressed: () => state.pro
-                      ? Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtStrategyScreen()))
-                      : showProGate(context, l.proGateEarly),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [Text(l.strategy), if (!state.pro) ...[const SizedBox(width: 6), const ProBadge()]]),
-                ),
-              SectionHeader(l.forecastTitle),
-              const BudgetForecastCard(),
+              const SizedBox(height: 8),
+              // Две колонки на обычном экране; одна — на узком или при крупном шрифте.
+              LayoutBuilder(builder: (context, c) {
+                final single = c.maxWidth < 340 || MediaQuery.textScalerOf(context).scale(1) > 1.4;
+                final rows = <Widget>[];
+                for (var i = 0; i < tiles.length; i += single ? 1 : 2) {
+                  final pair = [tiles[i], if (!single && i + 1 < tiles.length) tiles[i + 1]];
+                  rows.add(Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: IntrinsicHeight(
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        for (var k = 0; k < (single ? 1 : 2); k++) ...[
+                          if (k > 0) const SizedBox(width: 12),
+                          Expanded(child: k < pair.length ? pair[k] : const SizedBox.shrink()),
+                        ],
+                      ]),
+                    ),
+                  ));
+                }
+                return Column(children: rows);
+              }),
             ],
           ),
         );
       },
     );
   }
-
 }
 
+/// Кнопка направления: значок, название, краткая сводка и, если надо, красный
+/// значок «внимание».
+class _Tile extends StatelessWidget {
+  const _Tile({required this.icon, required this.title, required this.summary, required this.onTap, this.badge, this.summaryColor});
+  final IconData icon;
+  final String title;
+  final String summary;
+  final String? badge;
+  final Color? summaryColor;
+  final VoidCallback onTap;
 
-/// «Добавить» в «Долгах»: кредит и долг человеку — разные вещи (банк с графиком
-/// платежей против «взял у друга»), и раньше предлагался только кредит.
-Future<void> _addDebtChoice(BuildContext context) {
-  final l = context.l10n;
-  Widget option(BuildContext ctx, IconData icon, String title, String note, VoidCallback onTap) => ListTile(
-        leading: CircleAvatar(child: Icon(icon)),
-        title: Text(title),
-        subtitle: Text(note),
-        onTap: () {
-          Navigator.pop(ctx);
-          onTap();
-        },
-      );
-  return showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    useSafeArea: true,
-    builder: (ctx) => SafeArea(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text(l.debtAddTitle, style: Theme.of(ctx).textTheme.titleLarge))),
-        option(ctx, Icons.person_add_alt_1_outlined, l.debtAddBorrow, l.debtAddBorrowNote, () => showAddTransactionSheet(context, kind: FieldsKind.debt, debtKind: 'borrow')),
-        option(ctx, Icons.volunteer_activism_outlined, l.debtAddLend, l.debtAddLendNote, () => showAddTransactionSheet(context, kind: FieldsKind.debt, debtKind: 'lendOut')),
-        option(ctx, Icons.account_balance_outlined, l.debtAddBank, l.debtAddBankNote, () => addBankDebtFlow(context)),
-        const SizedBox(height: 8),
-      ]),
-    ),
-  );
+  @override
+  Widget build(BuildContext context) {
+    final fam = context.fam;
+    return Material(
+      color: Theme.of(context).cardColor,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 112),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(border: Border.all(color: fam.line), borderRadius: BorderRadius.circular(16)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              CategoryAvatar(icon),
+              const Spacer(),
+              if (badge != null)
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: fam.expense.withValues(alpha: .16), borderRadius: BorderRadius.circular(999)),
+                    child: Text(badge!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fam.expense)),
+                  ),
+                )
+              else
+                Icon(Icons.chevron_right, size: 20, color: fam.text2),
+            ]),
+            const SizedBox(height: 10),
+            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text(summary, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: summaryColor ?? fam.text2)),
+          ]),
+        ),
+      ),
+    );
+  }
 }

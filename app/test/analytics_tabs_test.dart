@@ -69,10 +69,16 @@ void main() {
 
     await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.text('Бюджет')));
     await tester.pumpAndSettle();
+    expect(find.byType(BudgetScreen), findsOneWidget);
+    // «Бюджет» — кнопки направлений со сводкой (D135); подробности — на экране «Лимиты».
+    expect(find.textContaining('Потрачено ${moneyInText(kzt(40000))} из ${moneyInText(kzt(100000))}'), findsOneWidget);
+    await tester.tap(find.text('Лимиты'));
+    await tester.pumpAndSettle();
     expect(find.text(moneyInText(kzt(100000))), findsWidgets); // план
     expect(find.text(moneyInText(kzt(40000))), findsWidgets); // факт
     expect(find.text('40%'), findsOneWidget);
-    expect(find.byType(BudgetScreen), findsOneWidget);
+    Navigator.of(tester.element(find.byType(BudgetLimitsPage))).pop();
+    await tester.pumpAndSettle();
     expect(find.text('План / факт'), findsNothing);
     expect(find.text('Доходы'), findsNothing, reason: 'месячный отчёт находится в Обзоре');
     await tester.pumpWidget(const SizedBox());
@@ -91,8 +97,11 @@ void main() {
     await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.text('Бюджет')));
     await tester.pumpAndSettle();
     expect(find.textContaining('1350%'), findsNothing);
-    await tester.scrollUntilVisible(find.byType(BudgetForecastCard), 350, scrollable: find.descendant(of: find.byType(BudgetScreen), matching: find.byType(Scrollable)).first);
+    await tester.tap(find.text('Прогноз'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('внесены не все доходы'), findsWidgets);
+    Navigator.of(tester.element(find.byType(BudgetForecastPage))).pop();
+    await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.descendant(of: find.byType(TabBar), matching: find.text('Обзор')));
     await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.text('Обзор')));

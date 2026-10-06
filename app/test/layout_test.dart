@@ -96,7 +96,7 @@ void main() {
   });
 
   testWidgets('разовые покупки (D88, D90): раздел в «Бюджете», подсказка сколько откладывать, копилка и «купил»', (tester) async {
-    final f = await pumpApp(tester, home: const BudgetScreen(), size: const Size(360, 732));
+    final f = await pumpApp(tester, home: const BudgetPurchasesPage(), size: const Size(360, 732));
     await f.state.addPurchase(name: 'Колёса', amount: kzt(100000), month: DateTime(2027, 3, 1), category: 'transport');
     await tester.pump(const Duration(milliseconds: 500));
     await tester.scrollUntilVisible(find.text('Колёса'), 200, scrollable: find.byType(Scrollable).first);

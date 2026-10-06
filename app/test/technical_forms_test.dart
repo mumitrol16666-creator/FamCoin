@@ -488,12 +488,10 @@ void main() {
 
   group('«Долги» → «Добавить»', () {
     testWidgets('предлагает выбор: взял в долг, дал в долг, кредит; «Я взял в долг» открывает вкладку «Долг» с этим видом', (tester) async {
-      final f = await pumpApp(tester, home: const BudgetScreen(), size: const Size(390, 844));
+      final f = await pumpApp(tester, home: const BudgetDebtsPage(), size: const Size(390, 844));
       await tester.pumpAndSettle();
       // «Добавить» в заголовке раздела «Долги».
-      await tester.scrollUntilVisible(find.text('Долги'), 300, scrollable: find.byType(Scrollable).first);
-      final header = find.ancestor(of: find.text('Долги'), matching: find.byType(Row)).first;
-      await tester.tap(find.descendant(of: header, matching: find.text('Добавить')));
+      await tester.tap(find.text('Добавить').first);
       await tester.pumpAndSettle();
       expect(find.text('Что добавить?'), findsOneWidget);
       expect(find.text('Я взял в долг'), findsOneWidget);
@@ -509,12 +507,10 @@ void main() {
     });
 
     testWidgets('пункт «Кредит…» открывает прежнюю форму кредита', (tester) async {
-      await pumpApp(tester, home: const BudgetScreen(), size: const Size(390, 844));
+      await pumpApp(tester, home: const BudgetDebtsPage(), size: const Size(390, 844));
       await tester.pumpAndSettle();
       // «Добавить» в заголовке раздела «Долги».
-      await tester.scrollUntilVisible(find.text('Долги'), 300, scrollable: find.byType(Scrollable).first);
-      final header = find.ancestor(of: find.text('Долги'), matching: find.byType(Row)).first;
-      await tester.tap(find.descendant(of: header, matching: find.text('Добавить')));
+      await tester.tap(find.text('Добавить').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Кредит, рассрочка или кредитная карта'));
       await tester.pumpAndSettle();
