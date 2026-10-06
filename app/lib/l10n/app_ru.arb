@@ -1723,5 +1723,6 @@
   "reportForgiven": "Долгов закрыто без оплаты: {amount}",
   "@reportForgiven": {"placeholders": {"amount": {"type": "String"}}},
   "csvFee": "Комиссия",
-  "transferFromHere": "Перевести отсюда"
+  "transferFromHere": "Перевести отсюда",
+  "installBannerText": "Скачайте приложение для Android: быстрее открывается и работает как обычное приложение"
 }

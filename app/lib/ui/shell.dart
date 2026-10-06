@@ -12,6 +12,7 @@ import 'ops/add_transaction_sheet.dart';
 import 'ops/voice_sheet.dart';
 import 'ops/journal_screen.dart';
 import 'widgets/common.dart';
+import 'widgets/install_banner.dart';
 import 'widgets/season_background.dart';
 import 'budget/month_close_screen.dart';
 
@@ -128,6 +129,7 @@ class _ShellState extends State<Shell> {
       body: Column(children: [
         // Вышло обновление (D103): плашка над вкладками, пока не нажали «Позже».
         const UpdateBanner(),
+        const InstallBanner(),
         Expanded(
           child: SeasonBackground(
         child: Theme(
@@ -249,3 +251,4 @@ class UpdateBanner extends StatelessWidget {
     );
   }
 }
+

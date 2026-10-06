@@ -79,6 +79,13 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Плашка «Скачайте приложение для Android» закрыта на этом устройстве.
+  bool get installBannerDismissed => _prefs.getBool('installBannerDismissed') ?? false;
+  Future<void> dismissInstallBanner() async {
+    await _prefs.setBool('installBannerDismissed', true);
+    notifyListeners();
+  }
+
   bool get pushPromptDismissed => _prefs.getBool('pushPromptDismissed') ?? false;
   Future<void> dismissPushPrompt() async {
     await _prefs.setBool('pushPromptDismissed', true);

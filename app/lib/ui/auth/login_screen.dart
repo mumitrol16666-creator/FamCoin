@@ -8,6 +8,7 @@ import '../../state/api_client.dart' show ApiException, apiUrl;
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/install_banner.dart';
 import 'auth_widgets.dart';
 
 /// S03 — вход. Основной путь — Telegram (D49): аккаунт создаётся сам при
@@ -114,6 +115,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final fam = context.fam;
 
     return AuthScaffold(children: [
+      // Сидящему с Android в браузере — скачать приложение, пока он не вошёл.
+      const InstallBanner(rounded: true),
+      const SizedBox(height: 12),
       const Logo(),
       const SizedBox(height: 8),
       Center(child: Text(l.tagline, textAlign: TextAlign.center, style: TextStyle(color: fam.text2))),

@@ -1454,5 +1454,6 @@
   "reportForgiven": "Төлемсіз жабылған қарыздар: {amount}",
   "@reportForgiven": {"placeholders": {"amount": {"type": "String"}}},
   "csvFee": "Комиссия",
-  "transferFromHere": "Осыдан аудару"
+  "transferFromHere": "Осыдан аудару",
+  "installBannerText": "Android қосымшасын жүктеп алыңыз: тезірек ашылады және әдеттегі қосымшадай жұмыс істейді"
 }
