@@ -307,9 +307,16 @@ Future<void> showTransactionSheet(BuildContext context, Transaction tx) {
           label: Text(l.delete),
           onPressed: () async {
             final nav = Navigator.of(ctx);
-            if (!await confirm(ctx, title: l.confirmDelete, message: l.deleteHint, action: l.delete)) return;
+            // У покупки есть возврат: объясняем и предлагаем удалить оба сразу,
+            // вместо тупика «сначала удалите возврат».
+            final refunded = state.refundedTotal(tx.id);
+            final withRefunds = refunded > 0;
+            final agreed = withRefunds
+                ? await confirm(ctx, title: l.deleteWithRefundTitle, message: l.deleteWithRefundBody(formatMoney(refunded)), action: l.deleteWithRefundAction)
+                : await confirm(ctx, title: l.confirmDelete, message: l.deleteHint, action: l.delete);
+            if (!agreed) return;
             if (!ctx.mounted) return;
-            if (await runAction(ctx, () => state.deleteTransaction(tx.id))) nav.pop();
+            if (await runAction(ctx, () => state.deleteTransaction(tx.id, withRefunds: withRefunds))) nav.pop();
           },
         ),
       ]);

@@ -1761,13 +1761,35 @@ class AppState extends ChangeNotifier {
 
   /// Удаление — отменяющая запись, история сохраняется. Если удаляется
   /// оплата планового платежа, её срок снова становится неоплаченным.
-  Future<void> deleteTransaction(String txId, {String? commandId}) {
+  /// Действующие возвраты по покупке [txId] (с учётом всех её версий).
+  List<Transaction> activeRefundsOf(String txId) {
+    final root = ledger.purchaseRoot(txId);
+    return [
+      for (final t in ledger.transactions)
+        if (t.type == EventType.refund && !ledger.isReversed(t.id) && t.meta['refundOf'] is String && ledger.purchaseRoot(t.meta['refundOf'] as String) == root) t,
+    ];
+  }
+
+  /// Сколько по покупке сейчас возвращено, в тиынах.
+  int refundedTotal(String txId) {
+    final tx = ledger.byId(txId);
+    if (tx == null || tx.type != EventType.expense) return 0;
+    return tx.postings.where((p) => p.accountId.startsWith('expense:')).fold(0, (sum, p) => sum + ledger.refundedFor(txId, p.accountId));
+  }
+
+  /// [withRefunds]: покупка удаляется вместе с возвратами по ней (один пакет —
+  /// сначала возвраты, потом покупка).
+  Future<void> deleteTransaction(String txId, {String? commandId, bool withRefunds = false}) {
     final reverse = {'type': 'reverse', 'txId': txId, 'id': newId()};
     final tx = ledger.byId(txId);
     // Покупку с действующим возвратом удалять нельзя: деньги вернулись бы
-    // дважды. Сначала удаляется возврат.
-    if (tx != null && tx.type == EventType.expense && tx.postings.any((p) => p.accountId.startsWith('expense:') && ledger.refundedFor(txId, p.accountId) > 0)) {
-      return Future.error(LedgerException('Сначала удалите возврат по этой покупке', code: 'hasRefunds'));
+    // дважды. Сначала удаляется возврат — либо вместе с ним, если человек согласился.
+    if (refundedTotal(txId) > 0) {
+      if (!withRefunds) return Future.error(LedgerException('Сначала удалите возврат по этой покупке', code: 'hasRefunds'));
+      return sendBatch([
+        for (final r in activeRefundsOf(txId)) {'type': 'reverse', 'txId': r.id, 'id': newId()},
+        reverse,
+      ], commandId: commandId);
     }
     final plannedId = tx?.meta['planned'];
     if (tx != null && plannedId is String) {

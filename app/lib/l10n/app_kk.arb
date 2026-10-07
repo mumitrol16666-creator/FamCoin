@@ -1546,5 +1546,9 @@
   "moneyInPiggies": "оның ішінде жинақтарда: {amount}",
   "@moneyInPiggies": {"placeholders": {"amount": {"type": "String"}}},
   "moneyInArchive": "мұрағаттағы шоттарда: {amount}",
-  "@moneyInArchive": {"placeholders": {"amount": {"type": "String"}}}
+  "@moneyInArchive": {"placeholders": {"amount": {"type": "String"}}},
+  "deleteWithRefundTitle": "Сатып алудың қайтарымы бар",
+  "deleteWithRefundBody": "Бұл сатып алу бойынша қайтарым: {amount}. Қайтарымсыз жоюға болмайды, әйтпесе ақша екі рет қайтады. Сатып алуды қайтарыммен бірге жою керек пе?",
+  "@deleteWithRefundBody": {"placeholders": {"amount": {"type": "String"}}},
+  "deleteWithRefundAction": "Екеуін де жою"
 }

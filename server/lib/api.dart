@@ -118,7 +118,7 @@ Handler buildHandler(
     })
     ..post('/command', (Request req) async {
       final id = await user(req);
-      final r = await ledger.command(id, await _body(req));
+      final r = await ledger.command(id, await _body(req), fromClient: true);
       await auth.touch(id);
       return _json(200, {'revision': r.revision, 'repeated': r.repeated});
     })

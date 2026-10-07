@@ -1815,5 +1815,9 @@
   "moneyInPiggies": "из них в копилках: {amount}",
   "@moneyInPiggies": {"placeholders": {"amount": {"type": "String"}}},
   "moneyInArchive": "на архивных счетах: {amount}",
-  "@moneyInArchive": {"placeholders": {"amount": {"type": "String"}}}
+  "@moneyInArchive": {"placeholders": {"amount": {"type": "String"}}},
+  "deleteWithRefundTitle": "У покупки есть возврат",
+  "deleteWithRefundBody": "Возврат по этой покупке: {amount}. Покупку нельзя удалить без него, иначе деньги вернутся дважды. Удалить покупку вместе с возвратом?",
+  "@deleteWithRefundBody": {"placeholders": {"amount": {"type": "String"}}},
+  "deleteWithRefundAction": "Удалить оба"
 }

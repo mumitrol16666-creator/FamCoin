@@ -91,4 +91,23 @@ void main() {
     expect(_texts(tester).where((t) => t.startsWith('Ближайший')), isEmpty);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('покупка с возвратом: без согласия не удаляется, вместе с возвратом — одним пакетом', (tester) async {
+    final f = await pumpApp(tester, home: const SizedBox(), size: const Size(390, 1200));
+    final s = f.state;
+    await s.addExpense(amount: kzt(10000), category: 'food', account: 'cash', date: s.today);
+    final purchase = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
+    await s.refund(purchase, category: 'food', amount: kzt(3000), account: 'cash');
+    expect(s.refundedTotal(purchase.id), kzt(3000));
+    expect(s.activeRefundsOf(purchase.id), hasLength(1));
+    expect(s.ledger.balance('cash'), kzt(93000));
+
+    await expectLater(s.deleteTransaction(purchase.id), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'hasRefunds')));
+    expect(s.ledger.balance('cash'), kzt(93000), reason: 'ничего не изменилось');
+
+    await s.deleteTransaction(purchase.id, withRefunds: true);
+    expect(s.ledger.balance('cash'), kzt(100000), reason: 'деньги вернулись ровно один раз');
+    expect(s.monthReport.total, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

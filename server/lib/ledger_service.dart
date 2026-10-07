@@ -231,7 +231,7 @@ class LedgerService {
 
   /// Применяет команду владельца. Возвращает новую ревизию и признак повтора:
   /// команда с тем же `commandId` уже принята и второй раз не применяется.
-  Future<({int revision, bool repeated})> command(String userId, Map<String, dynamic> cmd) async {
+  Future<({int revision, bool repeated})> command(String userId, Map<String, dynamic> cmd, {bool fromClient = false}) async {
     final commandId = cmd['commandId'];
     if (commandId is! String || commandId.isEmpty || commandId.length > maxIdLength) {
       throw ApiError(400, 'bad_request');
@@ -258,7 +258,7 @@ class LedgerService {
 
         final ledger = await _loadLedger(s, userId, revision, forWrite: true);
         final before = _Snapshot.of(ledger);
-        final ctx = _Ctx(s, userId, plan, ledger, Map<String, dynamic>.from(u.first[2] as Map));
+        final ctx = _Ctx(s, userId, plan, ledger, Map<String, dynamic>.from(u.first[2] as Map))..guardRefunds = fromClient;
         await _apply(ctx, cmd, depth: 0);
         final affected = earliestPostingDate(ledger.transactions.skip(before.txCount));
         if (affected != null) await _invalidateReconciliations(ctx, affected);
@@ -290,6 +290,17 @@ class LedgerService {
     }
   }
 
+  /// Покупку с действующим возвратом отменять нельзя: возврат остался бы без
+  /// покупки, и деньги вернулись бы дважды (на счёте лишнее, расход отрицательный).
+  /// Приложение проверяет это у себя, но второй телефон мог добавить возврат,
+  /// пока на первом данные не обновились.
+  void _requireNoActiveRefunds(_Ctx ctx, String? txId) {
+    final tx = txId == null ? null : ctx.ledger.byId(txId);
+    if (tx == null || tx.type != EventType.expense || ctx.editedInBatch.contains(txId)) return;
+    final refunded = tx.postings.any((p) => p.accountId.startsWith('expense:') && ctx.ledger.refundedFor(tx.id, p.accountId) > 0);
+    if (refunded) throw LedgerException('Сначала удалите возврат по этой покупке', code: 'hasRefunds');
+  }
+
   Future<void> _apply(_Ctx ctx, Map<String, dynamic> c, {required int depth}) async {
     final type = c['type'];
     if (type == 'batch') {
@@ -297,10 +308,17 @@ class LedgerService {
       if (depth > 0 || items is! List || items.isEmpty || items.length > maxBatch) {
         throw ApiError(400, 'bad_request');
       }
+      // Правка покупки — «отменить старую, записать новую» в одном пакете: такую
+      // отмену защита от возвратов пропускает.
+      ctx.editedInBatch = {
+        for (final item in items)
+          if (item is Map && item['meta'] is Map && (item['meta'] as Map)['edited'] is String) (item['meta'] as Map)['edited'] as String,
+      };
       for (final item in items) {
         if (item is! Map) throw ApiError(400, 'bad_request');
         await _apply(ctx, item.cast<String, dynamic>(), depth: depth + 1);
       }
+      ctx.editedInBatch = const {};
       return;
     }
     if (ledgerCommandTypes.contains(type)) {
@@ -319,6 +337,7 @@ class LedgerService {
         final active = ctx.ledger.accounts.where((a) => a.isMoney && !a.archived && !isPiggy(a.id)).length;
         if (id is String && !isPiggy(id) && active >= freeMoneyAccounts) throw ApiError(402, 'plan_limit');
       }
+      if (type == 'reverse' && ctx.guardRefunds) _requireNoActiveRefunds(ctx, c['txId'] as String?);
       applyLedgerCommand(ctx.ledger, c);
       return;
     }
@@ -514,6 +533,12 @@ class _Ctx {
   final Ledger ledger;
   final Map<String, dynamic> profile;
   bool profileChanged = false;
+
+  /// Команда пришла от клиента: включена защита покупок с возвратами.
+  bool guardRefunds = false;
+
+  /// Покупки, которые текущий пакет заменяет новой версией (правка).
+  Set<String> editedInBatch = const {};
 }
 
 class _Snapshot {
