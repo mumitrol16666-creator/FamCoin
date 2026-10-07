@@ -1,6 +1,6 @@
 import 'package:famcoin/ui/home/home_screen.dart';
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
-import 'package:famcoin/ui/analytics/overview_tab.dart';
+import 'package:famcoin/ui/analytics/month_tab.dart';
 import 'package:famcoin/ui/more/more_screen.dart';
 import 'package:famcoin/ui/more/ai_screen.dart';
 import 'package:famcoin/ui/shell.dart';
@@ -24,14 +24,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Планы, лимиты и будущие платежи').hitTestable(), findsOneWidget);
-    // Отчёт месяца — на вкладке «Обзор» (отдельной ссылки в «Бюджете» нет).
+    // Отчёт месяца — на вкладке «Месяц» (отдельной ссылки в «Бюджете» нет).
     expect(find.text('Открыть отчёт'), findsNothing);
-    final overview = find.descendant(of: find.byType(TabBar), matching: find.text('Обзор'));
+    final overview = find.descendant(of: find.byType(TabBar), matching: find.text('Месяц'));
     await tester.ensureVisible(overview);
     await tester.tap(overview);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byType(OverviewTab).hitTestable(), findsOneWidget);
+    expect(find.byType(MonthTab).hitTestable(), findsOneWidget);
     await tester.tap(find.descendant(of: nav, matching: find.text('Ещё')));
     await tester.pump(const Duration(milliseconds: 600));
     for (final label in ['Аналитика', 'Голос', 'ИИ-консультант']) {

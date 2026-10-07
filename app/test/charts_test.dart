@@ -2,7 +2,7 @@ import 'package:famcoin/l10n/app_localizations.dart';
 import 'package:famcoin/theme/app_theme.dart';
 import 'package:famcoin/ui/analytics/category_chart.dart';
 import 'package:famcoin/ui/analytics/day_flow_chart.dart';
-import 'package:famcoin/ui/analytics/expenses_tab.dart';
+import 'package:famcoin/ui/analytics/month_tab.dart';
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,7 +48,7 @@ void main() {
   });
 
   testWidgets('возврат не создаёт 150% и отрицательные доли в типах расходов', (tester) async {
-    final f = await pumpApp(tester, home: Scaffold(body: ExpensesTab(offset: 0, onOffset: (_) {})), size: const Size(390, 1400));
+    final f = await pumpApp(tester, home: Scaffold(body: MonthTab(offset: 0, onOffset: (_) {}, selectedDay: null, onSelectDay: (_) {})), size: const Size(390, 2400));
     final s = f.state;
     await s.addExpense(amount: kzt(40000), category: 'fun', account: 'cash', date: DateTime(2026, 8, 15));
     final old = s.userTransactions.firstWhere((t) => t.type == EventType.expense);
@@ -56,7 +56,7 @@ void main() {
     await s.addExpense(amount: kzt(60000), category: 'food', account: 'cash', date: s.today);
     await s.addExpense(amount: kzt(20000), category: 'home', account: 'cash', date: s.today);
     // В рабочем приложении вкладку перестраивает ListenableBuilder экрана.
-    tester.element(find.byType(ExpensesTab)).markNeedsBuild();
+    tester.element(find.byType(MonthTab)).markNeedsBuild();
     await tester.pumpAndSettle();
     expect(find.text('150%'), findsNothing);
     expect(find.text('-100%'), findsNothing);

@@ -1,11 +1,11 @@
-/// Пять вкладок аналитики (D66): переключаются, месяц общий для «Обзора» и
-/// «Расходов», числа на «Бюджете» и «Капитале» совпадают с тем, что реально
-/// в журнале — не просто «экран открылся без ошибок».
+/// Три вкладки аналитики (D136: «Месяц», «Деньги», «Бюджет»): переключаются,
+/// числа на «Бюджете» и «Деньгах» совпадают с тем, что реально в журнале —
+/// не просто «экран открылся без ошибок».
 library;
 
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
-import 'package:famcoin/ui/analytics/history_tab.dart';
-import 'package:famcoin/ui/analytics/overview_tab.dart';
+import 'package:famcoin/ui/analytics/money_tab.dart';
+import 'package:famcoin/ui/analytics/month_tab.dart';
 import 'package:famcoin/ui/analytics/trend_chart.dart';
 import 'package:famcoin/ui/budget/budget_forecast_card.dart';
 import 'package:famcoin/ui/budget/budget_screen.dart';
@@ -17,20 +17,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'layout_test.dart' show pumpApp;
 
 void main() {
-  testWidgets('История открывает выбранный месяц и не повторяет график капитала', (tester) async {
-    await pumpApp(tester, home: const AnalyticsScreen(initialSection: AnalyticsSection.history), size: const Size(390, 844));
-    expect(find.descendant(of: find.byType(HistoryTab), matching: find.byType(TrendChart)), findsNothing);
-    await tester.tap(find.textContaining('Август'));
+  testWidgets('сравнение месяцев внизу «Месяца» открывает выбранный месяц, график капитала там не повторяется', (tester) async {
+    // Высокий экран: длинный список «Месяца» строится целиком, без прокрутки.
+    await pumpApp(tester, home: const AnalyticsScreen(initialSection: AnalyticsSection.history), size: const Size(390, 3200));
+    expect(find.byType(MonthTab), findsOneWidget);
+    expect(find.descendant(of: find.byType(MonthTab), matching: find.byType(TrendChart)), findsNothing);
+    final august = find.textContaining('Август');
+    await tester.tap(august);
     await tester.pumpAndSettle();
-    expect(find.byType(OverviewTab), findsOneWidget);
-    expect(find.textContaining('Август'), findsOneWidget);
+    expect(find.byType(MonthTab), findsOneWidget);
+    expect(find.textContaining('Август'), findsWidgets);
     expect(find.byType(BudgetForecastCard), findsNothing);
     expect(find.text('Наблюдения'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('пять вкладок открываются без ошибок, месяц общий для Обзора и Расходов', (tester) async {
+  testWidgets('три вкладки открываются без ошибок, капитал и счета — на «Деньгах»', (tester) async {
     final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(390, 844));
     await f.state.upsert('limit', 'l1', {'category': 'food', 'amount': '10000000'});
     await f.state.addExpense(amount: kzt(30000), category: 'food', account: 'cash', date: f.state.today);
@@ -38,25 +41,30 @@ void main() {
 
     Finder tabFinder(String label) => find.descendant(of: find.byType(TabBar), matching: find.text(label));
 
-    for (final tab in ['Обзор', 'Расходы', 'Бюджет', 'Капитал', 'История']) {
+    for (final tab in ['Месяц', 'Деньги', 'Бюджет']) {
       await tester.ensureVisible(tabFinder(tab));
       await tester.tap(tabFinder(tab));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: 'вкладка «$tab» не должна падать');
     }
+    expect(find.byTooltip('Предыдущий месяц'), findsNothing);
 
-    // Обзор → сентябрь; переключаемся на предыдущий месяц через общий навигатор.
-    await tester.ensureVisible(tabFinder('Обзор'));
-    await tester.tap(tabFinder('Обзор'));
+    await tester.tap(tabFinder('Деньги'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MoneyTab), findsOneWidget);
+    expect(find.text('Всего денег сейчас'), findsOneWidget);
+    expect(find.byType(TrendChart), findsOneWidget);
+
+    // Предыдущий месяц на «Месяце»: он показывается и после возврата на вкладку.
+    await tester.tap(tabFinder('Месяц'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Предыдущий месяц').first);
     await tester.pumpAndSettle();
     expect(find.textContaining('Август'), findsWidgets);
-
-    // Расходы должны показывать тот же (прошлый) месяц, а не сентябрь.
-    await tester.tap(tabFinder('Расходы'));
+    await tester.tap(tabFinder('Деньги'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Август'), findsWidgets);
+    await tester.tap(tabFinder('Месяц'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('Сентябрь'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
@@ -80,7 +88,7 @@ void main() {
     Navigator.of(tester.element(find.byType(BudgetLimitsPage))).pop();
     await tester.pumpAndSettle();
     expect(find.text('План / факт'), findsNothing);
-    expect(find.text('Доходы'), findsNothing, reason: 'месячный отчёт находится в Обзоре');
+    expect(find.text('Доходы'), findsNothing, reason: 'месячный отчёт находится на вкладке «Месяц»');
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -103,8 +111,8 @@ void main() {
     Navigator.of(tester.element(find.byType(BudgetForecastPage))).pop();
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.descendant(of: find.byType(TabBar), matching: find.text('Обзор')));
-    await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.text('Обзор')));
+    await tester.ensureVisible(find.descendant(of: find.byType(TabBar), matching: find.text('Месяц')));
+    await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.text('Месяц')));
     await tester.pumpAndSettle();
     expect(find.textContaining('1350%', skipOffstage: false), findsNothing);
     expect(tester.takeException(), isNull);
@@ -115,15 +123,13 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('Обзор: выбранный день не переживает смену месяца с другой вкладки (F05)', (tester) async {
-    final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(390, 844));
+  testWidgets('Месяц: выбранный день не переживает смену месяца (F05)', (tester) async {
+    final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(390, 3200));
     await f.state.addExpense(amount: kzt(1000), category: 'food', account: 'cash', date: DateTime(2026, 8, 31));
     await tester.pump();
 
-    Finder tabFinder(String label) => find.descendant(of: find.byType(TabBar), matching: find.text(label));
-
-    // Август короче сентября только по индексу: уходим в август и выбираем
-    // 31-е число через календарь (по умолчанию открывается на последнем дне).
+    // Уходим в август и выбираем 31-е число через календарь (по умолчанию
+    // открывается на последнем дне).
     await tester.tap(find.byTooltip('Предыдущий месяц').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Выбрать день'));
@@ -131,28 +137,21 @@ void main() {
     await tester.tap(find.text('ОК')); // подтверждение пикера — по-русски кириллицей
     await tester.pumpAndSettle();
 
-    // Переключаем месяц НАЗАД на сентябрь через «Расходы», а не через «Обзор».
-    await tester.tap(tabFinder('Расходы'));
-    await tester.pumpAndSettle();
+    // Возврат на сентябрь (30 дней) с «застрявшим» днём 31 не должен падать
+    // RangeError-ом при построении графика.
     await tester.tap(find.byTooltip('Следующий месяц').first);
-    await tester.pumpAndSettle();
-
-    // Возврат на «Обзор» с сентябрём (30 дней) и «застрявшим» днём 31 не
-    // должен падать RangeError-ом при построении графика.
-    await tester.ensureVisible(tabFinder('Обзор'));
-    await tester.tap(tabFinder('Обзор'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('Капитал: чистый капитал и разбивка совпадают с ledger.netWorth()', (tester) async {
+  testWidgets('Деньги: чистый капитал и разбивка совпадают с ledger.netWorth()', (tester) async {
     final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(390, 844));
     await f.state.sendBatch(f.state.newBankDebtCommands(name: 'Kaspi', kind: 'loan', balance: kzt(200000), payment: kzt(20000), day: 5, rate: 20));
     await tester.pump();
 
-    await tester.ensureVisible(find.descendant(of: find.byType(TabBar), matching: find.text('Капитал')));
-    await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.text('Капитал')));
+    await tester.ensureVisible(find.descendant(of: find.byType(TabBar), matching: find.text('Деньги')));
+    await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.text('Деньги')));
     await tester.pumpAndSettle();
     final nw = f.state.ledger.netWorth();
     expect(nw.liabilities, kzt(200000));
@@ -161,4 +160,23 @@ void main() {
     expect(find.text('−100 000 ₸'), findsWidgets); // капитал отрицательный
     await tester.pumpWidget(const SizedBox());
   });
+
+  for (final locale in ['ru', 'kk']) {
+    testWidgets('«Месяц» и «Деньги» на 320 px и тексте 200 % без переполнений, $locale', (tester) async {
+      final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(320, 2600), textScale: 2, locale: Locale(locale));
+      final s = f.state;
+      await s.addExpense(amount: kzt(30000), category: 'food', account: 'cash', date: s.today);
+      await s.addIncome(amount: kzt(400000), source: 'salary', account: 'cash', date: s.today);
+      await s.addPersonDebt(kind: 'lendOut', amount: kzt(50000), person: 'Друг', account: 'cash', date: s.today);
+      await s.sendBatch(s.newBankDebtCommands(name: 'Kaspi', kind: 'loan', balance: kzt(200000), payment: kzt(20000), day: 5, rate: 20));
+      await tester.pumpAndSettle();
+      expect(find.byType(MonthTab), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.descendant(of: find.byType(TabBar), matching: find.byType(Tab)).at(1));
+      await tester.pumpAndSettle();
+      expect(find.byType(MoneyTab), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
 }

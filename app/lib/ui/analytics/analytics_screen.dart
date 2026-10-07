@@ -3,12 +3,25 @@ import 'package:flutter/material.dart';
 import '../../state/app_scope.dart';
 import '../budget/budget_screen.dart';
 import '../widgets/common.dart';
-import 'capital_tab.dart';
-import 'expenses_tab.dart';
-import 'history_tab.dart';
-import 'overview_tab.dart';
+import 'money_tab.dart';
+import 'month_tab.dart';
 
-enum AnalyticsSection { overview, expenses, budget, capital, history }
+/// Разделы старые (их знают подсказки консультанта и ссылки из приложения), вкладок
+/// три (D136): обзор, расходы и история — это «Месяц», капитал — «Деньги».
+enum AnalyticsSection {
+  overview,
+  expenses,
+  budget,
+  capital,
+  history;
+
+  /// Номер вкладки: Месяц, Деньги, Бюджет.
+  int get tabIndex => switch (this) {
+        overview || expenses || history => 0,
+        capital => 1,
+        budget => 2,
+      };
+}
 
 /// Единый раздел: отчёты о прошлом и отдельная вкладка планирования.
 class AnalyticsScreen extends StatefulWidget {
@@ -20,15 +33,14 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProviderStateMixin {
-  late final _tab = TabController(length: AnalyticsSection.values.length, initialIndex: widget.initialSection.index, vsync: this);
+  late final _tab = TabController(length: 3, initialIndex: widget.initialSection.tabIndex, vsync: this);
 
   void openSection(AnalyticsSection section, {bool currentMonth = false}) {
     if (currentMonth) _onOffset(0);
-    _tab.animateTo(section.index);
+    _tab.animateTo(section.tabIndex);
   }
 
-  /// Общий для «Обзора» и «Расходов»: это один и тот же месяц, разъезжаться
-  /// при переключении вкладок он не должен.
+  /// Месяц, выбранный на вкладке «Месяц».
   int _offset = 0;
   int? _selectedDay;
 
@@ -38,14 +50,7 @@ class AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProvi
     super.dispose();
   }
 
-  void _openMonth(int offset) {
-    _onOffset(offset);
-    _tab.animateTo(0);
-  }
-
-  /// Общий обработчик смены месяца для «Обзора» и «Расходов» (F05): выбранный
-  /// день сбрасывается всегда, а не только при смене месяца из «Обзора» —
-  /// иначе он переживал переход в более короткий месяц и ломал график.
+  /// Смена месяца (F05): выбранный день сбрасывается всегда, иначе он переживал переход в более короткий месяц и ломал график.
   void _onOffset(int o) => setState(() {
         _offset = o;
         _selectedDay = null;
@@ -62,23 +67,18 @@ class AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProvi
           title: Text(l.analytics),
           bottom: TabBar(
             controller: _tab,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 16),
-            tabs: [Tab(text: l.tabOverview), Tab(text: l.tabExpenses), Tab(text: l.navBudget), Tab(text: l.tabCapital), Tab(text: l.tabHistory)],
+                        tabs: [Tab(text: l.tabMonth), Tab(text: l.tabMoney), Tab(text: l.navBudget)],
           ),
         ),
         body: TabBarView(controller: _tab, children: [
-          OverviewTab(
+          MonthTab(
             offset: _offset,
             onOffset: _onOffset,
             selectedDay: _selectedDay,
             onSelectDay: (d) => setState(() => _selectedDay = d),
           ),
-          ExpensesTab(offset: _offset, onOffset: _onOffset),
+          const MoneyTab(),
           const BudgetScreen(embedded: true),
-          const CapitalTab(),
-          HistoryTab(onOpenMonth: _openMonth),
         ]),
       ),
     );

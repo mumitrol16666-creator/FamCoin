@@ -1796,5 +1796,22 @@
   "budgetTileForecastValue": "К концу месяца ≈ {amount}",
   "@budgetTileForecastValue": {"placeholders": {"amount": {"type": "String"}}},
   "budgetTilePaymentsCount": "Платежей: {n}",
-  "@budgetTilePaymentsCount": {"placeholders": {"n": {"type": "int"}}}
+  "@budgetTilePaymentsCount": {"placeholders": {"n": {"type": "int"}}},
+  "tabMonth": "Месяц",
+  "tabMoney": "Деньги",
+  "monthWhere": "Куда ушли деньги",
+  "monthInProgress": "Месяц ещё идёт: сравнение с прошлым месяцем предварительное",
+  "deltaVsPrev": "{arrow} {pct}% к прошлому месяцу",
+  "@deltaVsPrev": {"placeholders": {"arrow": {"type": "String"}, "pct": {"type": "int"}}},
+  "monthMoves": "Движения, не доходы и не расходы",
+  "monthMovesNote": "Займы, возвраты долгов, списания, уточнения остатков",
+  "movesBorrowed": "Получено в долг",
+  "movesLent": "Дал в долг",
+  "movesReturnedToMe": "Мне вернули долг",
+  "movesDebtPayments": "Погашено долгов",
+  "movesWrittenOff": "Списано долгов",
+  "movesForgiven": "Долгов закрыто без оплаты",
+  "moneyTotal": "Всего денег сейчас",
+  "moneyInPiggies": "из них в копилках: {amount}",
+  "@moneyInPiggies": {"placeholders": {"amount": {"type": "String"}}}
 }

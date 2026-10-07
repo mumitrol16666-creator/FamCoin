@@ -1527,5 +1527,22 @@
   "budgetTileForecastValue": "Ай соңына ≈ {amount}",
   "@budgetTileForecastValue": {"placeholders": {"amount": {"type": "String"}}},
   "budgetTilePaymentsCount": "Төлемдер: {n}",
-  "@budgetTilePaymentsCount": {"placeholders": {"n": {"type": "int"}}}
+  "@budgetTilePaymentsCount": {"placeholders": {"n": {"type": "int"}}},
+  "tabMonth": "Ай",
+  "tabMoney": "Ақша",
+  "monthWhere": "Ақша қайда кетті",
+  "monthInProgress": "Ай әлі аяқталған жоқ: өткен аймен салыстыру алдын ала",
+  "deltaVsPrev": "{arrow} {pct}% өткен айға қарағанда",
+  "@deltaVsPrev": {"placeholders": {"arrow": {"type": "String"}, "pct": {"type": "int"}}},
+  "monthMoves": "Кіріс те, шығыс та емес қозғалыстар",
+  "monthMovesNote": "Қарыздар, қарыз қайтару, есептен шығару, қалдықты нақтылау",
+  "movesBorrowed": "Қарызға алынды",
+  "movesLent": "Қарызға берілді",
+  "movesReturnedToMe": "Маған қарыз қайтарылды",
+  "movesDebtPayments": "Қарыздар өтелді",
+  "movesWrittenOff": "Қарыздар есептен шығарылды",
+  "movesForgiven": "Төлемсіз жабылған қарыздар",
+  "moneyTotal": "Қазір барлық ақша",
+  "moneyInPiggies": "оның ішінде жинақтарда: {amount}",
+  "@moneyInPiggies": {"placeholders": {"amount": {"type": "String"}}}
 }

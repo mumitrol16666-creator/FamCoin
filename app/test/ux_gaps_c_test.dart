@@ -5,7 +5,7 @@ library;
 
 import 'package:famcoin/l10n/app_localizations_ru.dart';
 import 'package:famcoin/state/app_scope.dart';
-import 'package:famcoin/ui/analytics/overview_tab.dart';
+import 'package:famcoin/ui/analytics/month_tab.dart';
 import 'package:famcoin/ui/budget/budget_forecast_card.dart';
 import 'package:famcoin/ui/budget/sheets.dart';
 import 'package:famcoin/ui/more/guide_screen.dart';
@@ -149,17 +149,24 @@ void main() {
     testWidgets('«Дал в долг» и «Мне вернули долг» видны в итогах месяца отдельно от доходов и расходов', (tester) async {
       final f = await pumpApp(
         tester,
-        home: Scaffold(body: Builder(builder: (c) => ListenableBuilder(listenable: AppScope.of(c).state, builder: (c, _) => OverviewTab(offset: 0, onOffset: (_) {}, selectedDay: null, onSelectDay: (_) {})))),
+        home: Scaffold(body: Builder(builder: (c) => ListenableBuilder(listenable: AppScope.of(c).state, builder: (c, _) => MonthTab(offset: 0, onOffset: (_) {}, selectedDay: null, onSelectDay: (_) {})))),
         size: const Size(390, 844),
       );
       final s = f.state;
       await s.addPersonDebt(kind: 'lendOut', amount: kzt(50000), person: 'Друг', account: 'cash', date: DateTime(2026, 9, 20));
       await s.addPersonDebt(kind: 'repaymentReceived', amount: kzt(20000), person: 'Друг', account: 'cash', date: DateTime(2026, 9, 25));
       await tester.pump(const Duration(milliseconds: 500));
-      // Сумма в тексте идёт с неразрывным пробелом.
-      String shown(String start) => tester.widgetList<Text>(find.textContaining(start)).single.data!.replaceAll('\u00A0', ' ');
-      expect(shown('Дал в долг:'), 'Дал в долг: 50 000 ₸');
-      expect(shown('Мне вернули долг:'), 'Мне вернули долг: 20 000 ₸');
+      // Движения свёрнуты в «Движения, не доходы и не расходы» (D136).
+      await tester.scrollUntilVisible(find.text('Движения, не доходы и не расходы'), 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.text('Движения, не доходы и не расходы'));
+      await tester.pumpAndSettle();
+      // Строка — подпись и сумма; сумма в тексте идёт с неразрывным пробелом.
+      String rowOf(String label) => tester
+          .widgetList<Text>(find.descendant(of: find.ancestor(of: find.text(label), matching: find.byType(Row)).first, matching: find.byType(Text)))
+          .map((t) => t.data!.replaceAll('\u00A0', ' '))
+          .join('|');
+      expect(rowOf('Дал в долг'), contains('50 000'));
+      expect(rowOf('Мне вернули долг'), contains('20 000'));
       expect(s.monthReport.income, 0);
       expect(s.monthReport.expense, 0);
     });
