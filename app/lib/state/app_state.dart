@@ -648,12 +648,12 @@ class AppState extends ChangeNotifier {
   LimitExplain get limitExplain {
     final until = nextIncomeDate;
     final due = dueItems(until.subtract(const Duration(days: 1)));
-    final unpaid = due.fold<int>(0, (sum, d) => sum + d.payAmount);
+    final unpaid = due.fold<int>(0, (sum, d) => sum + dueNeed(d));
     return LimitExplain(
       liquid: ledger.liquid(),
       reserves: liquidReserves,
       obligations: unpaid,
-      overdue: due.where((d) => d.date.isBefore(today)).fold<int>(0, (sum, d) => sum + d.payAmount),
+      overdue: due.where((d) => d.date.isBefore(today)).fold<int>(0, (sum, d) => sum + dueNeed(d)),
       days: daysToIncome < 1 ? 1 : daysToIncome,
       until: until,
       byMonthEnd: !hasPayDay,
@@ -730,10 +730,19 @@ class AppState extends ChangeNotifier {
   }
 
   /// Сумма срока: остаток долга человеку (не больше записанной суммы) для
-  /// срока возврата личного долга, иначе `null` — сумма платежа.
+  /// срока возврата личного долга; остаток рассрочки, если он меньше платежа;
+  /// иначе `null` — сумма платежа.
   int? _dueAmount(PlannedInfo p) {
     final person = p.person;
-    if (person == null) return null;
+    if (person == null) {
+      // Рассрочка: платёж округлён вверх, и последний срок бывает больше остатка
+      // (100 000 ₸ на 3 месяца — 3 × 33 334). Платить больше долга нельзя, а
+      // обязательства и прогноз не должны включать лишние тиын-копейки (процентов нет).
+      final debtId = p.debtId;
+      if (debtId == null || bankDebt(debtId)?.kind != 'installment') return null;
+      final left = debtBalance(debtId);
+      return left > 0 && left < p.amount ? left : null;
+    }
     final owed = ledger.hasAccount(liabilityAccount(person)) ? ledger.balance(liabilityAccount(person)) : 0;
     return owed < p.amount || p.amount <= 0 ? owed : p.amount;
   }
@@ -818,14 +827,27 @@ class AppState extends ChangeNotifier {
 
   List<DueItem> get upcoming => dueItems(today.add(const Duration(days: 31)));
 
+  /// Сколько ещё нужно денег со свободных счетов на срок. У разовой покупки с
+  /// копилкой накопленное уже лежит вне свободных денег и вернётся на счёт при
+  /// оплате, поэтому второй раз его вычитать нельзя: нужна только недостающая
+  /// часть. Сама сумма расхода при оплате остаётся полной ([DueItem.payAmount]).
+  int dueNeed(DueItem d) {
+    final p = d.planned;
+    if (p.once == null || p.onceMonth == null || purchaseGoal(p) == null) return d.payAmount;
+    final rest = d.payAmount - purchaseSaved(p);
+    return rest < 0 ? 0 : rest;
+  }
+
   /// C0: обязательства до следующего дохода, ещё не оплаченные.
   int get obligationsUntilIncome =>
-      dueItems(nextIncomeDate.subtract(const Duration(days: 1))).fold(0, (s, d) => s + d.payAmount);
+      dueItems(nextIncomeDate.subtract(const Duration(days: 1))).fold(0, (s, d) => s + dueNeed(d));
 
   int get liquidReserves {
     var sum = 0;
     for (final r in ledger.reservations) {
-      if (ledger.account(r.accountId).liquid) sum += r.amount;
+      final account = ledger.account(r.accountId);
+      // Архивный счёт в свободные деньги не входит, и его резерв тоже не вычитается.
+      if (account.liquid && !account.archived) sum += r.amount;
     }
     return sum;
   }
@@ -1575,7 +1597,7 @@ class AppState extends ChangeNotifier {
   /// ожидаемые повседневные траты по уже сложившемуся среднему, плюс
   /// ожидаемый остаток дохода месяца.
   MonthForecast get monthEndForecast {
-    final remaining = dueItems(monthEnd.subtract(const Duration(days: 1))).fold(0, (s, d) => s + d.payAmount);
+    final remaining = dueItems(monthEnd.subtract(const Duration(days: 1))).fold(0, (s, d) => s + dueNeed(d));
     final elapsed = today.day;
     final avgDaily = elapsed <= 0 ? 0 : spentBetween(monthStart, today) ~/ elapsed;
     final daysLeft = monthEnd.difference(today).inDays - 1;

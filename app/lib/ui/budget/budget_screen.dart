@@ -36,10 +36,12 @@ class BudgetScreen extends StatelessWidget {
         final limitsOver = limits.where((x) => state.spentInCategory(x.category) > x.amount).length;
 
         // Платежи.
-        final due = state.dueItems(state.today.add(const Duration(days: 62)));
+        // Только то, что показывает страница «Платежи»: разовые покупки и сроки
+        // личных долгов живут на своих страницах.
+        final due = state.dueItems(state.today.add(const Duration(days: 62))).where((d) => d.planned.once == null && d.planned.person == null).toList();
         final paymentsCount = state.planned.where((p) => p.once == null && p.person == null).length;
         final overdue = due.where((d) => d.date.isBefore(state.today)).length;
-        final next = due.where((d) => !d.date.isBefore(state.today)).firstOrNull ?? due.firstOrNull;
+        final next = due.where((d) => !d.date.isBefore(state.today)).firstOrNull;
 
         // Покупки и цели.
         final purchases = state.purchases;

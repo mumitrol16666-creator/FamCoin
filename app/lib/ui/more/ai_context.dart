@@ -234,8 +234,8 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
             'howItIsCalculated': 'availableToday = perDay + unspentFromPreviousDays − overspentOnPreviousDays − spentToday, но не больше денег на счетах',
           },
     'paymentsUntilMonthEnd': {
-      'unpaidTotal': _t(due.fold(0, (sum, d) => sum + d.planned.amount)),
-      'overdueTotal': _t(due.where((d) => d.date.isBefore(s.today)).fold(0, (sum, d) => sum + d.planned.amount)),
+      'unpaidTotal': _t(due.fold(0, (sum, d) => sum + s.dueNeed(d))),
+      'overdueTotal': _t(due.where((d) => d.date.isBefore(s.today)).fold(0, (sum, d) => sum + s.dueNeed(d))),
       'overdueNote': 'Просроченным считается платёж, не отмеченный оплаченным в приложении; он мог быть оплачен без отметки',
       'unpaidCount': due.length,
       'notEnoughMoneyNowBy': _t(ex.shortfall),

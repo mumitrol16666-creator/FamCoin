@@ -62,7 +62,7 @@ const Map<String, String> _categoryWords = {
   'хлеб': 'food', 'молоко': 'food', 'мясо': 'food', 'овощ': 'food', 'фрукт': 'food', 'яйц': 'food', 'сыр': 'food', 'рынок': 'food', 'базар': 'food',
   'нан': 'food', 'сүт': 'food', 'ет': 'food', 'азық': 'food', 'дүкен': 'food', 'көкөніс': 'food', 'жеміс': 'food',
   // кафе
-  'кофе': 'cafe', 'кафе': 'cafe', 'ресторан': 'cafe', 'обед': 'cafe', 'ужин': 'cafe', 'завтрак': 'cafe', 'пицц': 'cafe', 'бургер': 'cafe', 'шаурм': 'cafe', 'донер': 'cafe', 'чай': 'cafe', 'столов': 'cafe', 'доставк': 'cafe', 'wolt': 'cafe', 'глово': 'cafe', 'glovo': 'cafe',
+  'кофе': 'cafe', 'кафе': 'cafe', 'суп': 'cafe', 'суши': 'cafe', 'ролл': 'cafe', 'ресторан': 'cafe', 'обед': 'cafe', 'ужин': 'cafe', 'завтрак': 'cafe', 'пицц': 'cafe', 'бургер': 'cafe', 'шаурм': 'cafe', 'донер': 'cafe', 'чай': 'cafe', 'столов': 'cafe', 'доставк': 'cafe', 'wolt': 'cafe', 'глово': 'cafe', 'glovo': 'cafe',
   'түскі': 'cafe', 'кешкі ас': 'cafe', 'дәмхана': 'cafe', 'мейрамхана': 'cafe', 'шай': 'cafe',
   // транспорт
   'такси': 'transport', 'яндекс': 'transport', 'indrive': 'transport', 'индрайв': 'transport', 'автобус': 'transport', 'метро': 'transport', 'бензин': 'transport', 'заправк': 'transport', 'парковк': 'transport', 'проезд': 'transport', 'машин': 'transport', 'мойк': 'transport',
@@ -71,7 +71,7 @@ const Map<String, String> _categoryWords = {
   'аптек': 'health', 'лекарств': 'health', 'врач': 'health', 'клиник': 'health', 'стоматолог': 'health', 'больниц': 'health', 'анализ': 'health', 'таблетк': 'health',
   'дәріхана': 'health', 'дәрі': 'health', 'дәрігер': 'health', 'емхана': 'health',
   // дети
-  'дет': 'kids', 'ребен': 'kids', 'ребён': 'kids', 'школ': 'kids', 'садик': 'kids', 'кружок': 'kids', 'игрушк': 'kids', 'подгузник': 'kids',
+  'дет': 'kids', 'детск': 'kids', 'ребен': 'kids', 'ребён': 'kids', 'школ': 'kids', 'садик': 'kids', 'кружок': 'kids', 'игрушк': 'kids', 'подгузник': 'kids',
   'бала': 'kids', 'мектеп': 'kids', 'балабақша': 'kids', 'ойыншық': 'kids',
   // жильё и коммунальные
   'аренд': 'home', 'квартир': 'home', 'ипотек': 'home', 'ремонт': 'home', 'мебел': 'home',
@@ -95,12 +95,13 @@ const Map<String, String> _categoryWords = {
 
 const Map<String, String> _incomeWords = {
   'зарплат': 'salary', 'аванс': 'salary', 'оклад': 'salary', 'жалақы': 'salary', 'айлық': 'salary',
-  'подработк': 'side', 'халтур': 'side', 'фриланс': 'side', 'заказ': 'side', 'қосымша': 'side',
+  'подработк': 'side', 'халтур': 'side', 'фриланс': 'side', 'заказ\$': 'side', 'заказчик': 'side', 'қосымша': 'side',
   'кешбэк': 'cashback', 'кэшбек': 'cashback', 'кешбек': 'cashback', 'бонус': 'cashback',
   'процент': 'interestIncome', 'пайыз': 'interestIncome', 'вклад': 'interestIncome', 'депозит': 'interestIncome',
 };
 
-const _incomeVerbs = ['получил', 'получила', 'пришл', 'зачисл', 'доход', 'кіріс', 'түсті', 'алдым'];
+// `\$` в конце — слово целиком: «пришло» — доход, «пришлось» — нет.
+const _incomeVerbs = ['получил\$', 'получила\$', 'пришел\$', 'пришла\$', 'пришли\$', 'пришло\$', 'зачисл', 'доход', 'кіріс', 'түсті\$', 'алдым\$'];
 const _transferVerbs = ['перевел', 'перевёл', 'перевела', 'перекинул', 'перекинула', 'перевод', 'аудардым', 'аударым'];
 
 /// Снятие наличных и пополнение карты — перевод между своими счетами, а не
@@ -112,7 +113,9 @@ const _cashWords = ['налич', 'банкомат', 'деньг', 'денег'
 const _lendVerbs = ['дал в долг', 'дала в долг', 'одолжил', 'одолжила', 'занял ему', 'қарыз бердім'];
 const _borrowVerbs = ['взял в долг', 'взяла в долг', 'занял у', 'заняла у', 'занял', 'қарыз алдым'];
 const _repayReceivedVerbs = ['вернул мне', 'вернула мне', 'мне вернул', 'мне вернула', 'отдал мне', 'отдала мне', 'қайтарды'];
-const _repayMadeVerbs = ['вернул долг', 'вернула долг', 'отдал долг', 'отдала долг', 'вернул', 'вернула', 'қайтардым'];
+/// Я взял в долг: «взял / занял … в долг», «одолжил у».
+final _iBorrowed = RegExp(r'(?<!\p{L})(?:взял|взяла|занял|заняла)(?!\p{L}).*?(?<!\p{L})в долг|(?<!\p{L})одолжил[а]?\s+у(?!\p{L})', unicode: true);
+const _repayMadeVerbs = ['вернул долг', 'вернула долг', 'отдал долг', 'отдала долг', 'вернул\$', 'вернула\$', 'қайтардым'];
 
 /// Слова фразы о долге, которые не могут быть именем человека.
 const _debtWords = 'дал|дала|взял|взяла|в|долг|долга|одолжил|одолжила|занял|заняла|у|вернул|вернула|отдал|отдала|мне|ему|ей|'
@@ -142,6 +145,10 @@ RegExp _word(String w) => RegExp('(?<!\\p{L})(?:$w)(?!\\p{L})', unicode: true);
 String _normalize(String s) => s
     .toLowerCase()
     .replaceAll('ё', 'е')
+    // Время «14:30» — не сумма.
+    .replaceAll(RegExp(r'(?<!\d)\d{1,2}:\d{2}(?!\d)'), ' ')
+    // «1.500», «12,500», «1.234.567» — разделитель тысяч, а не десятичная точка.
+    .replaceAllMapped(RegExp(r'(?<![\d.,])\d{1,3}(?:[.,]\d{3})+(?![\d])'), (m) => m[0]!.replaceAll(RegExp(r'[.,]'), ''))
     // Запятая и точка между цифрами — десятичный знак, остальные — пунктуация.
     .replaceAll(RegExp(r'(?<!\d)[,.]|[,.](?!\d)'), ' ')
     .replaceAll(RegExp(r'[;:!?()«»"]'), ' ')
@@ -151,6 +158,12 @@ String _normalize(String s) => s
 /// Извлекает сумму из фразы; возвращает тиыны и текст без суммы.
 (int?, String) _extractAmount(String text) {
   var t = ' $text ';
+  // 0а. «5 тысяч 500», «10 тыс 500» — цифры, слово-тысяча и цифры сотен.
+  final digitMixed = RegExp(r'(?<!\d)(\d{1,3})\s*(?:тысяч[а-яё]*|тыс|тыщ[а-яё]*)\s+(\d{1,3})(?![\s\d]*\d)');
+  final dm = digitMixed.firstMatch(t);
+  if (dm != null) {
+    t = t.replaceRange(dm.start, dm.end, ' ${int.parse(dm.group(1)!) * 1000 + int.parse(dm.group(2)!)} ');
+  }
   // 0. Смешанная форма «тыща 590», «две тыщи 300»: слово-тысяча и цифры
   // сотен — склеиваем в одно число, дальше его разберёт цифровая ветка.
   final mixed = RegExp(r'(?:([а-яё]+)\s+)?(тысяч[а-яё]*|тыщ[а-яё]*)\s+(\d{1,3})(?![\s\d]*\d)');
@@ -167,12 +180,14 @@ String _normalize(String s) => s
     final value = ((thousands ?? 1.0) * 1000 + int.parse(mm.group(3)!)).round();
     t = t.replaceRange(start, mm.end, ' $value ');
   }
-  // 1. Цифры с пробелами-разделителями: «1 200», «450 000», «1200».
-  final digitRe = RegExp(r'(?<!\d)(\d{1,3}(?: \d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(тысяч[а-яё]*|тыс|тыщ[а-яё]*|к|k|мың|млн|миллион[а-яё]*)?(?=\s|$)');
+  // 1. Цифры с пробелами-разделителями: «1 200», «450 000», «1200». Короткое
+  // «к»/«k» — тысяча только вплотную к числу («2,5к») или в конце фразы
+  // («кофе 5 к»): «1500 к дому» — это предлог.
+  final digitRe = RegExp(r'(?<!\d)(\d{1,3}(?: \d{3})+|\d+)(?:[.,](\d{1,2}))?(?:\s*(тысяч[а-яё]*|тыс|тыщ[а-яё]*|мың|млн|миллион[а-яё]*)|([кk])|\s+([кk])(?=\s*$))?(?=\s|$)');
   final m = digitRe.firstMatch(t);
   if (m != null) {
     var units = double.parse(m.group(1)!.replaceAll(' ', '') + (m.group(2) != null ? '.${m.group(2)}' : ''));
-    final suffix = m.group(3);
+    final suffix = m.group(3) ?? m.group(4) ?? m.group(5);
     if (suffix != null) {
       if (_millionWords.any((w) => suffix.startsWith(w))) {
         units *= 1000000;
@@ -207,9 +222,10 @@ String _normalize(String s) => s
       current = 0;
       found = true;
       used.add(i);
-    } else if (_millionWords.any((mw) => w.startsWith(mw)) && found) {
+    } else if (_millionWords.any((mw) => w.startsWith(mw)) && (found || w.startsWith('миллион'))) {
       total += (current == 0 ? 1 : current) * 1000000;
       current = 0;
+      found = true;
       used.add(i);
     } else if (found && current > 0 && w != 'и') {
       // число закончилось
@@ -222,6 +238,16 @@ String _normalize(String s) => s
   return ((total * minorPerUnit).round(), rest.trim());
 }
 
+/// Числа во фразе, которые не сумма: «2 км», «5 раз», «в 5 утра», «25 октября»;
+/// «купил 2 кофе за 700» → «купил кофе 700» (количество перед ценой).
+String _cleanNoise(String text) => text
+    .replaceAll(RegExp(r'(?<!\d)\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)(?!\p{L})', unicode: true), ' ')
+    .replaceAll(RegExp(r'(?<!\d)\d{1,2}\s+(?:утра|вечера|дня|ночи)(?!\p{L})', unicode: true), ' ')
+    .replaceAll(RegExp(r'(?<!\d)\d{1,3}(?:[.,]\d+)?\s+(?:км|кг|шт|штук[а-я]*|минут[а-я]*|мин|час[а-я]*|раз[а-я]*|дн[а-я]*|литр[а-я]*|метр[а-я]*)(?!\p{L})', unicode: true), ' ')
+    .replaceAllMapped(RegExp(r'(?<!\d)\d{1,2}\s+([а-яa-z]{3,})\s+(?:за|по)\s+(?=\d)', unicode: true), (m) => '${m[1]} ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
 int? _extractDate(String text) {
   if (_word('позавчера|алдыңғы күні').hasMatch(text)) return -2;
   if (_word('вчера|кеше').hasMatch(text)) return -1;
@@ -231,7 +257,15 @@ int? _extractDate(String text) {
 
 String _stripDate(String text) => text.replaceAll(_word('позавчера|вчера|сегодня|кеше|бүгін|алдыңғы күні'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 
-bool _hasAny(String text, List<String> phrases) => phrases.any((p) => text.contains(p));
+/// Фраза с начала слова («перевод» найдёт «переводом», но не «автоперевод»);
+/// с `$` в конце — только слово целиком.
+RegExp _phraseRe(String phrase) {
+  final whole = phrase.endsWith('\$');
+  final body = RegExp.escape(whole ? phrase.substring(0, phrase.length - 1) : phrase);
+  return RegExp('(?<!\\p{L})$body${whole ? '(?!\\p{L})' : ''}', unicode: true);
+}
+
+bool _hasAny(String text, List<String> phrases) => phrases.any((p) => _phraseRe(p).hasMatch(text));
 
 /// Во фразе названо хотя бы одно название счёта.
 bool _mentionsAccount(String text, List<VoiceAccount> accounts) =>
@@ -305,17 +339,47 @@ List<String> _aliasPatterns(String alias) {
   ];
 }
 
+/// Слово из словаря ищется с начала слова, а не внутри чужого: «су» (вода) не
+/// должно находиться в «суп», «ет» (мясо) — в «цветы», «газ» — в «газета».
+/// Ключ из двух букв — только слово целиком, из трёх — с окончанием не длиннее
+/// двух букв («газа», «детям», но не «газета», «детали»).
+RegExp _keyRe(String key) {
+  if (key.endsWith('\$')) return _phraseRe(key);
+  final len = key.length;
+  final tail = len <= 2 ? '(?!\\p{L})' : len == 3 ? '\\p{L}{0,2}(?!\\p{L})' : '';
+  return RegExp('(?<!\\p{L})${RegExp.escape(key)}$tail', unicode: true);
+}
+
 String? _matchCategory(String text, Map<String, String> dict) {
   String? best;
   var bestLen = 0;
   for (final e in dict.entries) {
-    if (text.contains(e.key) && e.key.length > bestLen) {
+    if (e.key.length > bestLen && _keyRe(e.key).hasMatch(text)) {
       best = e.value;
       bestLen = e.key.length;
     }
   }
   return best;
 }
+
+/// Служебные слова, которые не могут быть названием позиции в списке покупок.
+final _notItemName = _word('тысяч[а-яё]*|тыс|тыщ[а-яё]*|млн|миллион[а-яё]*|мың|тенге|теңге|тг|руб|рублей|за|на|в|с|со|из|по|к|от|до|и|у|около|примерно|'
+    'потратил[а]?|купил[а]?|заплатил[а]?|оплатил[а]?|взял[а]?|дал[а]?|отдал[а]?|вернул[а]?|получил[а]?');
+
+/// Название позиции: слова без служебных; ведущие глаголы («купил молоко»)
+/// отбрасываются, служебное слово посередине или слишком короткое имя — не позиция.
+String? _itemName(String raw) {
+  final words = raw.trim().split(RegExp(r'\s+'));
+  while (words.isNotEmpty && _notItemName.hasMatch(words.first) && _verbOnly.hasMatch(words.first)) {
+    words.removeAt(0);
+  }
+  if (words.isEmpty) return null;
+  final name = words.join(' ');
+  if (_notItemName.hasMatch(name)) return null;
+  return RegExp(r'\p{L}', unicode: true).allMatches(name).length >= 3 ? name : null;
+}
+
+final _verbOnly = _word('потратил[а]?|купил[а]?|заплатил[а]?|оплатил[а]?|взял[а]?|дал[а]?|отдал[а]?|вернул[а]?|получил[а]?');
 
 /// Разбирает фразу. [accounts] — счета пользователя с их названиями,
 /// [people] — известные должники, [userWords] — личный словарь «слово → категория».
@@ -333,6 +397,10 @@ VoiceDraft parseVoice(
   var kind = VoiceKind.expense;
   if (_hasAny(text, _repayReceivedVerbs)) {
     kind = VoiceKind.repaymentReceived;
+  } else if (_iBorrowed.hasMatch(text) && !_word('ему|ей|им').hasMatch(text)) {
+    // «Взял 5000 в долг у Марата», «одолжил у Марата 5000»: деньги получил я.
+    // Проверяется до «дал»: иначе любое «в долг» и «одолжил» считалось бы выдачей.
+    kind = VoiceKind.borrow;
   } else if (_hasAny(text, _lendVerbs)) {
     kind = VoiceKind.lendOut;
   } else if (_hasAny(text, _borrowVerbs)) {
@@ -356,7 +424,7 @@ VoiceDraft parseVoice(
   if (cashOut || cashIn) kind = VoiceKind.transfer;
 
   final date = _extractDate(text);
-  var rest = _stripDate(text);
+  var rest = _cleanNoise(_stripDate(text));
 
   // Счета: «с каспи», «на халык», «наличными».
   String? account;
@@ -403,11 +471,19 @@ VoiceDraft parseVoice(
   final itemRe = RegExp(r'([а-яёa-zәіңғүұқөһ\- ]+?)\s+(\d{1,3}(?: \d{3})+|\d+)(?=\s|$)');
   final itemMatches = itemRe.allMatches(rest).toList();
   if (itemMatches.length >= 2) {
+    final named = <(String, int)>[];
+    var ok = true;
     for (final m in itemMatches) {
-      final name = m.group(1)!.trim();
+      final name = _itemName(m.group(1)!);
       final v = int.parse(m.group(2)!.replaceAll(' ', ''));
-      if (name.isNotEmpty && v > 0) items.add((name, v * minorPerUnit));
+      // Название — настоящее слово: «тысяч 500», «на 2», «в 5» позициями не считаются.
+      if (name == null || v <= 0) {
+        ok = false;
+        break;
+      }
+      named.add((name, v * minorPerUnit));
     }
+    if (ok) items.addAll(named);
   }
 
   final (amount, afterAmount) = items.length >= 2

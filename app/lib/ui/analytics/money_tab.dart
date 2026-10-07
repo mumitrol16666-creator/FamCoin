@@ -14,7 +14,10 @@ import 'trend_chart.dart';
 /// денег всего и по каким счетам лежат, ниже — кто кому должен, итоговый капитал
 /// и как он менялся за год. Период и его отчёты — на вкладке «Месяц».
 class MoneyTab extends StatelessWidget {
-  const MoneyTab({super.key});
+  // Не const: экран аналитики кладёт вкладку в TabBarView, и неизменный экземпляр
+  // не перестраивался бы при смене данных (AppScope не оповещает зависимых).
+  // ignore: prefer_const_constructors_in_immutables
+  MoneyTab({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -23,10 +26,15 @@ class MoneyTab extends StatelessWidget {
     final state = AppScope.of(context).state;
     final nw = state.ledger.netWorth();
     final history = state.netWorthHistory(12);
-    final changed = history.length < 2 ? 0 : nw.capital - history.first.capital;
+    // «За последние 6 месяцев» — ровно шесть: точка шесть месяцев назад есть только
+    // при истории от семи точек; иначе подпись не показываем, а не подставляем
+    // более длинный срок под тот же текст.
+    final changed = history.length < 7 ? 0 : nw.capital - history[history.length - 7].capital;
     final labels = List<String>.generate(history.length, (i) => i == history.length - 1 ? l.now : '−${history.length - 1 - i}${l.monthsShort}');
     final accounts = [...state.activeAccounts, ...state.piggyAccounts];
     final inPiggies = state.piggyAccounts.fold<int>(0, (s, a) => s + state.ledger.balance(a.id));
+    // Деньги на архивных счетах входят в «всего», но в списке счетов их нет: покажем отдельной строкой.
+    final inArchive = state.moneyAccounts.where((a) => a.archived).fold<int>(0, (s, a) => s + state.ledger.balance(a.id));
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -38,6 +46,8 @@ class MoneyTab extends StatelessWidget {
             BigMoney(nw.money),
             if (inPiggies > 0)
               Padding(padding: const EdgeInsets.only(top: 4), child: Text(l.moneyInPiggies(formatMoney(inPiggies)), style: TextStyle(fontSize: 12, color: fam.text2))),
+            if (inArchive != 0)
+              Padding(padding: const EdgeInsets.only(top: 2), child: Text(l.moneyInArchive(formatMoney(inArchive)), style: TextStyle(fontSize: 12, color: fam.text2))),
           ]),
         ),
 

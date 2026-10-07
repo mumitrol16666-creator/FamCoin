@@ -598,7 +598,9 @@ class Ledger {
   int freeLiquid() {
     var reservedLiquid = 0;
     for (final r in _reservations.values) {
-      if (account(r.accountId).liquid) reservedLiquid += r.amount;
+      final acc = account(r.accountId);
+      // liquid() архивные счета не считает, значит и резерв на них вычитать нельзя.
+      if (acc.liquid && !acc.archived) reservedLiquid += r.amount;
     }
     return liquid() - reservedLiquid;
   }

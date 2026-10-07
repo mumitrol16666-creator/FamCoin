@@ -1813,5 +1813,7 @@
   "movesForgiven": "Долгов закрыто без оплаты",
   "moneyTotal": "Всего денег сейчас",
   "moneyInPiggies": "из них в копилках: {amount}",
-  "@moneyInPiggies": {"placeholders": {"amount": {"type": "String"}}}
+  "@moneyInPiggies": {"placeholders": {"amount": {"type": "String"}}},
+  "moneyInArchive": "на архивных счетах: {amount}",
+  "@moneyInArchive": {"placeholders": {"amount": {"type": "String"}}}
 }

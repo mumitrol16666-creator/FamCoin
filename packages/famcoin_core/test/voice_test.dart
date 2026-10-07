@@ -191,4 +191,81 @@ void main() {
   test('копейки и «к»: «12,5к»', () {
     expect(p('одежда 12,5к').amount, kzt(12500));
   });
+
+  group('аудит разбора фраз (D138)', () {
+    int? amountOf(String phrase) => parseVoice(phrase).amount;
+
+    test('направление долга: «взял в долг у», «одолжил у» — это я взял', () {
+      expect(parseVoice('взял 5000 в долг у Марата').kind, VoiceKind.borrow);
+      expect(parseVoice('одолжил у Марата 5000').kind, VoiceKind.borrow);
+      expect(parseVoice('занял у Марата 5000').kind, VoiceKind.borrow);
+      // Выдача не меняется.
+      expect(parseVoice('дал Асхату 30 тысяч в долг').kind, VoiceKind.lendOut);
+      expect(parseVoice('одолжил Марату 5000').kind, VoiceKind.lendOut);
+      expect(parseVoice('занял ему 5000 в долг').kind, VoiceKind.lendOut);
+    });
+
+    test('слова-подстроки не меняют тип операции', () {
+      expect(parseVoice('заказал такси 1500').kind, VoiceKind.expense);
+      expect(parseVoice('пришлось заплатить 3000 за такси').kind, VoiceKind.expense);
+      expect(parseVoice('вернулся домой купил хлеб 300').kind, VoiceKind.expense);
+      expect(parseVoice('доклад 500').kind, VoiceKind.expense);
+      // Настоящие доходы и возвраты остаются.
+      expect(parseVoice('пришла зарплата 300 тысяч').kind, VoiceKind.income);
+      expect(parseVoice('получил заказ 50000').kind, VoiceKind.income);
+      expect(parseVoice('вернул Марату 5000').kind, VoiceKind.repaymentMade);
+    });
+
+    test('категории не ищутся внутри чужих слов', () {
+      expect(parseVoice('суп 700').category, 'cafe');
+      expect(parseVoice('суши 3500').category, 'cafe');
+      expect(parseVoice('сумка 15000').category, isNot('utilities'));
+      expect(parseVoice('цветы 5000').category, isNot('food'));
+      expect(parseVoice('газета 200').category, isNot('utilities'));
+      expect(parseVoice('детали 900').category, isNot('kids'));
+      // Окончания и настоящие слова работают.
+      expect(parseVoice('детям 5000').category, 'kids');
+      expect(parseVoice('купил газ 3000').category, 'utilities');
+      expect(parseVoice('в баре 4000').category, 'fun');
+      expect(parseVoice('кофейня 1500').category, 'cafe');
+    });
+
+    test('«к» после числа — тысяча только вплотную или в конце фразы', () {
+      expect(amountOf('такси 1500 к дому'), kzt(1500));
+      expect(amountOf('потратил 500 к обеду'), kzt(500));
+      expect(amountOf('хлеб 300 к ужину'), kzt(300));
+      expect(amountOf('кофе 2,5к'), kzt(2500));
+      expect(amountOf('аренда 150к'), kzt(150000));
+      expect(amountOf('кофе 5 к'), kzt(5000));
+    });
+
+    test('количество, время и единицы не становятся позициями и суммой', () {
+      expect(amountOf('купил 2 кофе за 700'), kzt(700));
+      expect(amountOf('потратил 3000 на 2 пиццы'), kzt(3000));
+      expect(amountOf('кофе 350 тенге 5 раз'), kzt(350));
+      expect(amountOf('такси 1500 в 5 утра'), kzt(1500));
+      expect(amountOf('кофе 1500 в 14:30'), kzt(1500));
+      expect(amountOf('вчера в 15:00 кофе 1200'), kzt(1200));
+      expect(amountOf('такси 2 км 1200'), kzt(1200));
+      expect(amountOf('такси 15 минут 1800'), kzt(1800));
+      expect(amountOf('кофе 2500 и 3 пончика'), kzt(2500));
+      // Список покупок работает, как раньше.
+      expect(amountOf('молоко 800 хлеб 250 яйца 120'), kzt(1170));
+      expect(amountOf('купил молоко 800 хлеб 250'), kzt(1050));
+    });
+
+    test('суммы: «10 тысяч 500», «миллион двести тысяч», разделитель тысяч, даты', () {
+      expect(amountOf('бензин 10 тысяч 500'), kzt(10500));
+      expect(amountOf('потратил 5 тысяч 500 на продукты'), kzt(5500));
+      expect(parseVoice('потратил 5 тысяч 500 на продукты').category, 'food');
+      expect(amountOf('кофе 2 тысячи 500'), kzt(2500));
+      expect(amountOf('миллион двести тысяч аренда'), kzt(1200000));
+      expect(amountOf('кофе 1.500'), kzt(1500));
+      expect(amountOf('кофе 12,500'), kzt(12500));
+      expect(amountOf('кофе 1.234.567'), kzt(1234567));
+      expect(amountOf('25 октября кофе 500'), kzt(500));
+      // Десятичные остаются десятичными.
+      expect(amountOf('кофе 350,5'), 35050);
+    });
+  });
 }

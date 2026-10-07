@@ -1544,5 +1544,7 @@
   "movesForgiven": "Төлемсіз жабылған қарыздар",
   "moneyTotal": "Қазір барлық ақша",
   "moneyInPiggies": "оның ішінде жинақтарда: {amount}",
-  "@moneyInPiggies": {"placeholders": {"amount": {"type": "String"}}}
+  "@moneyInPiggies": {"placeholders": {"amount": {"type": "String"}}},
+  "moneyInArchive": "мұрағаттағы шоттарда: {amount}",
+  "@moneyInArchive": {"placeholders": {"amount": {"type": "String"}}}
 }

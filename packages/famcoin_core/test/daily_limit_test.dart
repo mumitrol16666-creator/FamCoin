@@ -94,4 +94,16 @@ void main() {
     applyLedgerCommand(l, {'type': 'reserve', 'goalId': 'trip', 'accountId': 'card', 'amount': '${kzt(2500)}'});
     expect(dailyLimitState(l, profile, _today).available, kzt(500));
   });
+
+  test('архивный счёт: его резерв под цель не вычитается из свободных денег (аудит)', () {
+    final l = _ledger([
+      {'type': 'addMoneyAccount', 'accountId': 'cash'},
+      {'type': 'opening', 'id': 'o2', 'date': '2026-09-01', 'account': 'cash', 'amount': '${kzt(50000)}'},
+      {'type': 'reserve', 'goalId': 'trip', 'accountId': 'card', 'amount': '${kzt(30000)}'},
+    ]);
+    expect(l.freeLiquid(), kzt(120000), reason: 'до архива: 150 000 − 30 000');
+    applyLedgerCommand(l, {'type': 'archiveAccount', 'accountId': 'card'});
+    expect(l.liquid(), kzt(50000));
+    expect(l.freeLiquid(), kzt(50000), reason: 'деньги архивного счёта не считаются, значит и резерв на нём тоже');
+  });
 }

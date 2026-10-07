@@ -77,7 +77,7 @@ class AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProvi
             selectedDay: _selectedDay,
             onSelectDay: (d) => setState(() => _selectedDay = d),
           ),
-          const MoneyTab(),
+          MoneyTab(),
           const BudgetScreen(embedded: true),
         ]),
       ),
