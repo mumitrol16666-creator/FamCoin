@@ -273,6 +273,26 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
       'note': 'Оценка свободных денег на конец месяца; диапазон — сценарий, а не вероятность. estimate = freeMoneyNow − unpaidPaymentsUntilMonthEnd − expectedRegularSpendUntilMonthEnd + expectedIncomeUntilMonthEnd; expectedIncomeUntilMonthEnd — доход, который приложение ожидает получить до конца месяца (средний доход минус уже полученный). Уже полученный доход входит в freeMoneyNow',
     },
     'capital': {'money': _t(worth.money), 'owedToMe': _t(worth.receivables), 'debts': _t(worth.liabilities), 'capital': _t(worth.capital)},
+    // Личные долги (D137): кто кому должен, сколько осталось, срок возврата и
+    // сколько уже возвращено. Раньше консультант видел только итог «мне должны».
+    'personDebts': s.personDebts.isEmpty
+        ? null
+        : [
+            for (final d in s.personDebts)
+              () {
+                final progress = s.personDebtProgress(d.person, oweMe: d.oweMe);
+                final due = s.personDuePlan(d.person)?.onDate;
+                return {
+                  'person': d.person,
+                  'direction': d.oweMe ? 'owesMe' : 'iOwe',
+                  'balance': _t(d.amount.abs()),
+                  'dueDate': due == null ? null : _dayText(due, l),
+                  'overdue': due != null && due.isBefore(s.today),
+                  'takenInTotal': _t(progress.taken),
+                  'returnedInTotal': _t(progress.repaid),
+                };
+              }(),
+          ],
     'bankDebts': debt.totalDebt == 0
         ? null
         : {'totalDebt': _t(debt.totalDebt), 'monthlyPayments': _t(debt.monthlyPayments), 'shareOfIncomePercent': _share(debt.incomeSharePercent)},

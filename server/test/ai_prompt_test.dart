@@ -42,4 +42,21 @@ void main() {
     }
     expect(aiActions['add_planned'], contains('неделю или год'));
   });
+
+  test('личные долги: путь «Внести платёж», устаревшего «Я вернул» нет, personDebts объяснены', () {
+    expect(system, contains('«Внести платёж»'));
+    expect(system, contains('«Вернуть всё»'));
+    expect(system, isNot(contains('«Я вернул»')));
+    for (final fact in ['personDebts', 'owesMe', 'iOwe', 'overdue']) {
+      expect(system, contains(fact), reason: fact);
+    }
+  });
+
+  test('аналитика: три вкладки, прежних названий вкладок в правилах нет (D136)', () {
+    expect(system, contains('«Месяц»'));
+    expect(system, contains('«Деньги»'));
+    for (final old in ['«Обзор»', '«История»', '«Капитал»']) {
+      expect(system, isNot(contains(old)), reason: old);
+    }
+  });
 }
