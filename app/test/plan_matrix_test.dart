@@ -45,6 +45,16 @@ void main() {
     expect(find.text('100/мес'), findsNothing);
   });
 
+  testWidgets('квота не пришла (нет связи с /billing): консультант в Pro — галочка, а не «—», и без числа', (tester) async {
+    final f = await pumpApp(tester, home: const SizedBox(), size: const Size(390, 2400));
+    f.offline = true;
+    final context = tester.element(find.byType(SizedBox).first);
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TariffScreen()));
+    await tester.pumpAndSettle();
+    expect(rowCells(tester, 'ИИ-консультант'), ['—', '✓']);
+    expect(find.textContaining('/мес'), findsNothing);
+  });
+
   test('проверки доступа берут числа из той же матрицы', () {
     expect(planAllowsMore(PlanFeature.accounts, pro: false, count: freeMoneyAccounts - 1), isTrue);
     expect(planAllowsMore(PlanFeature.accounts, pro: false, count: freeMoneyAccounts), isFalse);

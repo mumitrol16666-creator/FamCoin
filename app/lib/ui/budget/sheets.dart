@@ -99,7 +99,14 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
             listenable: amount,
             builder: (_, _) {
               final a = parseAmount(amount.text);
-              if (a == null || a >= due.payAmount) return const SizedBox.shrink();
+              if (a == null || a == due.payAmount) return const SizedBox.shrink();
+              // Больше остатка сервер не примет (D161): говорим об этом до нажатия.
+              if (a > due.payAmount) {
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(l.dueOverLeft(moneyInText(due.payAmount)), style: TextStyle(fontSize: 12, color: ctx.fam.warn)),
+                );
+              }
               return Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(l.duePartLeft(moneyInText(due.payAmount - a)), style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
@@ -139,6 +146,7 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
             final a = parseAmount(amount.text);
             final i = parseAmount(interest.text, allowZero: true) ?? 0;
             if (a == null || account == null || i > a) return false;
+            if (p.person != null && a > due.payAmount) return false; // подсказка уже на экране
             return runAction(ctx, () => state.payDue(due, account: account!, amount: a, interest: i, date: payDate));
           },
         ),

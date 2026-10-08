@@ -184,7 +184,7 @@ class _TariffScreenState extends State<TariffScreen> {
                         ? '∞'
                         : '✓';
     final rows = <(String, String, String)>[
-      for (final e in planMatrix.entries) (name(e.key), cell(e.value.$1), e.key == PlanFeature.ai ? (_billing?['aiChatQuota'] is int ? l.tPerMonth(_billing!['aiChatQuota'] as int) : '—') : cell(e.value.$2)),
+      for (final e in planMatrix.entries) (name(e.key), cell(e.value.$1), e.key == PlanFeature.ai ? (_billing?['aiChatQuota'] is int ? l.tPerMonth(_billing!['aiChatQuota'] as int) : '✓') : cell(e.value.$2)),
     ];
 
     final stars = _billing?['stars'] as int?;

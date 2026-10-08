@@ -109,6 +109,23 @@ void main() {
     });
   });
 
+  testWidgets('сумма больше остатка к сроку: предупреждение до нажатия, оплата не уходит (сервер её отклонил бы)', (tester) async {
+    final f = await pumpWith(tester, (c) => showPayDueSheet(c, AppScope.of(c).state.dueItems(DateTime(2026, 10, 31)).single));
+    final s = f.state;
+    await s.addPersonDebt(kind: 'borrow', amount: kzt(80000), person: 'Друг', account: 'cash', date: s.today, dueDate: DateTime(2026, 9, 30));
+    await s.payDue(soleDue(s), account: 'cash', amount: kzt(30000), date: s.today);
+    await openForm(tester);
+    await tester.enterText(find.byType(TextField).first, '60000');
+    await tester.pump();
+    expect(find.textContaining('Больше, чем осталось к сроку'), findsOneWidget);
+    final pay = find.widgetWithText(FilledButton, 'Оплатить');
+    await tester.ensureVisible(pay);
+    await tester.tap(pay);
+    await tester.pumpAndSettle();
+    expect(f.ledger.balance(liabilityAccount('Друг')), kzt(50000), reason: 'лишнего не отправлено');
+    expect(soleDue(s).payAmount, kzt(50000));
+  });
+
   group('N02: новый цикл долга', () {
     test('долг закрыт через срок, новый долг тому же человеку с той же датой оплачивается', () async {
       final s = await started();
