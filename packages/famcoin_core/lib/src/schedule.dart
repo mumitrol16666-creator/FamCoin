@@ -176,6 +176,23 @@ bool plannedDebtActive(Ledger l, String? debtId, {String? person}) {
   return id == null || (l.hasAccount(liabilityAccount(id)) && l.balance(liabilityAccount(id)) > 0);
 }
 
+/// Сколько осталось внести к сроку возврата личного долга (N01): договорённая
+/// сумма [amount] минус части к этому сроку (`meta.part` записей с этим
+/// `meta.planned` и `meta.period`), но не больше долга человеку сейчас. Общая
+/// для приложения, сводок бота и консультанта; `amount <= 0` — весь долг.
+int personDueLeft(Ledger l, {required String planId, required String person, required int amount, required String period}) {
+  final account = liabilityAccount(person);
+  final owed = l.hasAccount(account) ? l.balance(account) : 0;
+  if (amount <= 0) return owed;
+  var parts = 0;
+  for (final t in l.transactions) {
+    if (t.type != EventType.repaymentMade || l.isReversed(t.id)) continue;
+    if (t.meta['planned'] == planId && t.meta['period'] == period && t.meta['part'] == true) parts += -t.amountOn(account);
+  }
+  final left = amount - parts;
+  return owed < left ? owed : left;
+}
+
 /// Команда справочника «отметить срок» (R01): добавляет или снимает один ключ
 /// в списке `paid` записи платежа, не трогая остальные отметки. Полная замена
 /// записи устаревшей копией с другого устройства теряла чужие отметки.

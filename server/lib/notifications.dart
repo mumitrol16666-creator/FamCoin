@@ -164,7 +164,8 @@ class NotificationService {
     final s = await ledger.state(userId);
     final l = _ledgerOf(s);
     final entities = (s['entities'] as List).cast<Map<String, dynamic>>();
-    List<Map<String, dynamic>> ofKind(String k) => [for (final e in entities) if (e['kind'] == k) Map<String, dynamic>.from(e['data'] as Map)];
+    // id записи нужен сроку возврата личного долга: части к сроку ищутся по нему (N01).
+    List<Map<String, dynamic>> ofKind(String k) => [for (final e in entities) if (e['kind'] == k) {...Map<String, dynamic>.from(e['data'] as Map), 'id': e['id']}];
     final preferences = await settings(userId);
     final input = BriefInput(
       monthRemindersEnabled: preferences['month'] != false,

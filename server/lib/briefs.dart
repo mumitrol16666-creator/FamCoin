@@ -29,16 +29,17 @@ List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dyna
     if (!plannedDebtActive(ledger, p['debtId'] as String?, person: person)) continue;
     final paid = ((p['paid'] as List?) ?? const []).cast<String>();
     final end = until.isBefore(horizon) ? until : horizon;
-    // Срок возврата личного долга (D133): сумма — остаток долга, название — «Долг: имя».
-    var entry = p;
-    if (person != null) {
-      final owed = ledger.balance(liabilityAccount(person));
-      final planned = _minor(p['amount']);
-      entry = {...p, 'name': '${locale == 'kk' ? 'Қарыз' : 'Долг'}: $person', 'amount': '${owed < planned || planned <= 0 ? owed : planned}'};
-    }
     for (final o in PaySchedule.fromJson(p).occurrences(from, end)) {
       if (paid.contains(o.period)) continue;
-      out.add((entry, o.date));
+      // Срок возврата личного долга (D133): сумма — сколько осталось внести к
+      // нему (за вычетом частей, N01), название — «Долг: имя».
+      if (person != null) {
+        final left = personDueLeft(ledger, planId: '${p['id'] ?? ''}', person: person, amount: _minor(p['amount']), period: o.period);
+        if (left <= 0) continue;
+        out.add(({...p, 'name': '${locale == 'kk' ? 'Қарыз' : 'Долг'}: $person', 'amount': '$left'}, o.date));
+        continue;
+      }
+      out.add((p, o.date));
     }
   }
   out.sort((a, b) => a.$2.compareTo(b.$2));

@@ -706,7 +706,9 @@ class AppState extends ChangeNotifier {
       // остаются, пока не оплачены, но недельные — не глубже восьми недель.
       for (final o in p.schedule.occurrences(p.schedule.scanFrom(today), end)) {
         if (p.paid.contains(o.period)) continue;
-        items.add(DueItem(p, o.date, o.period, amount: _dueAmount(p)));
+        final amount = _dueAmount(p, o.period);
+        if (p.person != null && amount! <= 0) continue; // договорённость исполнена частями
+        items.add(DueItem(p, o.date, o.period, amount: amount));
       }
     }
     items.sort((a, b) => a.date.compareTo(b.date));
@@ -722,17 +724,21 @@ class AppState extends ChangeNotifier {
     for (final p in planned) {
       if (!_plannedDebtActive(p)) continue;
       for (final o in p.schedule.occurrences(from, to)) {
-        if (!p.paid.contains(o.period)) items.add(DueItem(p, o.date, o.period, amount: _dueAmount(p)));
+        if (p.paid.contains(o.period)) continue;
+        final amount = _dueAmount(p, o.period);
+        if (p.person != null && amount! <= 0) continue;
+        items.add(DueItem(p, o.date, o.period, amount: amount));
       }
     }
     items.sort((a, b) => a.date.compareTo(b.date));
     return items;
   }
 
-  /// Сумма срока: остаток долга человеку (не больше записанной суммы) для
-  /// срока возврата личного долга; остаток рассрочки, если он меньше платежа;
+  /// Сумма срока: для срока возврата личного долга — сколько осталось внести к
+  /// нему (договорённая сумма минус внесённые к этому сроку части, N01), но не
+  /// больше долга человеку сейчас; остаток рассрочки, если он меньше платежа;
   /// иначе `null` — сумма платежа.
-  int? _dueAmount(PlannedInfo p) {
+  int? _dueAmount(PlannedInfo p, String period) {
     final person = p.person;
     if (person == null) {
       // Рассрочка: платёж округлён вверх, и последний срок бывает больше остатка
@@ -743,8 +749,7 @@ class AppState extends ChangeNotifier {
       final left = debtBalance(debtId);
       return left > 0 && left < p.amount ? left : null;
     }
-    final owed = ledger.hasAccount(liabilityAccount(person)) ? ledger.balance(liabilityAccount(person)) : 0;
-    return owed < p.amount || p.amount <= 0 ? owed : p.amount;
+    return personDueLeft(ledger, planId: p.id, person: person, amount: p.amount, period: period);
   }
 
   /// Сколько взято (выдано) и сколько возвращено по долгу человеку за всё время:
@@ -1222,32 +1227,42 @@ class AppState extends ChangeNotifier {
     return due.isEmpty ? send(command, commandId: commandId) : sendBatch([command, ...due], commandId: commandId);
   }
 
-  /// Запись «срок возврата»: id и данные плана для человека.
-  static String personDueId(String person) => 'pd:${person.length > 80 ? person.substring(0, 80) : person}';
+  /// Id срока возврата личного долга: свой у каждой договорённости (N02). Имя
+  /// человека ключом не служит: раньше срок всегда был `pd:<имя>`, и новый долг
+  /// тому же человеку с той же датой после полного возврата получал id старого,
+  /// уже оплаченного срока — его оплата отклонялась («срок уже оплачен»).
+  static String newPersonDueId() => 'pd:${newId()}';
+
+  /// Снять прежние сроки возврата человеку: новая договорённость их заменяет.
+  List<Map<String, dynamic>> _dropPersonDues(String person) => [
+        for (final p in planned.where((p) => p.person == person)) {'type': 'deleteEntity', 'kind': 'planned', 'entityId': p.id},
+      ];
 
   /// Команды срока возврата долга человеку (D133). [added] — сумма нового долга,
-  /// прибавляется к уже записанному остатку. Есть дата — срок создаётся или
-  /// переносится на неё; даты нет, а прежний срок уже прошёл — он снимается, чтобы
-  /// не висела просрочка по долгу, у которого новый договор без срока.
+  /// прибавляется к уже записанному остатку. Есть дата — прежний срок заменяется
+  /// новой договорённостью на весь долг с новым id (её сумма уже за вычетом
+  /// прежних частей); даты нет, а прежний срок уже прошёл или долг перед этим был
+  /// погашен (новый цикл, N02) — прежний снимается, чтобы не висела просрочка
+  /// по старому договору.
   List<Map<String, dynamic>> personDueCommands(String person, int added, DateTime? dueDate) {
-    final id = personDueId(person);
     final existing = personDuePlan(person);
+    final owed = ledger.hasAccount(liabilityAccount(person)) ? ledger.balance(liabilityAccount(person)) : 0;
     if (dueDate == null) {
-      if (existing?.onDate != null && existing!.onDate!.isBefore(today)) return [{'type': 'deleteEntity', 'kind': 'planned', 'entityId': id}];
+      if (existing != null && (owed == 0 || existing.onDate != null && existing.onDate!.isBefore(today))) return _dropPersonDues(person);
       return const [];
     }
-    final owed = ledger.hasAccount(liabilityAccount(person)) ? ledger.balance(liabilityAccount(person)) : 0;
-    final plan = PlannedInfo(id, person, owed + added, 1, 'other', null, const {}, person: person, onDate: dueDate);
-    return [{'type': 'upsertEntity', 'kind': 'planned', 'entityId': id, 'data': plan.toJson()}];
+    final plan = PlannedInfo(newPersonDueId(), person, owed + added, 1, 'other', null, const {}, person: person, onDate: dueDate);
+    return [..._dropPersonDues(person), {'type': 'upsertEntity', 'kind': 'planned', 'entityId': plan.id, 'data': plan.toJson()}];
   }
 
   /// Назначить, перенести или убрать срок возврата долга человеку (экран долга).
+  /// Новая дата — новая договорённость на нынешний остаток (N02): перенос туда
+  /// и обратно не смешивает её с прежними частями и оплатами.
   Future<void> setPersonDue(PersonDebt d, DateTime? date) {
-    if (date == null) {
-      return send({'type': 'deleteEntity', 'kind': 'planned', 'entityId': personDueId(d.person)});
-    }
-    final plan = PlannedInfo(personDueId(d.person), d.person, d.amount, 1, 'other', null, const {}, person: d.person, onDate: date);
-    return send({'type': 'upsertEntity', 'kind': 'planned', 'entityId': plan.id, 'data': plan.toJson()});
+    final drop = _dropPersonDues(d.person);
+    if (date == null) return drop.isEmpty ? Future<void>.value() : sendBatch(drop);
+    final plan = PlannedInfo(newPersonDueId(), d.person, d.amount, 1, 'other', null, const {}, person: d.person, onDate: date);
+    return sendBatch([...drop, {'type': 'upsertEntity', 'kind': 'planned', 'entityId': plan.id, 'data': plan.toJson()}]);
   }
 
   Future<void> addPersonDebt({required String kind, required int amount, required String person, required String account, required DateTime date, String? time, DateTime? dueDate, String? id, String? commandId}) {
@@ -1275,7 +1290,10 @@ class AppState extends ChangeNotifier {
   Future<void> payDue(DueItem due, {required String account, required int amount, int interest = 0, DateTime? date, String? commandId}) {
     final p = due.planned;
     final d = _date(date ?? today);
-    final link = {'planned': p.id, 'period': due.period};
+    // Срок возврата личного долга можно гасить частями (N01): часть не
+    // закрывает срок, он остаётся с остатком; закрывает платёж на весь остаток.
+    final part = p.person != null && amount < due.payAmount;
+    final link = {'planned': p.id, 'period': due.period, if (part) 'part': true};
     // Срок возврата личного долга: оплата — возврат долга человеку.
     final fact = p.person != null
         ? {'type': 'repaymentMade', 'id': newId(), 'date': d, 'account': account, 'person': p.person, 'principal': amount.toString(), 'meta': link}
@@ -1292,7 +1310,7 @@ class AppState extends ChangeNotifier {
     return sendBatch([
       if (goal != null) ...closeGoalCommands(goal, returnTo: account, date: when),
       fact,
-      paidMark(p, due.period, clearGoal: goal != null && closesFully),
+      if (!part) paidMark(p, due.period, clearGoal: goal != null && closesFully),
     ], commandId: commandId);
   }
 
@@ -1811,7 +1829,8 @@ class AppState extends ChangeNotifier {
     final restore = {'type': 'restore', 'txId': txId, 'id': newId()};
     final tx = ledger.byId(txId);
     final plannedId = tx?.meta['planned'];
-    if (tx != null && plannedId is String) {
+    // Восстановленная часть возврата (N01) срок не закрывает.
+    if (tx != null && plannedId is String && tx.meta['part'] != true) {
       final p = planned.where((p) => p.id == plannedId).firstOrNull;
       final period = tx.meta['period'] as String? ?? _period(tx.date);
       if (p != null && !p.paid.contains(period)) {

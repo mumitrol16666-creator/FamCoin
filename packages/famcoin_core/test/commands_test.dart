@@ -217,6 +217,25 @@ void occurrenceTests() {
       expect(l.balance(liabilityAccount('Теща')), kzt(20000));
     });
 
+    test('части возврата личного долга к сроку (N01): несколько частей и закрывающий платёж; повтор части — не дубль; переплата — отказ', () {
+      final l = base();
+      applyLedgerCommand(l, {'type': 'borrow', 'id': 'b', 'date': '2026-09-02', 'account': 'kaspi', 'person': 'Друг', 'amount': '${kzt(80000)}'});
+      Map<String, dynamic> back(String id, num tenge, {bool part = true}) => {
+            'type': 'repaymentMade', 'id': id, 'date': '2026-09-20', 'account': 'kaspi', 'person': 'Друг', 'principal': '${kzt(tenge)}',
+            'meta': {'planned': 'pd:1', 'period': '2026-09-30', if (part) 'part': true},
+          };
+      applyLedgerCommand(l, back('p1', 30000));
+      applyLedgerCommand(l, back('p1', 30000)); // сетевой повтор той же части
+      applyLedgerCommand(l, back('p2', 20000));
+      expect(l.balance(liabilityAccount('Друг')), kzt(30000));
+      expect(() => applyLedgerCommand(l, back('p3', 40000)), throwsA(isA<LedgerException>()), reason: 'больше остатка долга — отказ');
+      applyLedgerCommand(l, back('last', 30000, part: false));
+      expect(l.balance(liabilityAccount('Друг')), 0);
+      // Закрывающий платёж занял срок: второй такой же — отказ, как раньше.
+      applyLedgerCommand(l, {'type': 'borrow', 'id': 'b2', 'date': '2026-09-21', 'account': 'kaspi', 'person': 'Друг', 'amount': '${kzt(10000)}'});
+      expect(() => applyLedgerCommand(l, back('again', 10000, part: false)), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'occurrencePaid')));
+    });
+
     test('повтор той же записи с тем же id остаётся идемпотентным, а не ошибкой срока', () {
       final l = base();
       applyLedgerCommand(l, pay('a'));

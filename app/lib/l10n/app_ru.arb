@@ -1444,6 +1444,8 @@
   "purchaseRemoveHint": "Копилка с накопленным останется среди целей.",
   "purchaseFromPiggy": "Из копилки на этот счёт вернётся {amount} — покупка оплатится с него.",
   "@purchaseFromPiggy": {"placeholders": {"amount": {"type": "String"}}},
+  "duePartLeft": "Часть: к сроку останется {amount}",
+  "@duePartLeft": {"placeholders": {"amount": {"type": "String"}}},
   "aiUnverified": "Эти суммы не удалось подтвердить данными приложения: {amounts}. Перепроверьте.",
   "@aiUnverified": {"placeholders": {"amounts": {"type": "String"}}},
   "incomeIncompleteNote": "Платежей в месяц больше, чем записано доходов. Похоже, в приложении внесены не все доходы — доли и прогноз пока неточны.",

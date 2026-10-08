@@ -127,4 +127,25 @@ void personDueBriefTests() {
     applyLedgerCommand(l, {'type': 'repaymentMade', 'id': 'r2', 'date': '2026-10-12', 'account': 'card', 'person': 'Теща', 'principal': '${kzt(50000)}'});
     expect(morningBrief(input(DateTime(2026, 10, 20))).body, isNot(contains('Теща')));
   });
+
+  test('N01: части к сроку вычитаются так же, как в приложении — по общему расчёту ядра', () {
+    final l = Ledger();
+    applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o', 'date': '2026-09-01', 'account': 'card', 'amount': '${kzt(200000)}'});
+    // Договорились вернуть 80 000 к 20.10, потом заняли ещё 20 000 без срока.
+    applyLedgerCommand(l, {'type': 'borrow', 'id': 'b', 'date': '2026-10-02', 'account': 'card', 'person': 'Брат', 'amount': '${kzt(80000)}'});
+    applyLedgerCommand(l, {'type': 'borrow', 'id': 'b2', 'date': '2026-10-03', 'account': 'card', 'person': 'Брат', 'amount': '${kzt(20000)}'});
+    const due = {'id': 'pd:1', 'name': 'Брат', 'amount': '8000000', 'day': 1, 'category': 'other', 'paid': <String>[], 'person': 'Брат', 'onDate': '2026-10-20'};
+    BriefInput input() => BriefInput(ledger: l, today: DateTime(2026, 10, 20), profile: const {}, planned: const [due], limits: const [], locale: 'ru');
+    applyLedgerCommand(l, {
+      'type': 'repaymentMade', 'id': 'p1', 'date': '2026-10-10', 'account': 'card', 'person': 'Брат', 'principal': '${kzt(30000)}',
+      'meta': {'planned': 'pd:1', 'period': '2026-10-20', 'part': true},
+    });
+    expect(morningBrief(input()).body, allOf(contains('Долг: Брат'), contains('50 000 ₸')), reason: 'к сроку осталось 80 000 − 30 000, хотя долг 70 000');
+    applyLedgerCommand(l, {
+      'type': 'repaymentMade', 'id': 'p2', 'date': '2026-10-11', 'account': 'card', 'person': 'Брат', 'principal': '${kzt(50000)}',
+      'meta': {'planned': 'pd:1', 'period': '2026-10-20', 'part': true},
+    });
+    expect(morningBrief(input()).body, isNot(contains('Брат')), reason: 'договорённость исполнена частями, долг 20 000 без срока');
+  });
 }

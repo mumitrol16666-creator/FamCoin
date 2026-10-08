@@ -462,11 +462,16 @@ class Ledger {
   /// теми же `meta.planned` и `meta.period` уже действует, вторая — с другого
   /// устройства или со старой формы — отклоняется, а не списывает деньги заново.
   /// [exceptTxId] — сама проверяемая запись (при восстановлении).
+  ///
+  /// Часть исполнения (`meta.part: true`, N01: часть долга человеку к сроку)
+  /// срок не занимает и сама не проверяется: частей может быть несколько, срок
+  /// закрывает платёж на весь остаток. От дубля части при повторе запроса
+  /// защищают её id и commandId, от переплаты — проверка остатка долга.
   void requireOccurrenceFree(Map<String, Object?> meta, {String? exceptTxId}) {
     final planned = meta['planned'], period = meta['period'];
-    if (planned is! String || period is! String) return;
+    if (planned is! String || period is! String || meta['part'] == true) return;
     for (final t in _transactions) {
-      if (t.id == exceptTxId || t.type == EventType.reversal || _reversed.contains(t.id)) continue;
+      if (t.id == exceptTxId || t.type == EventType.reversal || _reversed.contains(t.id) || t.meta['part'] == true) continue;
       if (t.meta['planned'] == planned && t.meta['period'] == period) {
         throw LedgerException('Этот срок уже оплачен', code: 'occurrencePaid');
       }

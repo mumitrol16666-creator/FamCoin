@@ -85,6 +85,19 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         AmountField(controller: amount, label: l.amount),
+        // Возврат человеку можно внести частью (N01): срок останется на остаток.
+        if (p.person != null)
+          ListenableBuilder(
+            listenable: amount,
+            builder: (_, _) {
+              final a = parseAmount(amount.text);
+              if (a == null || a >= due.payAmount) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(l.duePartLeft(moneyInText(due.payAmount - a)), style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+              );
+            },
+          ),
         const SizedBox(height: 8),
         Row(children: [
           Text(l.date, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
