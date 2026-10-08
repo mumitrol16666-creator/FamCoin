@@ -23,6 +23,7 @@ export 'src/formulas/limits.dart';
 export 'src/formulas/loans.dart';
 export 'src/ledger.dart';
 export 'src/money.dart';
+export 'src/plans.dart';
 export 'src/reconciliation.dart';
 export 'src/schedule.dart';
 export 'src/serialization.dart';

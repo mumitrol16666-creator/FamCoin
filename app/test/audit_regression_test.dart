@@ -96,6 +96,9 @@ class FakeServer {
   Future<http.Response> _handle(http.Request req) async {
     if (offline) throw http.ClientException('offline');
     if (req.url.path == '/state') return http.Response(jsonEncode(_snapshot()), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+    if (req.url.path == '/billing') {
+      return http.Response(jsonEncode({'available': false, 'stars': 950, 'days': 365, 'priceTenge': 10000, 'plan': 'free', 'proUntil': null, 'payments': []}), 200);
+    }
     // История уведомлений (UI04): список и «прочитано».
     if (req.url.path == '/notifications') return http.Response(jsonEncode({'items': notificationItems}), 200, headers: {'content-type': 'application/json; charset=utf-8'});
     if (req.url.path == '/notifications/read') return http.Response(jsonEncode({'status': 'ok'}), 200);

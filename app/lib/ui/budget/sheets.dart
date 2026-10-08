@@ -363,7 +363,7 @@ Future<void> showPersonRepaySheet(BuildContext context, PersonDebt debt, {bool a
 Future<void> showGoalSheet(BuildContext context, {GoalInfo? initial}) async {
   final l = context.l10n;
   final state = AppScope.of(context).state;
-  if (initial == null && !state.pro && state.goals.isNotEmpty) {
+  if (initial == null && !planAllowsMore(PlanFeature.goals, pro: state.pro, count: state.goals.length)) {
     await showProGate(context, l.proGateGoals);
     return;
   }
@@ -498,7 +498,7 @@ Future<void> showReserveSheet(BuildContext context, GoalInfo goal, {required boo
 Future<void> addAccountFlow(BuildContext context) async {
   final l = context.l10n;
   final state = AppScope.of(context).state;
-  if (!state.pro && state.activeAccounts.isNotEmpty) {
+  if (!planAllowsMore(PlanFeature.accounts, pro: state.pro, count: state.activeAccounts.length)) {
     await showProGate(context, l.proGateAccounts);
     return;
   }
@@ -613,7 +613,7 @@ Future<void> showPurchaseSheet(BuildContext context, PlannedInfo p) {
             Navigator.pop(ctx);
             if (goal != null) {
               await showReserveSheet(context, goal, release: false, initial: monthly == 0 ? null : monthly);
-            } else if (!state.pro && state.goals.isNotEmpty) {
+            } else if (!planAllowsMore(PlanFeature.goals, pro: state.pro, count: state.goals.length)) {
               await showProGate(context, l.proGateGoals);
             } else {
               await runAction(context, () => state.startSavingFor(p));
@@ -713,7 +713,7 @@ Future<void> addBankDebtFlow(BuildContext context) async {
 Future<void> addLimitFlow(BuildContext context, {LimitInfo? initial}) async {
   final l = context.l10n;
   final state = AppScope.of(context).state;
-  if (initial == null && !state.pro && state.limits.length >= 2) {
+  if (initial == null && !planAllowsMore(PlanFeature.limits, pro: state.pro, count: state.limits.length)) {
     await showProGate(context, l.proGateLimit);
     return;
   }

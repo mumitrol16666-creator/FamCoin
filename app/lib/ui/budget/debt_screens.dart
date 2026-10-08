@@ -54,7 +54,7 @@ class BankDebtScreen extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: balance <= 0 || payment <= 0
                         ? null
-                        : () => state.pro
+                        : () => planAllows(PlanFeature.early, pro: state.pro)
                             ? Navigator.push(context, MaterialPageRoute(builder: (_) => EarlyRepaymentScreen(debtId: debtId)))
                             : showProGate(context, l.proGateEarly),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [Flexible(child: Text(l.earlyShort, overflow: TextOverflow.ellipsis)), if (!state.pro) ...[const SizedBox(width: 6), const ProBadge()]]),

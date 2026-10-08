@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:famcoin_core/famcoin_core.dart' show formatMoney;
+import 'package:famcoin_core/famcoin_core.dart' show PlanAccess, PlanFeature, formatMoney, planMatrix;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -27,9 +27,15 @@ class _TariffScreenState extends State<TariffScreen> {
   Map<String, dynamic>? _billing;
   bool _busy = false;
 
+  bool _requested = false;
+
+  // Не в initState: AppScope — унаследованный виджет, обращаться к нему до
+  // конца initState нельзя (в отладочной сборке это падение).
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_requested) return;
+    _requested = true;
     _loadBilling();
   }
 
@@ -148,20 +154,37 @@ class _TariffScreenState extends State<TariffScreen> {
     final locale = Localizations.localeOf(context).toString();
     String date(DateTime d) => DateFormat.yMMMMd(locale).format(d);
 
+    // Строки — из общей матрицы тарифа (UI03): те же правила проверяют
+    // приложение и сервер, поэтому таблица не обещает лишнего и не прячет
+    // доступное.
+    String name(PlanFeature f) => switch (f) {
+          PlanFeature.manual => l.tManual,
+          PlanFeature.accounts => l.accounts,
+          PlanFeature.limits => l.limits,
+          PlanFeature.goals => l.tGoals,
+          PlanFeature.debts => l.tDebts,
+          PlanFeature.reports => l.tReports,
+          PlanFeature.compare => l.tCompare,
+          PlanFeature.early => l.tEarly,
+          PlanFeature.voice => l.tVoice,
+          PlanFeature.statementImport => l.tImport,
+          PlanFeature.ai => l.ai,
+          PlanFeature.family => l.tFamily,
+          PlanFeature.history => l.tHistory,
+        };
+    String cell(PlanAccess a) => a.previewOnly
+        ? l.tPreview
+        : !a.allowed
+            ? '—'
+            : a.limit != null
+                ? '${a.limit}'
+                : a.perMonth != null
+                    ? l.tPerMonth(a.perMonth!)
+                    : a.unlimited
+                        ? '∞'
+                        : '✓';
     final rows = <(String, String, String)>[
-      (l.tManual, '✓', '✓'),
-      (l.accounts, '1', '∞'),
-      (l.limits, '2', '∞'),
-      (l.tDebts, '✓', '✓'),
-      (l.tGoals, '1', '∞'),
-      (l.tReports, '✓', '✓'),
-      (l.tCompare, '—', '✓'),
-      (l.tEarly, '—', '✓'),
-      (l.tVoice, '✓', '✓'),
-      (l.tReceipts, '—', l.soon),
-      (l.ai, '—', l.soon),
-      (l.tFamily, '✓', '✓'),
-      (l.tHistory, '✓', '✓'),
+      for (final e in planMatrix.entries) (name(e.key), cell(e.value.$1), cell(e.value.$2)),
     ];
 
     final stars = _billing?['stars'] as int?;

@@ -397,6 +397,8 @@ class BillingService {
               : 'Pro действует до $date. Продлить ещё на год можно в разделе «Тариф».',
         );
       }
+      // Последним: сбой здесь не должен помешать напоминаниям выше.
+      await retryRefunds();
     } catch (e, st) {
       stderr.writeln('billing: ${e.runtimeType}\n$st');
     } finally {
@@ -465,7 +467,12 @@ class BillingService {
     return s.first[0] as String;
   }
 
-  /// Возврат звёзд: платёж помечается, срок Pro уменьшается на оплаченный период.
+  /// Возврат звёзд (CS06): сначала сохраняется намерение (`refund_requested`),
+  /// потом Telegram возвращает звёзды, потом платёж помечается возвращённым и
+  /// срок Pro уменьшается на оплаченный период — ровно один раз ([applyRefund]).
+  /// Если сбой случился между Telegram и нашей записью, повтор (кнопка ещё раз
+  /// или [retryRefunds]) получает от Telegram «уже возвращено» и доводит
+  /// локальную часть; ответ 200 на повтор не считается новым возвратом.
   Future<void> refund(String paymentId) async {
     final p = await db.execute(
       Sql.named('SELECT user_id, charge_id, telegram_user_id, period_days, status FROM payments WHERE id = @p'),
@@ -473,20 +480,48 @@ class BillingService {
     );
     if (p.isEmpty) throw ApiError(404, 'not_found');
     if (p.first[4] == 'refunded') throw ApiError(409, 'already_refunded');
-    final ok = await telegram.refundStars(telegramUserId: p.first[2] as int, chargeId: p.first[1] as String);
-    if (!ok) throw ApiError(502, 'telegram_refund_failed');
-    await db.runTx((tx) async {
-      await tx.execute(Sql.named("UPDATE payments SET status = 'refunded', refunded_at = now() WHERE id = @p"), parameters: {'p': paymentId});
-      await tx.execute(
-        Sql.named('''
-          UPDATE users SET
-            pro_until = pro_until - make_interval(days => @d),
-            plan = CASE WHEN pro_until - make_interval(days => @d) > now() THEN 'pro' ELSE 'free' END,
-            revision = revision + 1
-          WHERE id = @u AND pro_until IS NOT NULL'''),
-        parameters: {'u': p.first[0].toString(), 'd': p.first[3] as int},
-      );
-    });
+    await db.execute(
+      Sql.named("UPDATE payments SET status = 'refund_requested', refund_requested_at = now() WHERE id = @p AND status = 'paid'"),
+      parameters: {'p': paymentId},
+    );
+    final outcome = await telegram.refundStars(telegramUserId: p.first[2] as int, chargeId: p.first[1] as String);
+    if (outcome == RefundOutcome.failed) throw ApiError(502, 'telegram_refund_failed');
+    await applyRefund(paymentId);
+  }
+
+  /// Локальная часть подтверждённого возврата: переход `refund_requested` →
+  /// `refunded` и уменьшение срока Pro одной транзакцией. Повтор ничего не
+  /// меняет (`false`).
+  Future<bool> applyRefund(String paymentId) => db.runTx((tx) async {
+        final r = await tx.execute(
+          Sql.named("UPDATE payments SET status = 'refunded', refunded_at = now() WHERE id = @p AND status = 'refund_requested' RETURNING user_id, period_days"),
+          parameters: {'p': paymentId},
+        );
+        if (r.isEmpty) return false;
+        await tx.execute(
+          Sql.named('''
+            UPDATE users SET
+              pro_until = pro_until - make_interval(days => @d),
+              plan = CASE WHEN pro_until - make_interval(days => @d) > now() THEN 'pro' ELSE 'free' END,
+              revision = revision + 1
+            WHERE id = @u AND pro_until IS NOT NULL'''),
+          parameters: {'u': r.first[0].toString(), 'd': r.first[1] as int},
+        );
+        return true;
+      });
+
+  /// Доводит возвраты, запрошенные больше минуты назад и не завершённые (сбой
+  /// или перезапуск между Telegram и нашей записью). Раз в 5 минут.
+  Future<int> retryRefunds() async {
+    final rows = await db.execute("SELECT id FROM payments WHERE status = 'refund_requested' AND refund_requested_at < now() - interval '1 minute' LIMIT 20");
+    for (final r in rows) {
+      try {
+        await refund(r[0].toString());
+      } catch (e) {
+        stderr.writeln('billing: возврат ${r[0]} не доведён: ${e is ApiError ? e.code : e.runtimeType}');
+      }
+    }
+    return rows.length;
   }
 
   static String _date(DateTime t) {

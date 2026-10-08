@@ -111,7 +111,7 @@ class AccountScreen extends StatelessWidget {
                 // чём просит бот. В обычной версии активный счёт один — как при добавлении.
                 PopupMenuButton<String>(
                   onSelected: (_) async {
-                    if (!state.pro && state.activeAccounts.isNotEmpty) {
+                    if (!planAllowsMore(PlanFeature.accounts, pro: state.pro, count: state.activeAccounts.length)) {
                       await showProGate(context, l.proGateAccounts);
                       return;
                     }

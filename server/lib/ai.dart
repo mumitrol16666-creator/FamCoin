@@ -12,7 +12,7 @@ import 'dart:io';
 
 import 'package:postgres/postgres.dart';
 
-import 'package:famcoin_core/famcoin_core.dart' show aiActions, knownAiActions;
+import 'package:famcoin_core/famcoin_core.dart' show aiActions, knownAiActions, proAiQuestionsPerMonth;
 
 import 'ai_check.dart';
 import 'auth_service.dart';
@@ -25,7 +25,7 @@ const maxContextBytes = 32 * 1024;
 const historyMessages = 10;
 
 /// Сообщений консультанту на человека в календарный месяц (Pro).
-const defaultChatQuota = 100;
+const defaultChatQuota = proAiQuestionsPerMonth; // то же число, что в таблице тарифа (UI03)
 
 class AiReply {
   const AiReply(this.text, {this.insufficientData = false, this.numbers = const [], this.actions = const [], this.tokensIn = 0, this.tokensOut = 0});

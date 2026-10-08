@@ -24,6 +24,16 @@ class _FakeTelegram extends Telegram {
   /// Отправленные сообщения: чат и текст.
   final sent = <(Object?, String)>[];
 
+  /// Возвраты звёзд: что просили и что уже возвращено на стороне Telegram.
+  final refundCalls = <String>[];
+  final refundedCharges = <String>{};
+
+  @override
+  Future<RefundOutcome> refundStars({required int telegramUserId, required String chargeId}) async {
+    refundCalls.add(chargeId);
+    return refundedCharges.add(chargeId) ? RefundOutcome.refunded : RefundOutcome.alreadyRefunded;
+  }
+
   @override
   Future<Map<String, dynamic>?> call(String method, Map<String, Object?> body) async {
     if (method == 'sendMessage') sent.add((body['chat_id'], '${body['text']}'));
@@ -49,6 +59,23 @@ class _FlakyBilling extends BillingService {
   Future<ProGrant?> grant(TxSession tx, {required String userId, required String chargeId, required int telegramUserId, required int stars}) {
     if (failing) throw StateError('таблица payments недоступна');
     return super.grant(tx, userId: userId, chargeId: chargeId, telegramUserId: telegramUserId, stars: stars);
+  }
+}
+
+/// Локальная часть возврата падает [failures] раз — уже после того, как
+/// Telegram вернул звёзды.
+class _CrashOnApply extends BillingService {
+  _CrashOnApply(super.db, super.telegram, super.notifications);
+
+  int failures = 1;
+
+  @override
+  Future<bool> applyRefund(String paymentId) {
+    if (failures > 0) {
+      failures--;
+      throw StateError('сбой записи после возврата в Telegram');
+    }
+    return super.applyRefund(paymentId);
   }
 }
 
@@ -290,5 +317,69 @@ void main() {
     expect(s[1], granted[1], reason: 'срок Pro тот же');
     expect((await inboxRow(charge))['status'], 'done');
     expect(tg2.sent, isEmpty, reason: 'повторного «Pro включён» нет');
+  });
+
+  // CS06 (аудит 08.10): внешний возврат и локальная запись разнесены сохраняемым
+  // намерением — сбой между ними доводится повтором ровно один раз.
+  Future<(String, DateTime)> paidPro(_FakeTelegram tg, String userId, String charge) async {
+    charges.add(charge);
+    await tg.onPayment!(4242, const {'id': 4242}, _paid(1, userId, charge)['message']['successful_payment'] as Map<String, dynamic>);
+    final r = await pool!.execute(Sql.named('SELECT p.id, u.pro_until FROM payments p JOIN users u ON u.id = p.user_id WHERE p.charge_id = @c'), parameters: {'c': charge});
+    return (r.first[0].toString(), r.first[1] as DateTime);
+  }
+
+  Future<(String, DateTime?)> refundState(String paymentId) async {
+    final r = await pool!.execute(Sql.named('SELECT p.status, u.pro_until FROM payments p JOIN users u ON u.id = p.user_id WHERE p.id = @p'), parameters: {'p': paymentId});
+    return (r.first[0] as String, r.first[1] as DateTime?);
+  }
+
+  test('CS06: Telegram вернул звёзды, наша запись упала — повтор получает «уже возвращено» и уменьшает Pro ровно один раз', () async {
+    if (skip()) return;
+    final userId = await newUser();
+    final tg = _FakeTelegram(pool!);
+    final billing = _CrashOnApply(pool!, tg, notif(tg));
+    final (paymentId, until) = await paidPro(tg, userId, 'charge-refund-${DateTime.now().microsecondsSinceEpoch}');
+
+    await expectLater(billing.refund(paymentId), throwsA(isA<StateError>()));
+    expect(await refundState(paymentId), ('refund_requested', until), reason: 'намерение сохранено, Pro пока не тронут');
+    expect(tg.refundedCharges, hasLength(1), reason: 'звёзды уже у покупателя');
+
+    // Повтор из админки: Telegram отвечает «уже возвращено» — это подтверждение.
+    await billing.refund(paymentId);
+    final (status, after) = await refundState(paymentId);
+    expect(status, 'refunded');
+    expect(until.difference(after!).inDays, BillingService(pool!, tg, notif(tg)).proDays, reason: 'срок уменьшен на оплаченный период');
+    await expectLater(billing.refund(paymentId), throwsA(isA<ApiError>().having((e) => e.code, 'code', 'already_refunded')));
+    expect((await refundState(paymentId)).$2, after, reason: 'второго уменьшения нет');
+  });
+
+  test('CS06: перезапуск между Telegram и нашей записью — новый процесс доводит возврат сам; двойное нажатие не уменьшает Pro дважды', () async {
+    if (skip()) return;
+    final userId = await newUser();
+    final tg = _FakeTelegram(pool!);
+    final crashed = _CrashOnApply(pool!, tg, notif(tg));
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final (first, until) = await paidPro(tg, userId, 'charge-r1-$stamp');
+    await expectLater(crashed.refund(first), throwsA(isA<StateError>()));
+
+    // Новый процесс: через минуту незавершённый возврат доводится по расписанию.
+    final restarted = BillingService(pool!, tg, notif(tg));
+    await pool!.execute(Sql.named("UPDATE payments SET refund_requested_at = now() - interval '2 minutes' WHERE id = @p"), parameters: {'p': first});
+    expect(await restarted.retryRefunds(), 1);
+    final (status, after) = await refundState(first);
+    expect(status, 'refunded');
+    expect(until.difference(after!).inDays, restarted.proDays);
+    expect(await restarted.retryRefunds(), 0);
+
+    // Вторая оплата и два одновременных «Вернуть звёзды».
+    final (second, before) = await paidPro(tg, userId, 'charge-r2-$stamp');
+    // Второе нажатие либо тоже доводит тот же возврат, либо узнаёт, что он уже сделан.
+    Future<void> click(BillingService b) => b.refund(second).catchError((Object e) {
+          if (e is! ApiError || e.code != 'already_refunded') throw e;
+        });
+    await Future.wait([click(restarted), click(BillingService(pool!, tg, notif(tg)))]);
+    final (status2, after2) = await refundState(second);
+    expect(status2, 'refunded');
+    expect(before.difference(after2!).inDays, restarted.proDays, reason: 'срок уменьшен один раз');
   });
 }

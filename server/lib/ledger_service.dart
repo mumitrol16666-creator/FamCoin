@@ -23,10 +23,8 @@ const maxEntityBytes = 8 * 1024;
 const maxProfileBytes = 32 * 1024;
 const maxBatch = 200;
 
-/// Ограничения обычного тарифа (D05).
-const freeMoneyAccounts = 1;
-const freeLimits = 2;
-const freeGoals = 1;
+// Ограничения обычного тарифа (D05) — freeMoneyAccounts, freeLimits,
+// freeGoals — в ядре (`plans.dart`), вместе с таблицей тарифа (UI03).
 
 /// Счета-копилки целей не расходуют лимит денежных счетов обычного тарифа.
 bool isPiggy(String accountId) => accountId.startsWith('piggy');

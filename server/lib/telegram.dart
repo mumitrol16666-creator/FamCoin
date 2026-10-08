@@ -30,6 +30,10 @@ String telegramEmail(int chatId) => 'tg$chatId@telegram.local';
 /// Чем закончилась привязка чата к аккаунту для уведомлений.
 enum LinkOutcome { linked, notFound, loginChat }
 
+/// Чем ответил Telegram на возврат звёзд (CS06): `alreadyRefunded` — этот
+/// платёж уже возвращён раньше (повтор после сбоя), это тоже подтверждение.
+enum RefundOutcome { refunded, alreadyRefunded, failed }
+
 class Telegram {
   Telegram(this.db, {required this.token});
 
@@ -72,13 +76,17 @@ class Telegram {
     }
   }
 
-  Future<Map<String, dynamic>?> _post(String method, Map<String, Object?> body) async {
+  Future<Map<String, dynamic>> _postRaw(String method, Map<String, Object?> body) async {
     final req = await _client.postUrl(Uri.parse('https://api.telegram.org/bot$token/$method'));
     req.headers.contentType = ContentType.json;
     req.write(jsonEncode(body));
     final res = await req.close();
     final text = await res.transform(utf8.decoder).join();
-    final data = jsonDecode(text) as Map<String, dynamic>;
+    return jsonDecode(text) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>?> _post(String method, Map<String, Object?> body) async {
+    final data = await _postRaw(method, body);
     if (data['ok'] != true) {
       stderr.writeln('telegram $method: ${data['description']}');
       return null;
@@ -196,8 +204,21 @@ class Telegram {
       null;
 
   /// Возврат звёзд покупателю; нужен id пользователя Telegram и id платежа.
-  Future<bool> refundStars({required int telegramUserId, required String chargeId}) async =>
-      (await call('refundStarPayment', {'user_id': telegramUserId, 'telegram_payment_charge_id': chargeId})) != null;
+  /// Ответ «уже возвращено» отличается от сбоя: так повтор после сбоя на нашей
+  /// стороне узнаёт, что деньги уже ушли покупателю.
+  Future<RefundOutcome> refundStars({required int telegramUserId, required String chargeId}) async {
+    if (!enabled) return RefundOutcome.failed;
+    try {
+      final data = await _postRaw('refundStarPayment', {'user_id': telegramUserId, 'telegram_payment_charge_id': chargeId}).timeout(const Duration(seconds: 20));
+      if (data['ok'] == true) return RefundOutcome.refunded;
+      final description = '${data['description']}';
+      stderr.writeln('telegram refundStarPayment: $description');
+      return description.toUpperCase().contains('ALREADY_REFUNDED') ? RefundOutcome.alreadyRefunded : RefundOutcome.failed;
+    } catch (e) {
+      stderr.writeln('telegram refundStarPayment: ${e.runtimeType}');
+      return RefundOutcome.failed;
+    }
+  }
 
   /// Паузы между повторами оплаты, которую не удалось обработать; после
   /// последней повторы идут с тем же интервалом.

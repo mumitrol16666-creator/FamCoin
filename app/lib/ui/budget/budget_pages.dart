@@ -1,4 +1,4 @@
-import 'package:famcoin_core/famcoin_core.dart' show everyYear;
+import 'package:famcoin_core/famcoin_core.dart' show PlanFeature, everyYear, planAllows;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -221,7 +221,7 @@ class BudgetDebtsPage extends StatelessWidget {
                 ),
               if (state.bankDebts.where((d) => state.debtBalance(d.id) > 0).length > 1)
                 OutlinedButton(
-                  onPressed: () => state.pro
+                  onPressed: () => planAllows(PlanFeature.early, pro: state.pro)
                       ? Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtStrategyScreen()))
                       : showProGate(context, l.proGateEarly),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [Text(l.strategy), if (!state.pro) ...[const SizedBox(width: 6), const ProBadge()]]),
