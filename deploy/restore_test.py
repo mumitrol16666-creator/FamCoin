@@ -7,7 +7,8 @@
 compose exec ... db <команда>` на временном кластере PostgreSQL (initdb в
 каталоге теста), а `stop`/`start api` и проверку API только записывает. Рабочие
 базы и серверы не затрагиваются. Нужны `initdb`, `pg_ctl`, `psql`, `pg_dump`
-в PATH (или каталог в POSTGRES_BIN); без них тесты пропускаются.
+в PATH (или каталог в POSTGRES_BIN); без них тесты пропускаются, а с
+RESTORE_TEST_REQUIRED=1 (так в CI) — падают: пропуск не должен выглядеть зелёным.
 """
 import glob
 import gzip
@@ -79,8 +80,11 @@ class RestoreTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp(prefix='famcoin-restore-test-', dir='/tmp'))
         initdb, path = find('initdb')
-        if not initdb or not find('pg_ctl')[0]:
-            raise unittest.SkipTest('нет initdb/pg_ctl')
+        missing = [t for t in ('initdb', 'pg_ctl', 'psql', 'pg_dump') if not find(t)[0]]
+        if missing:
+            if os.environ.get('RESTORE_TEST_REQUIRED') == '1':
+                raise RuntimeError(f'RESTORE_TEST_REQUIRED=1, а нет {", ".join(missing)}')
+            raise unittest.SkipTest(f'нет {", ".join(missing)}')
         cls.path = path
         cls.port = free_port()
         cls.env = dict(os.environ, PATH=path, LC_ALL='C', LANG='C')

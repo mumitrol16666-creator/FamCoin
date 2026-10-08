@@ -50,13 +50,14 @@ jobs:
           docker compose logs api
           exit 1
       - uses: dart-lang/setup-dart@v1
-      # Все тесты, которым нужна база: вход через Telegram, напоминания, бот,
-      # консультант, импорт выписки и виды справочников (ограничение таблицы
-      # против списка в коде).
+      # Все тесты, которым нужна база, — каждый файл test/*_db_test.dart, без
+      # ручного списка: новый файл попадает сюда сам. TEST_DB_REQUIRED=1
+      # превращает «база недоступна» в падение, а не в зелёный пропуск.
+      # Состав проверяет server/test/ci_config_test.dart.
       - name: Тесты сервера на настоящей базе
         env:
           TEST_DB_REQUIRED: '1'
-        run: cd server && dart pub get && dart test test/telegram_login_db_test.dart test/month_nudge_db_test.dart test/month_reconciliation_db_test.dart test/debt_report_reconciliation_db_test.dart test/chat_entry_db_test.dart test/ai_db_test.dart test/entity_kinds_db_test.dart test/statement_import_db_test.dart
+        run: cd server && dart pub get && dart test test/*_db_test.dart
       # Сервер при старте читает свой проверочный PDF: в образе должен быть
       # pdftotext, и запускаться он должен без прав и с потолком памяти.
       - name: Чтение PDF в образе сервера
@@ -71,3 +72,18 @@ jobs:
       - name: Журнал сервера при сбое
         if: failure()
         run: docker compose logs api db | tail -200
+
+  # Восстановление базы из копии (deploy/restore.sh): настоящий скрипт на
+  # временном кластере PostgreSQL, docker заменён заглушкой. Без утилит
+  # PostgreSQL job падает (RESTORE_TEST_REQUIRED=1), а не пропускает проверки.
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Утилиты PostgreSQL
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql
+      - name: Проверки восстановления
+        env:
+          RESTORE_TEST_REQUIRED: '1'
+        run: python3 deploy/restore_test.py

@@ -37,6 +37,7 @@ void main() {
   test('список пользователей показывает имя, фамилию, имя из Telegram и режим; поиск находит по имени', () async {
     final db = pool;
     if (db == null) {
+      if (Platform.environment['TEST_DB_REQUIRED'] == '1') fail('TEST_DB_REQUIRED=1, а база недоступна');
       markTestSkipped('база не запущена');
       return;
     }
