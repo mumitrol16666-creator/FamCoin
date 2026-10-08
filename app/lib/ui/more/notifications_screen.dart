@@ -19,6 +19,12 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<Map<String, dynamic>>? _items;
   Map<String, dynamic>? _settings;
+
+  /// Последняя загрузка не удалась (UI04). Пока данных нет — вместо вечного
+  /// индикатора ошибка и «Повторить»; уже показанные данные при ошибке
+  /// обновления остаются на экране.
+  Object? _error;
+  bool _loading = false;
   String? _code;
   bool _loadingCode = false;
   String _push = 'unsupported';
@@ -31,6 +37,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _load() async {
     final state = AppScope.of(context).state;
+    // Первая загрузка идёт из didChangeDependencies — там без setState; после
+    // ошибки «Повторить» снова показывает индикатор.
+    _loading = true;
+    if (_error != null) setState(() {});
     try {
       final items = await state.api.notifications(state.token);
       final settings = await state.api.notificationSettings(state.token);
@@ -40,6 +50,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _items = items;
         _settings = settings;
         _push = push;
+        _error = null;
+        _loading = false;
       });
       // Подписка есть в браузере, но сервер её потерял (например, удалил как
       // просроченную) — передаём заново, разрешение повторно не спрашивается.
@@ -54,7 +66,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
       if (items.any((i) => i['read'] != true)) await state.api.markNotificationsRead(state.token);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorText(context.l10n, e))));
+      if (!mounted) return;
+      final hadData = _items != null;
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
+      // Данные уже на экране — о сбое обновления достаточно короткого сообщения.
+      if (hadData) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorText(context.l10n, e))));
     }
   }
 
@@ -220,7 +239,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               SizedBox(width: double.infinity, child: OutlinedButton(onPressed: () => _test('month'), child: Text(l.sendTestMonth))),
             ],
             SectionHeader(l.notificationsHistory),
-            if (_items == null)
+            if (_items == null && _error != null && !_loading)
+              AppCard(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(errorText(l, _error!)),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: Text(l.retry)),
+                ]),
+              )
+            else if (_items == null)
               const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
             else if (_items!.isEmpty)
               EmptyHint(l.noNotifications, icon: Icons.notifications_none)

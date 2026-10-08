@@ -156,12 +156,16 @@ class WebPush {
   }
 
   /// Отправляет на все устройства пользователя; мёртвые подписки удаляет.
-  Future<void> sendToUser(String userId, String title, String body, {String tag = 'famcoin', String? url}) async {
+  /// `false` — хотя бы одному устройству доставить не удалось (временная
+  /// ошибка, повтор имеет смысл); устаревшие подписки удаляются и ошибкой не
+  /// считаются. Без подписок — `true`.
+  Future<bool> sendToUser(String userId, String title, String body, {String tag = 'famcoin', String? url}) async {
     final rows = await db.execute(
       Sql.named('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = @u'),
       parameters: {'u': userId},
     );
-    if (rows.isEmpty) return;
+    if (rows.isEmpty) return true;
+    var ok = true;
     final k = await keys();
     final payload = utf8.encode(jsonEncode({'title': title, 'body': body, 'tag': tag, if (url != null) 'url': url}));
     for (final r in rows) {
@@ -172,11 +176,14 @@ class WebPush {
           await db.execute(Sql.named('DELETE FROM push_subscriptions WHERE id = @i'), parameters: {'i': sub.id});
         } else if (status >= 300) {
           stderr.writeln('webpush: ${Uri.parse(sub.endpoint).host} ответил $status');
+          ok = false;
         }
       } catch (e) {
         stderr.writeln('webpush: ${e.runtimeType}');
+        ok = false;
       }
     }
+    return ok;
   }
 
   Future<int> _send(VapidKeys k, PushSubscription sub, Uint8List payload) async {

@@ -79,7 +79,7 @@ void main() {
       await db.execute(Sql.named("UPDATE users SET notif = notif || '{\"month\": false}'::jsonb WHERE id = @u"), parameters: {'u': off});
 
       Future<List<List<Object?>>> rows(String id) async =>
-          [for (final r in await db.execute(Sql.named("SELECT title, body FROM notifications WHERE user_id = @u AND title LIKE 'Сверьте%'"), parameters: {'u': id})) r.toList()];
+          [for (final r in await db.execute(Sql.named("SELECT title, body FROM notifications WHERE user_id = @u AND title LIKE 'Сверьте%' ORDER BY created_at"), parameters: {'u': id})) r.toList()];
 
       // 2 сентября, 10:00 по Астане: прошлый месяц — август.
       await svc.runMonth(DateTime(2026, 9, 2, 10));
@@ -96,10 +96,14 @@ void main() {
       await svc.runMonth(DateTime(2026, 9, 2, 10, 1));
       expect(await rows(active), hasLength(1));
 
-      // Следующий месяц — новое напоминание.
+      // Метку потеряли — напоминание за тот же месяц всё равно не дублируется:
+      // ключ уведомления «стадия:месяц» защищает и без неё (CS05), а метка
+      // восстанавливается той же транзакцией.
       await db.execute(Sql.named("UPDATE users SET notif = notif - 'sentMonth' WHERE id = @u"), parameters: {'u': active});
       await svc.runMonth(DateTime(2026, 9, 3, 12));
-      expect(await rows(active), hasLength(2), reason: 'после сброса метки уходит снова — метка и есть защита от повтора');
+      expect(await rows(active), hasLength(1));
+      final flag = await db.execute(Sql.named("SELECT notif->>'sentMonth' FROM users WHERE id = @u"), parameters: {'u': active});
+      expect(flag.first[0], '2026-08');
 
       // Пробное уведомление: сегодня (сентябрь) операций нет — берём прошлый месяц с учётом;
       // текущий месяц даже для предпросмотра закрывать нельзя.
@@ -113,7 +117,7 @@ void main() {
       // Новый пользователь с учётом в сентябре получает каждую стадию один раз.
       final prepare = await user();
       await ledger.command(prepare, {'commandId': 'sept-expense', 'type': 'expense', 'id': 'sept', 'date': '2026-09-15', 'account': 'cash', 'splits': {'food': '10000'}});
-      Future<List<String>> titles(String id) async => [for (final r in await db.execute(Sql.named('SELECT title FROM notifications WHERE user_id = @u'), parameters: {'u': id})) r[0] as String];
+      Future<List<String>> titles(String id) async => [for (final r in await db.execute(Sql.named('SELECT title FROM notifications WHERE user_id = @u ORDER BY created_at'), parameters: {'u': id})) r[0] as String];
       await svc.runMonth(DateTime(2026, 9, 27, 12));
       expect(await titles(prepare), isEmpty);
       await Future.wait([svc.runMonth(DateTime(2026, 9, 28, 10)), svc.runMonth(DateTime(2026, 9, 28, 10))]);
