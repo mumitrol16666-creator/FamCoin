@@ -148,6 +148,7 @@ String? ledgerErrorText(AppLocalizations l, String? code) => switch (code) {
       'hasRefunds' => l.leHasRefunds,
       'reverseBreaksDebt' => l.leReverseBreaksDebt,
       'occurrencePaid' => l.leOccurrencePaid,
+      'entityChanged' => l.leEntityChanged,
       'writeOffExceeds' => l.leWriteOffExceeds,
       'restoreSuperseded' => l.leRestoreSuperseded,
       _ => null,
@@ -169,8 +170,9 @@ Future<bool> runAction(BuildContext context, Future<void> Function() action) asy
       // же идентификаторами и не создаст второй факт (APP-03).
       attempt.uncertain = e is ApiException && (e.isNetwork || e.code == 'timeout');
     }
-    // Срок уже оплачен с другого устройства: показываем состояние сервера.
-    if (e is ApiException && e.ledgerCode == 'occurrencePaid' && context.mounted) unawaited(AppScope.of(context).state.refresh());
+    // Срок уже оплачен или платёж уже изменён с другого устройства (N03):
+    // показываем состояние сервера.
+    if (e is ApiException && (e.ledgerCode == 'occurrencePaid' || e.ledgerCode == 'entityChanged') && context.mounted) unawaited(AppScope.of(context).state.refresh());
     if (e is AttemptChanged) {
       // Важнее прежней «нет связи»: показывается сразу, а не в очереди за ней.
       messenger

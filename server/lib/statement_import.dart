@@ -660,10 +660,9 @@ class StatementImport {
     final kk = v.locale == 'kk';
     final plan = planImport(st, v, account, id, today, links: importLinks(data));
     final opening = openingCommands(plan, st, account, id);
-    final paid = <String, Set<String>>{};
     final units = <List<Map<String, dynamic>>>[
       if (opening.isNotEmpty) opening,
-      for (final o in plan.ops) [o.command, if (o.mark != null) markCommand(o.mark!, v, paid)],
+      for (final o in plan.ops) [o.command, if (o.mark != null) markCommand(o.mark!)],
       if (plan.restartCarry)
         [
           {
@@ -764,7 +763,6 @@ class StatementImport {
     final kk = v.locale == 'kk';
     final l = v.ledger;
     final marks = {for (final m in (data['marks'] as List? ?? const []).cast<Map>()) m['n'] as int: m};
-    final paid = <String, Set<String>>{};
     final units = <List<Map<String, dynamic>>>[];
     for (final n in (data['applied'] as List? ?? const []).cast<int>()) {
       final tx = l.byId(importRowId(id, n));
@@ -781,13 +779,7 @@ class StatementImport {
       final mark = marks[n];
       final entity = mark == null ? null : v.of(mark['kind'] as String)[mark['id']];
       if (mark != null && entity != null) {
-        final periods = paid.putIfAbsent('${mark['kind']}|${mark['id']}', () => {...((entity['paid'] as List?) ?? const []).cast<String>()})..remove(mark['period']);
-        unit.add({
-          'type': 'upsertEntity',
-          'kind': mark['kind'],
-          'entityId': mark['id'],
-          'data': {...entity, 'paid': periods.toList()..sort()},
-        });
+        unit.add(markCommand((kind: mark['kind'] as String, id: mark['id'] as String, period: mark['period'] as String), paid: false));
       }
       units.add(unit);
     }

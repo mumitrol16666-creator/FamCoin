@@ -407,6 +407,37 @@ void main() {
       await a.deleteTransaction(tx.id); // a ещё не знает об октябре
       expect(f.entities['planned']!['rent']!['paid'], ['2026-10']);
     });
+
+    test('N03: форма условий, открытая до оплаты на другом устройстве, не возвращает оплаченный срок', () async {
+      final (f, a, b) = await twoDevices();
+      final stale = b.planned.single; // b открыл правку до оплаты
+      await a.payDue(a.dueItems(DateTime(2026, 10, 31)).firstWhere((d) => d.period == '2026-09'), account: 'cash', amount: kzt(10000));
+      await b.upsert(stale.entityKind, stale.id, stale.copyWith(name: 'Аренда квартиры').toJson());
+      expect(f.entities['planned']!['rent']!['name'], 'Аренда квартиры');
+      expect(f.entities['planned']!['rent']!['paid'], ['2026-09'], reason: 'отметка оплаты осталась');
+      await b.refresh();
+      expect(b.dueItems(DateTime(2026, 10, 31)).where((d) => d.period == '2026-09'), isEmpty, reason: 'срок не вернулся в неоплаченные');
+      expect(b.monthEndForecast.remainingObligations, a.monthEndForecast.remainingObligations);
+    });
+
+    test('N03: две правки условий по одной версии — вторая получает отказ entityChanged и не затирает первую', () async {
+      final (f, a, b) = await twoDevices();
+      final staleA = a.planned.single;
+      final staleB = b.planned.single;
+      await a.upsert(staleA.entityKind, staleA.id, staleA.copyWith(amount: kzt(12000)).toJson());
+      await expectLater(
+        b.upsert(staleB.entityKind, staleB.id, staleB.copyWith(name: 'Квартира').toJson()),
+        throwsA(isA<ApiException>().having((e) => e.ledgerCode, 'code', 'entityChanged')),
+      );
+      expect(f.entities['planned']!['rent']!['amount'], '${kzt(12000)}');
+      expect(f.entities['planned']!['rent']!['name'], 'Аренда');
+      // После обновления правка по свежей версии проходит.
+      await b.refresh();
+      final fresh = b.planned.single;
+      await b.upsert(fresh.entityKind, fresh.id, fresh.copyWith(name: 'Квартира').toJson());
+      expect(f.entities['planned']!['rent']!['name'], 'Квартира');
+      expect(f.entities['planned']!['rent']!['amount'], '${kzt(12000)}');
+    });
   });
 
   group('C03/C08 в приложении', () {

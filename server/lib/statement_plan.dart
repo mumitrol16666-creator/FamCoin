@@ -751,16 +751,8 @@ List<Map<String, dynamic>> openingCommands(ImportPlan plan, BankStatement st, St
         },
     ];
 
-/// Отметка сроков оплаченными: справочник платежа с дополненным списком
-/// `paid`. [paidSoFar] копит периоды по платежам — у платежа может быть
-/// несколько сроков в одной выписке.
-Map<String, dynamic> markCommand(DueMark mark, LedgerView v, Map<String, Set<String>> paidSoFar) {
-  final data = v.of(mark.kind)[mark.id] ?? const <String, dynamic>{};
-  final paid = paidSoFar.putIfAbsent('${mark.kind}|${mark.id}', () => {...((data['paid'] as List?) ?? const []).cast<String>()})..add(mark.period);
-  return {
-    'type': 'upsertEntity',
-    'kind': mark.kind,
-    'entityId': mark.id,
-    'data': {...data, 'paid': paid.toList()..sort()},
-  };
-}
+/// Отметка срока оплаченным (или снятие отметки при отмене импорта): одна
+/// команда `setPaid` на срок. Раньше это была перезапись всей записи платежа
+/// с дополненным `paid`; запись условий отметки больше не меняет (N03).
+Map<String, dynamic> markCommand(DueMark mark, {bool paid = true}) =>
+    {'type': setPaidCommand, 'kind': mark.kind, 'entityId': mark.id, 'period': mark.period, 'paid': paid};

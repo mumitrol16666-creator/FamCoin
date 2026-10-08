@@ -360,13 +360,10 @@ void main() {
       expect(p.ops[2].mark, (kind: 'planned', id: 'p1', period: '2026-10'));
       expect(p.restartCarry, isTrue, reason: 'обычная покупка 13.09 попала в окно переноса');
 
-      // Отметки копятся: вторая команда несёт оба периода.
-      final paid = <String, Set<String>>{};
-      expect((markCommand(p.ops[0].mark!, v, paid)['data'] as Map)['paid'], ['2026-09']);
-      final second = markCommand(p.ops[2].mark!, v, paid);
-      expect((second['kind'], second['entityId']), ('planned', 'p1'));
-      expect((second['data'] as Map)['paid'], ['2026-09', '2026-10']);
-      expect((second['data'] as Map)['name'], 'Интернет', reason: 'остальные поля платежа не теряются');
+      // Отметка — своя команда на каждый срок, условия платежа не переписываются (N03).
+      expect(markCommand(p.ops[0].mark!), {'type': setPaidCommand, 'kind': 'planned', 'entityId': 'p1', 'period': '2026-09', 'paid': true});
+      expect(markCommand(p.ops[2].mark!)['period'], '2026-10');
+      expect(markCommand(p.ops[2].mark!, paid: false)['paid'], isFalse);
 
       // Плановая трата — вне дневного лимита, как при оплате из приложения.
       apply(l, p, st);

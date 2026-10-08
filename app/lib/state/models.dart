@@ -239,7 +239,7 @@ class GoalInfo {
 
 /// Плановый платёж: план не меняет баланс, факт оплаты проводится отдельно (D14).
 class PlannedInfo {
-  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once, this.goalId, this.every = everyMonth, this.weekday, this.monthOfYear, this.previous, this.person, this.onDate});
+  const PlannedInfo(this.id, this.name, this.amount, this.day, this.category, this.debtId, this.paid, {this.start, this.once, this.goalId, this.every = everyMonth, this.weekday, this.monthOfYear, this.previous, this.person, this.onDate, this.rev});
   factory PlannedInfo.fromJson(String id, Map<String, dynamic> d) => PlannedInfo(
         id,
         d['name'] as String? ?? '',
@@ -257,9 +257,14 @@ class PlannedInfo {
         previous: d['prev'] is Map ? PaySchedule.fromJson((d['prev'] as Map).cast<String, dynamic>()) : null,
         person: d['person'] as String?,
         onDate: d['onDate'] is String ? dateFromJson(d['onDate']) : null,
+        rev: (d['rev'] as num?)?.toInt(),
       );
   final String id;
   final String name;
+
+  /// Версия условий на сервере (N03): правка уходит с ней, и сервер отклоняет
+  /// её, если условия уже поменяли на другом устройстве. `null` — новая запись.
+  final int? rev;
   final int amount;
 
   /// Число месяца, 1–31; в коротком месяце — последний день.
@@ -329,6 +334,7 @@ class PlannedInfo {
       previous: versioned ? schedule : previous,
       person: person,
       onDate: onDate,
+      rev: rev,
     );
   }
 
@@ -356,6 +362,7 @@ class PlannedInfo {
         if (previous != null) 'prev': previous!.toJson(),
         if (person != null) 'person': person,
         if (onDate != null) 'onDate': dateToJson(onDate!),
+        if (rev != null) 'rev': rev,
       };
 }
 

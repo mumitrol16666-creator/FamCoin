@@ -176,6 +176,29 @@ bool plannedDebtActive(Ledger l, String? debtId, {String? person}) {
   return id == null || (l.hasAccount(liabilityAccount(id)) && l.balance(liabilityAccount(id)) > 0);
 }
 
+/// Виды справочника с отметками сроков: условия и исполнение в одной записи.
+const paidMarkKinds = {'planned', 'purchase'};
+
+/// Сохранение записи платежа или разовой покупки (N03): условия — из команды,
+/// исполнение (`paid`) — из уже сохранённой записи. Форма, открытая до чужой
+/// оплаты (или её отмены), не возвращает прежние отметки: отметки меняет
+/// только `setPaid`. Версия условий — поле `rev`: команда с `rev`, отличным от
+/// сохранённого, построена по устаревшей записи — условия уже поменяли на
+/// другом устройстве, отказ `entityChanged` вместо молчаливой замены чужой
+/// правки. Команда без `rev` (старое приложение) не проверяется. Новая запись
+/// получает `rev: 1`, каждое сохранение — следующий номер. Общая для сервера,
+/// приложения и тестовой заглушки сервера; [check] `false` — только слить
+/// (приложение после ответа сервера).
+Map<String, dynamic> mergePlannedUpsert(Map<String, dynamic>? stored, Map<String, dynamic> incoming, {bool check = true}) {
+  if (stored == null) return {...incoming, 'rev': 1};
+  final rev = (stored['rev'] as num?)?.toInt() ?? 0;
+  final base = incoming['rev'];
+  if (check && base is num && base.toInt() != rev) {
+    throw LedgerException('Этот платёж уже изменили на другом устройстве', code: 'entityChanged');
+  }
+  return {...incoming, 'paid': stored['paid'] ?? const <String>[], 'rev': rev + 1};
+}
+
 /// Сколько осталось внести к сроку возврата личного долга (N01): договорённая
 /// сумма [amount] минус части к этому сроку (`meta.part` записей с этим
 /// `meta.planned` и `meta.period`), но не больше долга человеку сейчас. Общая

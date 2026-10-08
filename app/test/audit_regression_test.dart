@@ -158,7 +158,9 @@ class FakeServer {
         if (c['expectedRevision'] != revision) throw LedgerException('monthChanged');
         reconciliations[dateToJson(month)] = {'month': dateToJson(month), 'snapshot': reconciliationSnapshot(ledger, month), 'closedAt': now.toUtc().toIso8601String(), 'invalidatedAt': null};
       case 'upsertEntity':
-        entities.putIfAbsent(c['kind'] as String, () => {})[c['entityId'] as String] = Map<String, dynamic>.from(c['data'] as Map);
+        final kind = entities.putIfAbsent(c['kind'] as String, () => {});
+        final data = Map<String, dynamic>.from(c['data'] as Map);
+        kind[c['entityId'] as String] = paidMarkKinds.contains(c['kind']) ? mergePlannedUpsert(kind[c['entityId']], data) : data;
       case 'deleteEntity':
         entities[c['kind']]?.remove(c['entityId']);
       case setPaidCommand:

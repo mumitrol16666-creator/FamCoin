@@ -117,7 +117,9 @@ void main() {
         showPayDueSheet(c, s.dueItems(DateTime(2026, 9, 30)).first);
       });
       await f.plan();
-      await f.state.upsert('planned', 'rent', PlannedInfo('rent', 'Rent', kzt(10000), 10, 'home', null, {'2026-08'}, start: DateTime(2026, 8, 1)).toJson());
+      await f.state.upsert('planned', 'rent', PlannedInfo('rent', 'Rent', kzt(10000), 10, 'home', null, const {}, start: DateTime(2026, 8, 1), rev: 1).toJson());
+      // Отметка срока — своей командой: запись условий отметки не меняет (N03).
+      await f.state.send({'type': setPaidCommand, 'kind': 'planned', 'entityId': 'rent', 'period': '2026-08', 'paid': true});
       await openForm(tester);
       expect(find.text('Изменить платёж'), findsOneWidget);
       expect(find.text('Удалить платёж'), findsOneWidget);

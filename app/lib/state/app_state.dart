@@ -351,7 +351,10 @@ class AppState extends ChangeNotifier {
           _applyLocal(item);
         }
       case 'upsertEntity':
-        _entities.putIfAbsent(c['kind'] as String, () => {})[c['entityId'] as String] = Map<String, dynamic>.from(c['data'] as Map);
+        final kind = _entities.putIfAbsent(c['kind'] as String, () => {});
+        final data = Map<String, dynamic>.from(c['data'] as Map);
+        // Как на сервере (N03): отметки сроков остаются свои, версия условий +1.
+        kind[c['entityId'] as String] = paidMarkKinds.contains(c['kind']) ? mergePlannedUpsert(kind[c['entityId']], data, check: false) : data;
         if (c['kind'] == 'category') _syncCategories();
       case 'deleteEntity':
         _entities[c['kind']]?.remove(c['entityId']);

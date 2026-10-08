@@ -367,11 +367,21 @@ class LedgerService {
           );
           if ((others.first[0] as int) >= freeLimits) throw ApiError(402, 'plan_limit');
         }
+        var next = data;
+        if (paidMarkKinds.contains(kind)) {
+          // Условия платежа меняются отдельно от исполнения (N03): отметки
+          // сроков — из сохранённой записи, устаревшая версия условий — отказ.
+          final rows = await ctx.s.execute(
+            Sql.named('SELECT data FROM entities WHERE user_id = @u AND kind = @k AND id = @id FOR UPDATE'),
+            parameters: {'u': ctx.userId, 'k': kind, 'id': id},
+          );
+          next = mergePlannedUpsert(rows.isEmpty ? null : (rows.first[0] as Map).cast<String, dynamic>(), data.cast<String, dynamic>());
+        }
         await ctx.s.execute(
           Sql.named('''
             INSERT INTO entities (user_id, kind, id, data) VALUES (@u, @k, @id, @d:jsonb)
             ON CONFLICT (user_id, kind, id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()'''),
-          parameters: {'u': ctx.userId, 'k': kind, 'id': id, 'd': data},
+          parameters: {'u': ctx.userId, 'k': kind, 'id': id, 'd': next},
         );
       case setPaidCommand:
         // Отметка срока (R01): ключ добавляется или снимается в актуальной записи
