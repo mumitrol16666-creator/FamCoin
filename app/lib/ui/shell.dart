@@ -140,12 +140,19 @@ class _ShellState extends State<Shell> {
           child: Stack(children: [
             // Вкладки живут одновременно (состояние не теряется), активная
             // проявляется коротким затуханием вместо резкой смены.
+            // Скрытая вкладка не принимает ни нажатий, ни голоса экранного
+            // диктора, ни клавиатурного фокуса (UI02): иначе Tab с Главной уходил
+            // в невидимое поле поиска Журнала, а начатый там ввод продолжался
+            // после смены вкладки.
             for (final (i, w) in tabs.indexed)
               IgnorePointer(
                 ignoring: _tab != i,
-                child: ExcludeSemantics(
+                child: ExcludeFocus(
                   excluding: _tab != i,
-                  child: AnimatedOpacity(opacity: _tab == i ? 1 : 0, duration: const Duration(milliseconds: 180), curve: Curves.easeOut, child: w),
+                  child: ExcludeSemantics(
+                    excluding: _tab != i,
+                    child: AnimatedOpacity(opacity: _tab == i ? 1 : 0, duration: const Duration(milliseconds: 180), curve: Curves.easeOut, child: w),
+                  ),
                 ),
               ),
             // Запрос в полёте: тонкая полоска под статус-баром, экран не блокируется.

@@ -103,11 +103,7 @@ class _JournalScreenState extends State<JournalScreen> {
         String monthChip(DateTime m) => toBeginningOfSentenceCase(m.year == state.today.year ? DateFormat.MMMM(locale).format(m) : DateFormat.yMMMM(locale).format(m));
         final customMonth = _month != null && _month != thisMonth && _month != prevMonth;
 
-        return Scaffold(
-          appBar: AppBar(title: Text(l.navOps)),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-            children: [
+        final controls = <Widget>[
               TextField(
                 controller: _query,
                 onChanged: (_) => setState(() {}),
@@ -146,20 +142,36 @@ class _JournalScreenState extends State<JournalScreen> {
                   padding: const EdgeInsets.only(top: 12),
                   child: EmptyHint(_view == _View.deleted && q.isEmpty ? l.noDeleted : q.isEmpty && _month == null ? l.noOperations : l.nothingFound),
                 ),
-              for (final e in groups.entries) ...[
-                Padding(
+        ];
+        // Строки истории строятся лениво (UI05): за годы это тысячи операций, а
+        // видно десяток. Плоский список: дата дня, затем его операции.
+        final rows = <Object>[
+          for (final e in groups.entries) ...[
+            e.key,
+            for (var k = 0; k < e.value.length; k++) (e.value[k], k == 0, k == e.value.length - 1),
+          ],
+        ];
+
+        return Scaffold(
+          appBar: AppBar(title: Text(l.navOps)),
+          body: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+            itemCount: controls.length + rows.length,
+            itemBuilder: (context, i) {
+              if (i < controls.length) return controls[i];
+              final row = rows[i - controls.length];
+              if (row is DateTime) {
+                return Padding(
                   padding: const EdgeInsets.fromLTRB(2, 14, 2, 4),
                   child: Row(children: [
-                    Expanded(child: Text(dayLabel(e.key), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fam.text2))),
-                    if (dayTotal(e.key) case final total?) Text(total, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fam.text2)),
+                    Expanded(child: Text(dayLabel(row), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fam.text2))),
+                    if (dayTotal(row) case final total?) Text(total, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fam.text2)),
                   ]),
-                ),
-                AppCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Column(children: [for (final tx in e.value) TransactionTile(tx)]),
-                ),
-              ],
-            ],
+                );
+              }
+              final (tx, first, last) = row as (Transaction, bool, bool);
+              return CardRow(first: first, last: last, child: TransactionTile(tx));
+            },
           ),
         );
       },

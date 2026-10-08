@@ -27,9 +27,9 @@ class CategoryScreen extends StatelessWidget {
         final limit = state.limits.where((x) => x.category == category).firstOrNull;
         return Scaffold(
           appBar: AppBar(title: Text(categoryName(l, category))),
-          body: ListView(
+          body: TransactionHistoryList(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-            children: [
+            header: [
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(toBeginningOfSentenceCase(DateFormat.yMMMM(locale).format(month)), style: TextStyle(fontSize: 12, color: fam.text2)),
@@ -43,14 +43,9 @@ class CategoryScreen extends StatelessWidget {
                   ],
                 ]),
               ),
-              if (txs.isEmpty)
-                EmptyHint(l.noOperations)
-              else
-                AppCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Column(children: [for (final t in txs) TransactionTile(t)]),
-                ),
+              if (txs.isEmpty) EmptyHint(l.noOperations),
             ],
+            transactions: txs,
           ),
         );
       },

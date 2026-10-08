@@ -376,6 +376,31 @@ class AppCard extends StatelessWidget {
   }
 }
 
+/// Строка длинного списка внутри общей карточки (UI05): список строится
+/// лениво, по строке, а выглядит одной карточкой — как `AppCard` с `Column`.
+/// У первой строки скруглён верх, у последней — низ и отступ после карточки.
+class CardRow extends StatelessWidget {
+  const CardRow({super.key, required this.child, required this.first, required this.last});
+  final Widget child;
+  final bool first;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const r = Radius.circular(18);
+    return Padding(
+      padding: EdgeInsets.only(bottom: last ? 12 : 0),
+      child: Material(
+        color: theme.cardTheme.color ?? theme.colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: first ? r : Radius.zero, bottom: last ? r : Radius.zero)),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(padding: EdgeInsets.fromLTRB(16, first ? 4 : 0, 16, last ? 4 : 0), child: child),
+      ),
+    );
+  }
+}
+
 class SectionHeader extends StatelessWidget {
   const SectionHeader(this.title, {super.key, this.action, this.onAction});
   final String title;

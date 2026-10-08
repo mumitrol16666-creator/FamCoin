@@ -34,9 +34,9 @@ class BankDebtScreen extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(title: Text(debt.name)),
-          body: ListView(
+          body: TransactionHistoryList(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-            children: [
+            header: [
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('${debtKindName(l, debt.kind)} · ${l.balanceLeft}', style: TextStyle(fontSize: 12, color: fam.text2)),
@@ -93,13 +93,10 @@ class BankDebtScreen extends StatelessWidget {
               ] else if (balance > 0 && payment > 0)
                 InfoBanner(l.paymentBelowInterest, color: fam.warnBg),
               SectionHeader(l.history),
-              if (history.isEmpty)
-                EmptyHint(l.noPaymentsYet)
-              else
-                AppCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Column(children: [for (final t in history) TransactionTile(t)]),
-                ),
+              if (history.isEmpty) EmptyHint(l.noPaymentsYet),
+            ],
+            transactions: history,
+            footer: [
               const SizedBox(height: 12),
               TextButton(
                 style: TextButton.styleFrom(foregroundColor: fam.expense),
@@ -175,9 +172,9 @@ class PersonDebtScreen extends StatelessWidget {
         ]..sort((a, b) => b.date.compareTo(a.date));
         return Scaffold(
           appBar: AppBar(title: Text(person)),
-          body: ListView(
+          body: TransactionHistoryList(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-            children: [
+            header: [
               if (debts.isEmpty) AppCard(child: Text(l.debtClosed, style: TextStyle(color: fam.income))),
               for (final d in debts)
                 AppCard(
@@ -227,14 +224,9 @@ class PersonDebtScreen extends StatelessWidget {
                   ]),
                 ),
               SectionHeader(l.history),
-              if (history.isEmpty)
-                EmptyHint(l.noOperations)
-              else
-                AppCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Column(children: [for (final t in history) TransactionTile(t)]),
-                ),
+              if (history.isEmpty) EmptyHint(l.noOperations),
             ],
+            transactions: history,
           ),
         );
       },

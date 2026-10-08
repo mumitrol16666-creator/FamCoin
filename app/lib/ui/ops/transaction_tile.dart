@@ -336,3 +336,28 @@ Widget? _debtLink(AppState state, Transaction tx) {
   }
   return null;
 }
+
+/// Экран с шапкой и историей операций (счёт, категория): строки истории
+/// строятся лениво (UI05) — за годы их тысячи, а видно десяток. Выглядит как
+/// прежняя карточка со всеми операциями.
+class TransactionHistoryList extends StatelessWidget {
+  const TransactionHistoryList({super.key, required this.header, required this.transactions, this.footer = const [], this.padding});
+  final List<Widget> header;
+  final List<Transaction> transactions;
+
+  /// Что идёт после истории (например, удаление закрытого долга).
+  final List<Widget> footer;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) => ListView.builder(
+        padding: padding,
+        itemCount: header.length + transactions.length + footer.length,
+        itemBuilder: (context, i) {
+          if (i < header.length) return header[i];
+          final k = i - header.length;
+          if (k >= transactions.length) return footer[k - transactions.length];
+          return CardRow(first: k == 0, last: k == transactions.length - 1, child: TransactionTile(transactions[k]));
+        },
+      );
+}
