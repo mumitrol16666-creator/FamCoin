@@ -94,6 +94,9 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
         // Вернуть из архива можно именно архивный счёт (C08), но только денежный.
         throw LedgerException('${s('accountId')} — не денежный счёт', code: 'accountNotMoney');
       }
+      if (archive && s('accountId').startsWith('piggy') && l.balance(s('accountId')) != 0) {
+        throw LedgerException('Сначала выведите остаток копилки', code: 'entityChanged');
+      }
       l.archiveAccount(s('accountId'), archived: archive);
     case 'opening':
       l.openingBalance(id: s('id'), date: date(), account: s('account'), amount: m('amount'), meta: meta());
@@ -107,6 +110,9 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
     case 'income':
       l.income(id: s('id'), date: date(), account: s('account'), source: s('source'), amount: m('amount'), meta: meta());
     case 'transfer':
+      if (l.byId(s('id')) == null && s('from').startsWith('piggy') && m('amount') + mo('fee') > l.availableFrom(s('from'), date())) {
+        throw LedgerException('Остаток копилки изменился. Обновите данные', code: 'entityChanged');
+      }
       l.transfer(id: s('id'), date: date(), from: s('from'), to: s('to'), amount: m('amount'), fee: mo('fee'), meta: meta());
     case 'lendOut':
       l.lendOut(id: s('id'), date: date(), account: s('account'), person: s('person'), amount: m('amount'), meta: meta());
@@ -115,7 +121,7 @@ void applyLedgerCommand(Ledger l, Map<String, dynamic> c) {
     case 'repaymentReceived':
       l.repaymentReceived(id: s('id'), date: date(), account: s('account'), person: s('person'), principal: m('principal'), interest: mo('interest'), meta: meta());
     case 'repaymentMade':
-      l.requireOccurrenceFree(meta(), exceptTxId: so('id'));
+      // Личный долг допускает несколько возвратов; лимит — остаток тела.
       l.repaymentMade(id: s('id'), date: date(), account: s('account'), person: s('person'), principal: m('principal'), interest: mo('interest'), fees: mo('fees'), meta: meta());
     case 'creditReceived':
       l.creditReceived(id: s('id'), date: date(), account: s('account'), debtId: s('debtId'), amount: m('amount'));

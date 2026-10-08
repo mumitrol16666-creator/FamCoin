@@ -433,7 +433,7 @@ class BillingService {
   /// разбор (failed). Пользователь — по счёту `pro:<id>`.
   Future<List<Map<String, Object?>>> inbox() async {
     final rows = await db.execute('''
-      SELECT i.charge_id, i.status, i.attempts, i.last_error, i.received_at, i.next_at, i.chat_id,
+      SELECT i.charge_id, i.status, i.attempts, i.last_error, i.received_at, CASE WHEN isfinite(i.next_at) THEN i.next_at ELSE NULL END, i.chat_id,
              (i.payment->>'total_amount')::int, u.email
       FROM payment_inbox i
       LEFT JOIN users u ON u.id::text = substring(i.payment->>'invoice_payload' from 5)
@@ -447,7 +447,7 @@ class BillingService {
           'attempts': r[2],
           'lastError': r[3],
           'receivedAt': (r[4] as DateTime).toIso8601String(),
-          'nextAt': (r[5] as DateTime).toIso8601String(),
+          'nextAt': (r[5] as DateTime?)?.toIso8601String(),
           'chatId': r[6],
           'stars': r[7],
           'email': r[8],

@@ -136,7 +136,7 @@ class _MonthTabState extends State<MonthTab> {
         else
           CategoryChart(
             categories: cats,
-            previousCategories: state.categoriesFor(state.monthOf(offset - 1)),
+            previousCategories: comparable ? state.categoriesFor(state.monthOf(offset - 1)) : const [],
             onOpenCategory: (id) => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryScreen(category: id, month: month))),
           ),
 

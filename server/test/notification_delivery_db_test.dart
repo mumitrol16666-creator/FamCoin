@@ -5,6 +5,7 @@
 library;
 
 import 'dart:io';
+import 'dart:async';
 
 import 'package:famcoin_server/auth_service.dart';
 import 'package:famcoin_server/ledger_service.dart';
@@ -50,6 +51,32 @@ class _Flaky extends NotificationService {
       throw StateError('сбой до записи');
     }
     return super.sendMonthNudge(userId, month, preparationDays: preparationDays, preview: preview, dedupKey: dedupKey, mark: mark);
+  }
+}
+
+class _BarrierTelegram extends _Telegram {
+  _BarrierTelegram(super.db);
+  final started = Completer<void>();
+  final release = Completer<void>();
+  int calls = 0;
+  @override
+  Future<Map<String, dynamic>?> call(String method, Map<String, Object?> body) async {
+    if (method == 'sendMessage') {
+      calls++;
+      if (!started.isCompleted) started.complete();
+      await release.future;
+    }
+    return super.call(method, body);
+  }
+}
+class _Push extends WebPush {
+  _Push(super.db) : super(subject: 'mailto:test@example.test');
+  bool fail = false;
+  int calls = 0;
+  @override
+  Future<bool> sendToUser(String userId, String title, String body, {String tag = 'famcoin', String? url}) async {
+    calls++;
+    return !fail;
   }
 }
 
@@ -155,9 +182,9 @@ void main() {
     expect((await svc.list(id)), hasLength(1));
     expect(await flag(id, 'sentMorning'), '2026-09-02', reason: 'сводка подготовлена — заново не строится');
 
-    // Прямой повтор, пока Telegram лежит: попытка засчитана, запись ждёт.
+    // Прямой повтор уважает паузу: до срока новая попытка не расходуется.
     await svc.deliver(rows.single[0].toString());
-    expect((await stored(id)).single[3], 2);
+    expect((await stored(id)).single[3], 1);
     tg.down = false;
     await pool!.execute(Sql.named('UPDATE notifications SET deliver_next_at = now() WHERE user_id = @u'), parameters: {'u': id});
     expect(await svc.retryDeliveries(), greaterThanOrEqualTo(1));
@@ -192,4 +219,44 @@ void main() {
     expect((await stored(id)).single[2], 'done');
     expect(tgA.delivered.length + tgB.delivered.length, 0);
   });
+  test('FV-S01: direct notify and two retry workers claim one delivery', () async {
+    if (skip()) return;
+    final ledger = LedgerService(pool!);
+    final id = await owner(ledger);
+    final tg = _BarrierTelegram(pool!);
+    final push = _Push(pool!);
+    final service = NotificationService(pool!, ledger, tg, push);
+    final direct = service.notify(id, 'system', 'race', 'body');
+    await tg.started.future.timeout(const Duration(seconds: 5));
+    try {
+      await Future.wait([service.retryDeliveries(), service.retryDeliveries()]);
+      expect(tg.calls, 1);
+      expect(push.calls, 0);
+    } finally { tg.release.complete(); await direct; }
+    expect(push.calls, 1);
+    expect((await stored(id)).single[2], 'done');
+  });
+
+  test('FV-S01: Telegram completion survives push failure; expired lease is recoverable', () async {
+    if (skip()) return;
+    final ledger = LedgerService(pool!);
+    final id = await owner(ledger);
+    final tg = _Telegram(pool!);
+    final push = _Push(pool!)..fail = true;
+    final service = NotificationService(pool!, ledger, tg, push);
+    await service.notify(id, 'system', 'channels', 'body');
+    expect(tg.delivered, hasLength(1));
+    final saved = await pool!.execute(Sql.named('SELECT tg_done, push_done FROM notifications WHERE user_id=@u'), parameters: {'u': id});
+    expect(saved.single.toList(), [true, false]);
+    await pool!.execute(Sql.named("UPDATE notifications SET deliver_next_at=now(), deliver_token=gen_random_uuid(), deliver_lease_until=now()+interval '1 minute' WHERE user_id=@u"), parameters: {'u': id});
+    await service.retryDeliveries();
+    expect(push.calls, 1, reason: 'active lease is not stolen');
+    await pool!.execute(Sql.named("UPDATE notifications SET deliver_lease_until=now()-interval '1 second' WHERE user_id=@u"), parameters: {'u': id});
+    push.fail = false;
+    await Future.wait([service.retryDeliveries(), service.retryDeliveries()]);
+    expect(tg.delivered, hasLength(1));
+    expect(push.calls, 2);
+    expect((await stored(id)).single[2], 'done');
+  });
+
 }

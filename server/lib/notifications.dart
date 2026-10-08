@@ -242,12 +242,18 @@ class NotificationService {
   /// по очереди. Не бросает: итог пишется в запись (попытки, ошибка, время
   /// следующего повтора; после [maxDeliverAttempts] — «не доставлено»).
   Future<void> deliver(String id) async {
+    Timer? heartbeat;
     try {
       final rows = await db.execute(
         Sql.named('''
-          SELECT n.user_id, n.kind, n.title, n.body, n.open_query, n.tg_done, n.push_done, u.telegram_chat_id
-          FROM notifications n JOIN users u ON u.id = n.user_id
-          WHERE n.id = @id AND n.deliver_status = 'pending' '''),
+          WITH claimed AS (
+            UPDATE notifications SET deliver_token = gen_random_uuid(), deliver_lease_until = now() + interval '2 minutes'
+            WHERE id = @id AND deliver_status = 'pending' AND deliver_next_at <= now()
+              AND (deliver_lease_until IS NULL OR deliver_lease_until <= now())
+            RETURNING *
+          )
+          SELECT n.user_id, n.kind, n.title, n.body, n.open_query, n.tg_done, n.push_done, u.telegram_chat_id, n.deliver_token
+          FROM claimed n JOIN users u ON u.id = n.user_id '''),
         parameters: {'id': id},
       );
       if (rows.isEmpty) return;
@@ -256,6 +262,27 @@ class NotificationService {
       final kind = r[1] as String, title = r[2] as String, body = r[3] as String, openQuery = r[4] as String?;
       var tgDone = r[5] == true, pushDone = r[6] == true;
       final chatId = r[7] as int?;
+      final token = r[8].toString();
+      var renewing = false;
+      heartbeat = Timer.periodic(const Duration(seconds: 30), (_) async {
+        if (renewing) return;
+        renewing = true;
+        try {
+          await db.execute(
+            Sql.named("UPDATE notifications SET deliver_lease_until = now() + interval '2 minutes' WHERE id = @id AND deliver_token = @token"),
+            parameters: {'id': id, 'token': token},
+          );
+        } catch (_) {
+          // При падении процесса аренда истечёт, и запись подберёт другой worker.
+        } finally { renewing = false; }
+      });
+      Future<bool> saveChannels() async {
+        final saved = await db.execute(
+          Sql.named('UPDATE notifications SET tg_done = tg_done OR @tg, push_done = push_done OR @push WHERE id = @id AND deliver_token = @token RETURNING id'),
+          parameters: {'id': id, 'token': token, 'tg': tgDone, 'push': pushDone},
+        );
+        return saved.isNotEmpty;
+      }
       String? error;
       if (!tgDone) {
         if (chatId == null || !telegram.enabled) {
@@ -271,6 +298,7 @@ class NotificationService {
           if (!tgDone) error = 'telegram';
         }
       }
+      if (!await saveChannels()) return;
       if (!pushDone) {
         try {
           pushDone = await push.sendToUser(userId, title, body.replaceAll(RegExp(r'</?b>'), ''), tag: kind, url: openQuery == null ? null : './?$openQuery');
@@ -279,17 +307,20 @@ class NotificationService {
         }
         if (!pushDone) error = error == null ? 'push' : '$error, push';
       }
+      if (!await saveChannels()) return;
       final done = tgDone && pushDone;
       await db.execute(
         Sql.named('''
           UPDATE notifications SET
-            tg_done = @tg, push_done = @push, deliver_error = @e,
+            tg_done = tg_done OR @tg, push_done = push_done OR @push, deliver_error = @e,
+            deliver_token = NULL, deliver_lease_until = NULL,
             deliver_attempts = deliver_attempts + CASE WHEN @ok THEN 0 ELSE 1 END,
             deliver_status = CASE WHEN @ok THEN 'done' WHEN deliver_attempts + 1 >= @max THEN 'failed' ELSE 'pending' END,
             deliver_next_at = now() + make_interval(secs => (@pauses::int[])[least(deliver_attempts + 1, @n)])
-          WHERE id = @id'''),
+          WHERE id = @id AND deliver_token = @token'''),
         parameters: {
           'id': id,
+          'token': token,
           'tg': tgDone,
           'push': pushDone,
           'e': error,
@@ -301,13 +332,15 @@ class NotificationService {
       );
     } catch (e, st) {
       stderr.writeln('notification delivery $id: ${e.runtimeType}\n$st');
+    } finally {
+      heartbeat?.cancel();
     }
   }
 
   /// Повтор внешней доставки уведомлений, у которых подошло время: каждую
   /// минуту и после перезапуска. Возвращает, сколько записей взято.
   Future<int> retryDeliveries() async {
-    final rows = await db.execute("SELECT id FROM notifications WHERE deliver_status = 'pending' AND deliver_next_at <= now() ORDER BY deliver_next_at LIMIT 200");
+    final rows = await db.execute("SELECT id FROM notifications WHERE deliver_status = 'pending' AND deliver_next_at <= now() AND (deliver_lease_until IS NULL OR deliver_lease_until <= now()) ORDER BY deliver_next_at LIMIT 200");
     for (var i = 0; i < rows.length; i += concurrency) {
       await Future.wait([for (final r in rows.skip(i).take(concurrency)) deliver(r[0].toString())]);
     }

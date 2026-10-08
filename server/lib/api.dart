@@ -155,7 +155,7 @@ Handler buildHandler(
       return _json(200, await ai.review(id, await _body(req)));
     })
     // Тариф: оплата Pro звёздами Telegram (D52)
-    ..get('/billing', (Request req) async => _json(200, await billing.info(await user(req))))
+    ..get('/billing', (Request req) async => _json(200, {...await billing.info(await user(req)), 'aiChatQuota': ai.chatQuota}))
     ..post('/billing/invoice', (Request req) async => _json(200, await billing.invoice(await user(req))))
 
     // Экспорт: приложение просит одноразовую ссылку и открывает её в браузере.

@@ -29,7 +29,7 @@ List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dyna
     if (!plannedDebtActive(ledger, p['debtId'] as String?, person: person)) continue;
     final paid = ((p['paid'] as List?) ?? const []).cast<String>();
     final end = until.isBefore(horizon) ? until : horizon;
-    for (final o in PaySchedule.fromJson(p).occurrences(from, end)) {
+    for (final o in PaySchedule.fromJson(p).occurrences(PaySchedule.fromJson(p).scanFrom(from), end)) {
       if (paid.contains(o.period)) continue;
       // Срок возврата личного долга (D133): сумма — сколько осталось внести к
       // нему (за вычетом частей, N01), название — «Долг: имя».
@@ -39,20 +39,25 @@ List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dyna
         out.add(({...p, 'name': '${locale == 'kk' ? 'Қарыз' : 'Долг'}: $person', 'amount': '$left'}, o.date));
         continue;
       }
-      // Платёж по долгу: последний бывает меньше обычного — сумма по общему
-      // с приложением расчёту ядра (CS03), а не сохранённый платёж.
-      final debtId = p['debtId'] as String?;
-      final debt = debtId == null ? null : debts[debtId];
-      if (debt != null) {
-        final amount = debtDueAmount(ledger, amount: _minor(p['amount']), debtId: debtId!, kind: '${debt['kind'] ?? 'loan'}', rate: (debt['rate'] as num?)?.toDouble() ?? 0);
-        out.add(({...p, 'amount': '$amount'}, o.date));
-        continue;
-      }
       out.add((p, o.date));
     }
   }
-  out.sort((a, b) => a.$2.compareTo(b.$2));
-  return out;
+  out.sort((a, b) {
+    final date = a.$2.compareTo(b.$2);
+    return date == 0 ? '${a.$1['id']}'.compareTo('${b.$1['id']}') : date;
+  });
+  final budget = DebtDueBudget(ledger);
+  final result = <(Map<String, dynamic>, DateTime)>[];
+  for (final (p, date) in out) {
+    final debtId = p['debtId'] as String?;
+    final debt = debts[debtId];
+    var amount = _minor(p['amount']);
+    if (debt != null && p['person'] == null) {
+      amount = budget.take(debtId: debtId!, amount: amount, kind: '${debt['kind'] ?? 'loan'}', rate: (debt['rate'] as num?)?.toDouble() ?? 0);
+    }
+    if (amount > 0 && !date.isBefore(from)) result.add(({...p, 'amount': '$amount'}, date));
+  }
+  return result;
 }
 
 class BriefInput {

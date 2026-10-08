@@ -35,6 +35,16 @@ void main() {
     expect(find.text('скоро'), findsNothing, reason: 'работающее не продаётся как будущее, несделанное не обещается');
   });
 
+  testWidgets('квота консультанта берётся с сервера, включая нестандартный лимит', (tester) async {
+    final f = await pumpApp(tester, home: const SizedBox(), size: const Size(390, 2400));
+    f.aiLimit = 25;
+    final context = tester.element(find.byType(SizedBox).first);
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TariffScreen()));
+    await tester.pumpAndSettle();
+    expect(rowCells(tester, 'ИИ-консультант'), ['—', '25/мес']);
+    expect(find.text('100/мес'), findsNothing);
+  });
+
   test('проверки доступа берут числа из той же матрицы', () {
     expect(planAllowsMore(PlanFeature.accounts, pro: false, count: freeMoneyAccounts - 1), isTrue);
     expect(planAllowsMore(PlanFeature.accounts, pro: false, count: freeMoneyAccounts), isFalse);

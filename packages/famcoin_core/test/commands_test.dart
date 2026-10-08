@@ -205,7 +205,7 @@ void occurrenceTests() {
       expect(l.balance(liabilityAccount('red')), kzt(20000));
     });
 
-    test('возврат личного долга: тот же срок дважды — отказ', () {
+    test('личный долг: ядро ограничивает остаток тела, сумму договорённости проверяет сервер', () {
       final l = base();
       applyLedgerCommand(l, {'type': 'borrow', 'id': 'b', 'date': '2026-09-02', 'account': 'kaspi', 'person': 'Теща', 'amount': '${kzt(30000)}'});
       Map<String, dynamic> back(String id) => {
@@ -213,8 +213,10 @@ void occurrenceTests() {
             'meta': {'planned': 'pd:Теща', 'period': '2026-09-20'},
           };
       applyLedgerCommand(l, back('r1'));
-      expect(() => applyLedgerCommand(l, back('r2')), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'occurrencePaid')));
-      expect(l.balance(liabilityAccount('Теща')), kzt(20000));
+      applyLedgerCommand(l, back('r2'));
+      applyLedgerCommand(l, back('r3'));
+      expect(() => applyLedgerCommand(l, back('r4')), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'principalExceeds')));
+      expect(l.balance(liabilityAccount('Теща')), 0);
     });
 
     test('части возврата личного долга к сроку (N01): несколько частей и закрывающий платёж; повтор части — не дубль; переплата — отказ', () {
@@ -231,9 +233,11 @@ void occurrenceTests() {
       expect(() => applyLedgerCommand(l, back('p3', 40000)), throwsA(isA<LedgerException>()), reason: 'больше остатка долга — отказ');
       applyLedgerCommand(l, back('last', 30000, part: false));
       expect(l.balance(liabilityAccount('Друг')), 0);
-      // Закрывающий платёж занял срок: второй такой же — отказ, как раньше.
-      applyLedgerCommand(l, {'type': 'borrow', 'id': 'b2', 'date': '2026-09-21', 'account': 'kaspi', 'person': 'Друг', 'amount': '${kzt(10000)}'});
-      expect(() => applyLedgerCommand(l, back('again', 10000, part: false)), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'occurrencePaid')));
+      // Переплата запрещена независимо от флага part; отмена части открывает остаток.
+      expect(() => applyLedgerCommand(l, back('again', 10000, part: false)), throwsA(isA<LedgerException>().having((e) => e.code, 'code', 'principalExceeds')));
+      applyLedgerCommand(l, {'type': 'reverse', 'id': 'undo-part', 'txId': 'p1'});
+      applyLedgerCommand(l, back('replace-part', 30000, part: false));
+      expect(l.balance(liabilityAccount('Друг')), 0);
     });
 
     test('повтор той же записи с тем же id остаётся идемпотентным, а не ошибкой срока', () {

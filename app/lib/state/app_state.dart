@@ -339,8 +339,8 @@ class AppState extends ChangeNotifier {
     return command['date'] == null ? null : dateFromJson(command['date']);
   }
 
-  Future<void> sendBatch(List<Map<String, dynamic>> commands, {String? commandId}) =>
-      send({'type': 'batch', 'commands': commands}, commandId: commandId);
+  Future<void> sendBatch(List<Map<String, dynamic>> commands, {String? commandId, bool requireCurrent = false}) =>
+      send({'type': 'batch', 'commands': commands, if (requireCurrent) 'expectedRevision': revision}, commandId: commandId);
 
   Future<void> _reload() async => applySnapshot(await api.state(token));
 
@@ -715,7 +715,7 @@ class AppState extends ChangeNotifier {
       }
     }
     items.sort((a, b) => a.date.compareTo(b.date));
-    return items;
+    return _allocateDebtDues(items);
   }
 
   /// Неоплаченные сроки точного промежутка [from, to] (R02): без обрезки
@@ -726,7 +726,7 @@ class AppState extends ChangeNotifier {
     final items = <DueItem>[];
     for (final p in planned) {
       if (!_plannedDebtActive(p)) continue;
-      for (final o in p.schedule.occurrences(from, to)) {
+      for (final o in p.schedule.occurrences(p.schedule.scanFrom(from).isBefore(from) ? p.schedule.scanFrom(from) : from, to)) {
         if (p.paid.contains(o.period)) continue;
         final amount = _dueAmount(p, o.period);
         if (p.person != null && amount! <= 0) continue;
@@ -734,7 +734,27 @@ class AppState extends ChangeNotifier {
       }
     }
     items.sort((a, b) => a.date.compareTo(b.date));
-    return items;
+    return _allocateDebtDues(items).where((d) => !d.date.isBefore(from)).toList();
+  }
+
+  List<DueItem> _allocateDebtDues(List<DueItem> items) {
+    items.sort((a, b) {
+      final date = a.date.compareTo(b.date);
+      return date == 0 ? a.planned.id.compareTo(b.planned.id) : date;
+    });
+    final budget = DebtDueBudget(ledger);
+    final result = <DueItem>[];
+    for (final item in items) {
+      final p = item.planned;
+      final debt = p.debtId == null ? null : bankDebt(p.debtId!);
+      if (debt == null || p.person != null) {
+        result.add(item);
+        continue;
+      }
+      final amount = budget.take(debtId: debt.id, amount: p.amount, kind: debt.kind, rate: debt.rate);
+      if (amount > 0) result.add(DueItem(p, item.date, item.period, amount: amount));
+    }
+    return result;
   }
 
   /// Сумма срока: для срока возврата личного долга — сколько осталось внести к
@@ -1248,7 +1268,7 @@ class AppState extends ChangeNotifier {
       'amount': amount.toString(),
     };
     final due = kind == 'borrow' ? personDueCommands(person, amount, dueDate) : const <Map<String, dynamic>>[];
-    return due.isEmpty ? send(command, commandId: commandId) : sendBatch([command, ...due], commandId: commandId);
+    return due.isEmpty ? send(command, commandId: commandId) : sendBatch([command, ...due], commandId: commandId, requireCurrent: true);
   }
 
   /// Id срока возврата личного долга: свой у каждой договорённости (N02). Имя
@@ -1284,9 +1304,9 @@ class AppState extends ChangeNotifier {
   /// и обратно не смешивает её с прежними частями и оплатами.
   Future<void> setPersonDue(PersonDebt d, DateTime? date) {
     final drop = _dropPersonDues(d.person);
-    if (date == null) return drop.isEmpty ? Future<void>.value() : sendBatch(drop);
+    if (date == null) return drop.isEmpty ? Future<void>.value() : sendBatch(drop, requireCurrent: true);
     final plan = PlannedInfo(newPersonDueId(), d.person, d.amount, 1, 'other', null, const {}, person: d.person, onDate: date);
-    return sendBatch([...drop, {'type': 'upsertEntity', 'kind': 'planned', 'entityId': plan.id, 'data': plan.toJson()}]);
+    return sendBatch([...drop, {'type': 'upsertEntity', 'kind': 'planned', 'entityId': plan.id, 'data': plan.toJson()}], requireCurrent: true);
   }
 
   Future<void> addPersonDebt({required String kind, required int amount, required String person, required String account, required DateTime date, String? time, DateTime? dueDate, String? id, String? commandId}) {
@@ -1302,7 +1322,7 @@ class AppState extends ChangeNotifier {
     };
     // Взял в долг со сроком (или без) — срок возврата становится обязательством.
     final due = kind == 'borrow' ? personDueCommands(person, amount, dueDate) : const <Map<String, dynamic>>[];
-    return due.isEmpty ? send(command, commandId: commandId) : sendBatch([command, ...due], commandId: commandId);
+    return due.isEmpty ? send(command, commandId: commandId) : sendBatch([command, ...due], commandId: commandId, requireCurrent: true);
   }
 
   Future<void> payDebt({required String debtId, required String account, required int principal, int interest = 0, DateTime? date}) =>
@@ -1934,21 +1954,11 @@ class AppState extends ChangeNotifier {
   /// уменьшает все более поздние остатки, поэтому снятие после [date] уменьшает
   /// доступное — иначе копилка ушла бы в минус, а обычный счёт был бы завышен.
   /// Пополнение после [date] доступное не увеличивает: поздние деньги назад не
-  /// переносятся (APP-07). Сегодня и позже — весь нынешний остаток.
+  /// переносятся (APP-07). Проверка использует то же ядро, что и сервер.
   int piggyAvailableOn(GoalInfo g, DateTime date) {
     final acc = g.account;
     if (acc == null || !ledger.hasAccount(acc)) return 0;
-    var low = ledger.balance(acc);
-    if (date.isBefore(today)) {
-      final at = ledger.balance(acc, asOf: date);
-      if (at < low) low = at;
-      for (final t in ledger.transactions) {
-        if (!t.date.isAfter(date) || t.amountOn(acc) == 0) continue;
-        final b = ledger.balance(acc, asOf: t.date);
-        if (b < low) low = b;
-      }
-    }
-    return low < 0 ? 0 : low;
+    return ledger.availableFrom(acc, date.isAfter(today) ? today : date);
   }
 
   /// Снятия из копилки после [date] — из-за них взять датой [date] можно

@@ -463,10 +463,9 @@ class Ledger {
   /// устройства или со старой формы — отклоняется, а не списывает деньги заново.
   /// [exceptTxId] — сама проверяемая запись (при восстановлении).
   ///
-  /// Часть исполнения (`meta.part: true`, N01: часть долга человеку к сроку)
-  /// срок не занимает и сама не проверяется: частей может быть несколько, срок
-  /// закрывает платёж на весь остаток. От дубля части при повторе запроса
-  /// защищают её id и commandId, от переплаты — проверка остатка долга.
+  /// Личные долги не используют этот одноразовый маркер: возвратов может
+  /// быть несколько, включая замену отменённой части. Для них ядро проверяет
+  /// остаток тела, а сервер — сумму действующей договорённости по справочнику.
   void requireOccurrenceFree(Map<String, Object?> meta, {String? exceptTxId}) {
     final planned = meta['planned'], period = meta['period'];
     if (planned is! String || period is! String || meta['part'] == true) return;
@@ -530,7 +529,7 @@ class Ledger {
         }
       case EventType.loanPayment:
       case EventType.repaymentMade:
-        requireOccurrenceFree(original.meta, exceptTxId: original.id);
+        if (original.type == EventType.loanPayment) requireOccurrenceFree(original.meta, exceptTxId: original.id);
         for (final p in original.postings) {
           if (_accounts[p.accountId]?.kind != LedgerKind.liability) continue;
           final principal = -p.amount; // платёж уменьшает долг
@@ -545,6 +544,18 @@ class Ledger {
   }
 
   // -------------------------------------------------------------- остатки
+
+  /// Минимальный остаток на дату и после неё: расход задним числом не
+  /// должен использовать деньги, уже потраченные позднее.
+  int availableFrom(String accountId, DateTime date) {
+    var low = balance(accountId, asOf: date);
+    final days = transactions.where((t) => t.date.isAfter(date) && t.amountOn(accountId) != 0).map((t) => t.date).toSet();
+    for (final day in days) {
+      final value = balance(accountId, asOf: day);
+      if (value < low) low = value;
+    }
+    return low > 0 ? low : 0;
+  }
 
   int balance(String accountId, {DateTime? asOf}) {
     account(accountId);

@@ -5,6 +5,11 @@
 library;
 
 import 'dart:io';
+import 'dart:convert';
+import 'package:shelf/shelf.dart';
+import 'package:famcoin_server/api.dart';
+import 'package:famcoin_server/admin.dart';
+import 'package:famcoin_server/ai.dart';
 
 import 'package:famcoin_server/auth_service.dart';
 import 'package:famcoin_server/billing.dart';
@@ -382,4 +387,33 @@ void main() {
     expect(status2, 'refunded');
     expect(before.difference(after2!).inDays, restarted.proDays, reason: 'срок уменьшен один раз');
   });
+  test('FV-S02: inbox serializes infinity for missing user alongside a pending payment', () async {
+    if (skip()) return;
+    final (tg, billing) = service();
+    final id = await newUser();
+    final suffix = DateTime.now().microsecondsSinceEpoch;
+    final missing = 'missing-$suffix', pending = 'pending-$suffix';
+    charges.addAll([missing, pending]);
+    await billing.receive(123, {'id': 123}, {'telegram_payment_charge_id': missing, 'currency': 'XTR', 'total_amount': 950, 'invoice_payload': 'pro:00000000-0000-0000-0000-000000000001'});
+    await pool!.execute(Sql.named("INSERT INTO payment_inbox (charge_id, chat_id, sender, payment) VALUES (@c,123,'{}'::jsonb,@p:jsonb)"),
+      parameters: {'c': pending, 'p': {'invoice_payload': 'pro:$id', 'total_amount': 950}});
+    final rows = await billing.inbox();
+    expect(rows.singleWhere((r) => r['chargeId'] == missing)['nextAt'], isNull);
+    expect(rows.singleWhere((r) => r['chargeId'] == pending)['nextAt'], isA<String>());
+    expect(tg.sent, isNotEmpty);
+  });
+
+  test('billing HTTP response exposes the effective AI service quota', () async {
+    if (skip()) return;
+    final auth = AuthService(pool!);
+    final registered = await auth.register('quota-${DateTime.now().microsecondsSinceEpoch}@example.test', 'Test-pass-12345', 'ru');
+    created.add((registered['user'] as Map)['id'] as String);
+    final (tg, billing) = service();
+    final handler = buildHandler(auth, LedgerService(pool!), notif(tg), AdminService(pool!, password: null),
+      telegram: tg, billing: billing, ai: AiService(pool!, ChatModel(apiKey: null), chatQuota: 25));
+    final response = await handler(Request('GET', Uri.parse('http://test/billing'), headers: {'authorization': 'Bearer ${registered['token']}'}));
+    expect(response.statusCode, 200);
+    expect((jsonDecode(await response.readAsString()) as Map)['aiChatQuota'], 25);
+  });
+
 }

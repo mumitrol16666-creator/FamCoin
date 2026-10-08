@@ -254,6 +254,9 @@ class LedgerService {
           throw LedgerException('Данные изменились во время сверки', code: 'monthChanged');
         }
 
+        if (cmd['expectedRevision'] != null && cmd['expectedRevision'] != revision) {
+          throw LedgerException('Данные изменились. Обновите их и повторите действие', code: 'entityChanged');
+        }
         final ledger = await _loadLedger(s, userId, revision, forWrite: true);
         final before = _Snapshot.of(ledger);
         final ctx = _Ctx(s, userId, plan, ledger, Map<String, dynamic>.from(u.first[2] as Map))..guardRefunds = fromClient;
@@ -335,6 +338,20 @@ class LedgerService {
         final active = ctx.ledger.accounts.where((a) => a.isMoney && !a.archived && !isPiggy(a.id)).length;
         if (id is String && !isPiggy(id) && active >= freeMoneyAccounts) throw ApiError(402, 'plan_limit');
       }
+      if (type == 'repaymentMade' && ctx.ledger.byId('${c['id']}') == null && c['meta'] is Map && (c['meta'] as Map)['planned'] is String) {
+        final meta = (c['meta'] as Map);
+        final rows = await ctx.s.execute(
+          Sql.named("SELECT data FROM entities WHERE user_id = @u AND kind = 'planned' AND id = @id"),
+          parameters: {'u': ctx.userId, 'id': meta['planned']},
+        );
+        if (rows.isEmpty || (rows.first[0] as Map)['person'] != c['person']) {
+          throw LedgerException('Срок долга изменён. Обновите данные', code: 'entityChanged');
+        }
+        final plan = rows.first[0] as Map;
+        final left = personDueLeft(ctx.ledger, planId: meta['planned'] as String, person: c['person'] as String,
+          amount: parseMinor(plan['amount']), period: '${meta['period']}');
+        if (parseMinor(c['principal']) > left) throw LedgerException('Возврат больше остатка к этому сроку', code: 'principalExceeds');
+      }
       if (type == 'reverse' && ctx.guardRefunds) _requireNoActiveRefunds(ctx, c['txId'] as String?);
       applyLedgerCommand(ctx.ledger, c);
       return;
@@ -362,6 +379,13 @@ class LedgerService {
           final exists = r.first[1] == true;
           if (!exists && (r.first[0] as int) >= (kind == 'goal' ? freeGoals : freeLimits)) throw ApiError(402, 'plan_limit');
         }
+        if (kind == 'planned' && data['person'] is String) {
+          final other = await ctx.s.execute(
+            Sql.named("SELECT id FROM entities WHERE user_id = @u AND kind = 'planned' AND id <> @id AND data->>'person' = @person LIMIT 1"),
+            parameters: {'u': ctx.userId, 'id': id, 'person': data['person']},
+          );
+          if (other.isNotEmpty) throw LedgerException('Срок долга уже изменён. Обновите данные', code: 'entityChanged');
+        }
         var next = data;
         if (paidMarkKinds.contains(kind)) {
           // Условия платежа меняются отдельно от исполнения (N03): отметки
@@ -370,6 +394,11 @@ class LedgerService {
             Sql.named('SELECT data FROM entities WHERE user_id = @u AND kind = @k AND id = @id FOR UPDATE'),
             parameters: {'u': ctx.userId, 'k': kind, 'id': id},
           );
+          if (rows.isEmpty && kind == 'planned' && data['person'] is String) {
+            final account = liabilityAccount(data['person'] as String);
+            final owed = ctx.ledger.hasAccount(account) ? ctx.ledger.balance(account) : 0;
+            if (parseMinor(data['amount']) != owed) throw LedgerException('Остаток долга изменился. Обновите данные', code: 'entityChanged');
+          }
           next = mergePlannedUpsert(rows.isEmpty ? null : (rows.first[0] as Map).cast<String, dynamic>(), data.cast<String, dynamic>());
         }
         await ctx.s.execute(

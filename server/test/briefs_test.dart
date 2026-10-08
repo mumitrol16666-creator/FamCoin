@@ -10,6 +10,16 @@ BriefInput _input(DateTime today, List<Map<String, dynamic>> planned) {
 }
 
 void main() {
+  test('FV-C04: brief does not reserve the same remaining installment for a later period', () {
+    final ledger = Ledger()..openingDebt(id: 'opening', date: DateTime(2026, 7, 1), debtId: 'red', amount: kzt(10000));
+    final input = BriefInput(ledger: ledger, today: DateTime(2026, 9, 30), profile: {}, limits: [], locale: 'ru',
+      debts: {'red': {'kind': 'installment', 'rate': 0}},
+      planned: [{'id':'red-pay','name':'Рассрочка','amount':'5000000','day':30,'debtId':'red','start':'2026-07-01','paid':<String>[]}]);
+    // Весь остаток распределён на июльский просроченный срок, повторного
+    // требования тех же денег за сентябрь в утренней сводке быть не должно.
+    expect(morningBrief(input).body, isNot(contains('Рассрочка —')));
+  });
+
   personDueBriefTests();
   const rent = {'name': 'Аренда', 'amount': '15000000', 'day': 31, 'category': 'home', 'paid': <String>[]};
   const tyres = {'name': 'Колёса', 'amount': '10000000', 'day': 31, 'category': 'transport', 'paid': <String>[], 'once': '2027-03'};
@@ -157,7 +167,7 @@ void personDueBriefTests() {
       applyLedgerCommand(l, {'type': 'openingDebt', 'id': 'd', 'date': '2026-09-01', 'debtId': 'red', 'amount': '${kzt(balance)}'});
       return l;
     }
-    final phone = {'id': 'pl', 'name': 'Телефон', 'amount': '${kzt(50000)}', 'day': 10, 'category': 'other', 'debtId': 'red', 'paid': <String>[], 'start': '2026-09-01'};
+    final phone = {'id': 'pl', 'name': 'Телефон', 'amount': '${kzt(50000)}', 'day': 10, 'category': 'other', 'debtId': 'red', 'paid': ['2026-09'], 'start': '2026-09-01'};
     String brief(Ledger l, Map<String, dynamic> debt, String locale) => morningBrief(BriefInput(
           ledger: l, today: DateTime(2026, 10, 10), profile: const {}, planned: [phone], limits: const [], locale: locale,
           debts: {'red': debt},

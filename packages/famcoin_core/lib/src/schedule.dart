@@ -192,7 +192,12 @@ const paidMarkKinds = {'planned', 'purchase'};
 /// приложения и тестовой заглушки сервера; [check] `false` — только слить
 /// (приложение после ответа сервера).
 Map<String, dynamic> mergePlannedUpsert(Map<String, dynamic>? stored, Map<String, dynamic> incoming, {bool check = true}) {
-  if (stored == null) return {...incoming, 'rev': 1};
+  if (stored == null) {
+    if (check && incoming['rev'] != null) {
+      throw LedgerException('Этот платёж удалён. Обновите данные', code: 'entityChanged');
+    }
+    return {...incoming, 'rev': 1};
+  }
   final rev = (stored['rev'] as num?)?.toInt() ?? 0;
   final base = incoming['rev'];
   if (check && base is num && base.toInt() != rev) {
@@ -217,8 +222,8 @@ int debtDueAmount(Ledger l, {required int amount, required String debtId, requir
 }
 
 /// Сколько осталось внести к сроку возврата личного долга (N01): договорённая
-/// сумма [amount] минус части к этому сроку (`meta.part` записей с этим
-/// `meta.planned` и `meta.period`), но не больше долга человеку сейчас. Общая
+/// сумма [amount] минус все действующие возвраты с этим
+/// `meta.planned` и `meta.period`, но не больше долга человеку сейчас. Общая
 /// для приложения, сводок бота и консультанта; `amount <= 0` — весь долг.
 int personDueLeft(Ledger l, {required String planId, required String person, required int amount, required String period}) {
   final account = liabilityAccount(person);
@@ -227,9 +232,9 @@ int personDueLeft(Ledger l, {required String planId, required String person, req
   var parts = 0;
   for (final t in l.transactions) {
     if (t.type != EventType.repaymentMade || l.isReversed(t.id)) continue;
-    if (t.meta['planned'] == planId && t.meta['period'] == period && t.meta['part'] == true) parts += -t.amountOn(account);
+    if (t.meta['planned'] == planId && t.meta['period'] == period) parts += -t.amountOn(account);
   }
-  final left = amount - parts;
+  final left = amount > parts ? amount - parts : 0;
   return owed < left ? owed : left;
 }
 
@@ -251,4 +256,23 @@ Map<String, dynamic> withPaidMark(Map<String, dynamic> data, String period, {req
   final out = {...data, 'paid': keys.toList()..sort()};
   if (clearGoal) out.remove('goal');
   return out;
+}
+
+/// Распределяет текущий остаток долга между сроками в хронологическом порядке.
+/// Один и тот же остаток тела нельзя резервировать под каждый месяц заново.
+class DebtDueBudget {
+  DebtDueBudget(this.ledger);
+  final Ledger ledger;
+  final _left = <String, int>{};
+
+  int take({required String debtId, required int amount, required String kind, double rate = 0}) {
+    final account = liabilityAccount(debtId);
+    final left = _left.putIfAbsent(debtId, () => ledger.hasAccount(account) ? ledger.balance(account) : 0);
+    if (left <= 0 || amount <= 0) return 0;
+    final interest = kind == 'installment' ? 0 : roundHalfUp(left * monthlyRate(rate));
+    final payment = amount < left + interest ? amount : left + interest;
+    final principal = payment > interest ? payment - interest : 0;
+    _left[debtId] = left - principal;
+    return payment;
+  }
 }
