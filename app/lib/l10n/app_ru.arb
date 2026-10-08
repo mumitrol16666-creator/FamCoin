@@ -1226,8 +1226,11 @@
       }
     }
   },
-  "freeCashVsPrev": "Свободных денег {sign}{amount} к прошлому месяцу",
-  "@freeCashVsPrev": {
+  "resultVsPrev": "Доходы минус расходы: {sign}{amount} к прошлому месяцу",
+  "noPrevMonthData": "За прошлый месяц пока нет данных для сравнения",
+  "dayRefundedNet": "возвращено {amount}",
+  "@dayRefundedNet": {"placeholders": {"amount": {"type": "String"}}},
+  "@resultVsPrev": {
     "placeholders": {
       "sign": {
         "type": "String"

@@ -1048,6 +1048,26 @@ class AppState extends ChangeNotifier {
     return spendDay;
   }
 
+  /// Расход каждого дня по тому же правилу, что столбики графика по дням
+  /// ([dailyExpense]): по проводкам расходов любых действующих событий —
+  /// покупка в рассрочку и проценты входят, возврат уменьшает день покупки
+  /// (внутри месяца) или свой день. Для итога дня в журнале (UI01): одна и та
+  /// же сумма на журнале и в аналитике. Дни без расхода в карту не попадают;
+  /// отрицательное значение — за день вернули больше, чем потратили.
+  Map<DateTime, int> expenseByDay() {
+    final out = <DateTime, int>{};
+    for (final tx in ledger.transactions) {
+      if (ledger.isReversed(tx.id) || tx.type == EventType.reversal) continue;
+      final day = _chartDay(tx);
+      if (day == null) continue;
+      for (final p in tx.postings) {
+        if (ledger.account(p.accountId).kind == LedgerKind.expense) out[day] = (out[day] ?? 0) + p.amount;
+      }
+    }
+    out.removeWhere((_, v) => v == 0);
+    return out;
+  }
+
   List<int> dailyExpense(DateTime monthStart) {
     final days = DateTime(monthStart.year, monthStart.month + 1, 0).day;
     final out = List<int>.filled(days, 0);
@@ -1528,12 +1548,27 @@ class AppState extends ChangeNotifier {
   /// внесённая и тут же удалённая старая операция не должна отодвигать
   /// начало учёта назад.
   DateTime? get _firstActivityMonth {
+    final earliest = _firstActivityDate;
+    return earliest == null ? null : DateTime(earliest.year, earliest.month, 1);
+  }
+
+  /// День первой действующей записи журнала — начало учёта.
+  DateTime? get _firstActivityDate {
     DateTime? earliest;
     for (final tx in ledger.transactions) {
       if (tx.type == EventType.reversal || ledger.isReversed(tx.id)) continue;
       if (earliest == null || tx.date.isBefore(earliest)) earliest = tx.date;
     }
-    return earliest == null ? null : DateTime(earliest.year, earliest.month, 1);
+    return earliest;
+  }
+
+  /// Месяц [month] можно сравнивать с прошлым (UI06): учёт шёл с первого дня
+  /// прошлого месяца. Пустой месяц до начала учёта — не «ноль трат», а
+  /// отсутствие данных, и неполный первый месяц — не сопоставимая база.
+  /// Полностью учтённый месяц без операций — честный ноль, с ним сравнивать можно.
+  bool hasComparablePrev(DateTime month) {
+    final first = _firstActivityDate;
+    return first != null && !first.isAfter(DateTime(month.year, month.month - 1, 1));
   }
 
   /// Долг, по которому сейчас может быть платёж: остаток больше нуля.

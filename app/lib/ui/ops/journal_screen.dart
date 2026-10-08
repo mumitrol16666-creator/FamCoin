@@ -89,15 +89,15 @@ class _JournalScreenState extends State<JournalScreen> {
           return DateFormat.yMMMMd(locale).format(d);
         }
 
-        int spent(List<Transaction> list) {
-          var sum = 0;
-          for (final t in list) {
-            if (t.type != EventType.expense || state.ledger.isReversed(t.id)) continue;
-            for (final p in t.postings) {
-              if (state.ledger.account(p.accountId).kind == LedgerKind.expense) sum += p.amount;
-            }
-          }
-          return sum;
+        // Итог дня — расход по тому же правилу, что столбик дня в аналитике
+        // (UI01): возвраты, рассрочка и проценты учтены. Он относится ко всему
+        // дню, поэтому показывается только в действующих операциях без поиска:
+        // в найденном, удалённом и истории он выдал бы не тот расход за текущий.
+        final dayTotals = _view == _View.active && q.isEmpty ? state.expenseByDay() : const <DateTime, int>{};
+        String? dayTotal(DateTime day) {
+          final v = dayTotals[day];
+          if (v == null) return null;
+          return v > 0 ? '− ${formatMoney(v)}' : l.dayRefundedNet(formatMoney(-v));
         }
 
         String monthChip(DateTime m) => toBeginningOfSentenceCase(m.year == state.today.year ? DateFormat.MMMM(locale).format(m) : DateFormat.yMMMM(locale).format(m));
@@ -151,7 +151,7 @@ class _JournalScreenState extends State<JournalScreen> {
                   padding: const EdgeInsets.fromLTRB(2, 14, 2, 4),
                   child: Row(children: [
                     Expanded(child: Text(dayLabel(e.key), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fam.text2))),
-                    if (spent(e.value) > 0) Text('− ${formatMoney(spent(e.value))}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fam.text2)),
+                    if (dayTotal(e.key) case final total?) Text(total, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fam.text2)),
                   ]),
                 ),
                 AppCard(

@@ -28,8 +28,11 @@ class MonthNav extends StatelessWidget {
   }
 }
 
-/// Не просто цифра — контекст цифры (владелец, 29.09.2026): расход/доход/
-/// свободные деньги в сравнении с прошлым месяцем, одной строкой.
+/// Не просто цифра — контекст цифры (владелец, 29.09.2026): расход, доход и
+/// «доходы минус расходы» в сравнении с прошлым месяцем, одной строкой.
+/// Последний показатель — результат месяца, а не свободные деньги (UI06):
+/// займы, возвраты тела долга и начальные остатки меняют деньги, но не его.
+/// Вызывать, только если прошлый месяц сопоставим (`hasComparablePrev`).
 String monthCompareText(AppLocalizations l, {required PeriodReport report, required PeriodReport prev}) {
   final parts = <String>[];
   if (prev.total > 0) {
@@ -40,8 +43,8 @@ String monthCompareText(AppLocalizations l, {required PeriodReport report, requi
     final pct = ((report.income - prev.income) / prev.income.abs() * 100).round();
     if (pct != 0) parts.add(l.incomeVsPrev(pct > 0 ? '↑' : '↓', pct.abs()));
   }
-  final freeDelta = report.result - prev.result;
-  if (freeDelta != 0) parts.add(l.freeCashVsPrev(freeDelta > 0 ? '+' : '−', formatMoney(freeDelta.abs())));
+  final resultDelta = report.result - prev.result;
+  if (resultDelta != 0) parts.add(l.resultVsPrev(resultDelta > 0 ? '+' : '−', formatMoney(resultDelta.abs())));
   return parts.join(' · ');
 }
 

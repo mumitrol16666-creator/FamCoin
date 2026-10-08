@@ -134,17 +134,16 @@ Map<String, Object?> _types(AppState s, DateTime month) {
   return {'mandatory': _t(split.mandatory), 'regular': _t(split.regular), 'discretionary': _t(split.discretionary)};
 }
 
-/// Был ли учёт в месяце [month]: без операций «0 ₸» означал бы «нет данных».
-bool _hasData(AppState s, DateTime month) {
-  final r = s.reportFor(month);
-  return r.income != 0 || r.total != 0;
-}
+/// Можно ли сравнивать месяц [month] с прошлым — то же правило, что на
+/// экране «Месяц» (UI06): учёт шёл с первого дня прошлого месяца. До начала
+/// учёта «0 ₸» означал бы «нет данных», а неполный месяц — не база.
+bool _hasPrev(AppState s, DateTime month) => s.hasComparablePrev(month);
 
 /// Снимок для чата: текущий месяц и состояние на сегодня.
 Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
   final month = s.monthStart;
   final prevMonth = DateTime(month.year, month.month - 1, 1);
-  final hasPrev = _hasData(s, prevMonth);
+  final hasPrev = _hasPrev(s, month);
   final r = s.monthReport;
   final pr = s.reportFor(prevMonth);
   final ex = s.limitExplain;
@@ -342,7 +341,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
 Map<String, Object?> aiReviewContext(AppState s, AppLocalizations l, DateTime month) {
   final sum = s.monthSummary(month);
   final prevMonth = DateTime(month.year, month.month - 1, 1);
-  final hasPrev = _hasData(s, prevMonth);
+  final hasPrev = _hasPrev(s, sum.month);
   return {
     'period': {'month': _month(month), 'monthText': _monthText(month, l), 'daysInMonth': sum.days},
     'month': {'income': _t(sum.income), 'expense': _t(sum.expense), 'debtPayments': _t(sum.debtPayments), 'incomeMinusExpense': _t(sum.income - sum.expense)},

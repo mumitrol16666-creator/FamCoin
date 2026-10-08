@@ -69,7 +69,9 @@ class _MonthTabState extends State<MonthTab> {
     final elapsed = offset == 0 ? state.today.day : expense.length;
     final avgDay = elapsed == 0 ? 0 : expense.take(elapsed).fold<int>(0, (s, v) => s + v) ~/ elapsed ~/ minorPerUnit * minorPerUnit;
     final adjustments = state.adjustmentsFor(month);
-    final compare = monthCompareText(l, report: report, prev: prev);
+    // До начала учёта прошлый месяц — не нулевая база (UI06).
+    final comparable = state.hasComparablePrev(month);
+    final compare = comparable ? monthCompareText(l, report: report, prev: prev) : '';
 
     final cats = state.categoriesFor(month);
     final byWho = state.expenseByWho(month);
@@ -111,12 +113,13 @@ class _MonthTabState extends State<MonthTab> {
             ]),
             MoneyText(report.result, sign: true, color: report.result < 0 ? fam.expense : fam.income, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700)),
             if (compare.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(compare, style: TextStyle(fontSize: 12, color: fam.text2))),
+            if (!comparable) Padding(padding: const EdgeInsets.only(top: 4), child: Text(l.noPrevMonthData, style: TextStyle(fontSize: 12, color: fam.text2))),
             if (offset == 0 && compare.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(l.monthInProgress, style: TextStyle(fontSize: 11, color: fam.text2))),
             const Divider(height: 24),
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: _kv(context, l.reportIncome, report.income, fam.income, delta: _delta(l, report.income, prev.income))),
+              Expanded(child: _kv(context, l.reportIncome, report.income, fam.income, delta: comparable ? _delta(l, report.income, prev.income) : null)),
               const SizedBox(width: 12),
-              Expanded(child: _kv(context, l.reportExpense, -report.total, fam.expense, delta: _delta(l, report.total, prev.total))),
+              Expanded(child: _kv(context, l.reportExpense, -report.total, fam.expense, delta: comparable ? _delta(l, report.total, prev.total) : null)),
             ]),
             const SizedBox(height: 10),
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

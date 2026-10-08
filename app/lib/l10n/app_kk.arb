@@ -983,8 +983,10 @@
       }
     }
   },
-  "freeCashVsPrev": "Бос ақша өткен айға қарағанда {sign}{amount}",
-  "@freeCashVsPrev": {
+  "resultVsPrev": "Кіріс минус шығыс: өткен айға қарағанда {sign}{amount}",
+  "noPrevMonthData": "Өткен ай бойынша салыстыруға әзірге дерек жоқ",
+  "dayRefundedNet": "{amount} қайтарылды",
+  "@resultVsPrev": {
     "placeholders": {
       "sign": {
         "type": "String"
