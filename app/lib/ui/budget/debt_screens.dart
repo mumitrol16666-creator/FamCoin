@@ -47,7 +47,8 @@ class BankDebtScreen extends StatelessWidget {
                 ]),
               ),
               Row(children: [
-                Expanded(child: FilledButton(onPressed: balance > 0 ? () => showBankPaySheet(context, debt) : null, child: Text(l.pay))),
+                // Оплата засчитывается в срок графика (N04); вне графика — отдельной кнопкой ниже.
+                Expanded(child: FilledButton(onPressed: balance > 0 ? () => payBankDebt(context, debt) : null, child: Text(l.pay))),
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton(
@@ -60,6 +61,8 @@ class BankDebtScreen extends StatelessWidget {
                   ),
                 ),
               ]),
+              if (balance > 0 && payment > 0)
+                Center(child: TextButton(onPressed: () => showBankPaySheet(context, debt, offSchedule: true), child: Text(l.payOffSchedule))),
               if (schedule != null) ...[
                 SectionHeader(l.schedule),
                 AppCard(

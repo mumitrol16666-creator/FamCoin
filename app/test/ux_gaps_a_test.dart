@@ -222,7 +222,8 @@ void main() {
       expect(find.textContaining('сентября'), findsOneWidget);
       await tapText(tester, 'Досрочно, вне графика');
       await tapText(tester, 'Продолжить');
-      expect(find.text('Оплатить: Kaspi Red'), findsOneWidget);
+      // Лист явно назван платежом вне графика (N04).
+      expect(find.text('Платёж вне графика: Kaspi Red'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Оплатить'));
       await tester.pumpAndSettle();
       expect(s.debtBalance(s.bankDebts.single.id), kzt(90000));

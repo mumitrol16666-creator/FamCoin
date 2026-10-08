@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../state/app_scope.dart';
+import '../../state/app_state.dart';
 import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../more/categories_screen.dart';
@@ -84,6 +85,12 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
     titleAction: p.debtId == null ? null : InfoTip(l.repaymentNote, title: l.repayHelpTitle),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // Какой срок оплачивается (N04): у кредита их бывает несколько.
+        Text(
+          '${l.dueForDate(DateFormat.MMMMd(locale).format(due.date))}${due.date.isBefore(state.today) ? ' · ${l.overdue}' : ''}',
+          style: TextStyle(fontSize: 12, color: ctx.fam.text2),
+        ),
+        const SizedBox(height: 8),
         AmountField(controller: amount, label: l.amount),
         // Возврат человеку можно внести частью (N01): срок останется на остаток.
         if (p.person != null)
@@ -170,7 +177,74 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
 }
 
 /// Погашение банковского долга вне графика или досрочно.
-Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? principal, DateTime? date, String? initialAccount}) {
+/// Выбор срока платежа по кредиту (APP-04, N04) — общий для карточки кредита
+/// и формы расхода: сроки графика (просроченные помечены) и «досрочно, вне
+/// графика». `null` — отмена; `(null,)` — платёж вне графика.
+Future<(DueItem?,)?> askLoanDue(BuildContext context, List<DueItem> dues) async {
+  final l = context.l10n;
+  final locale = Localizations.localeOf(context).toString();
+  var chosen = dues.first;
+  var early = false;
+  return showDialog<(DueItem?,)>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => AlertDialog(
+        title: Text(l.loanPaymentWhichTitle),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          for (final d in dues)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(!early && chosen == d ? Icons.radio_button_checked : Icons.radio_button_off, color: !early && chosen == d ? ctx.scheme.primary : ctx.fam.text2),
+              title: Text('${DateFormat.MMMMd(locale).format(d.date)}${d.date.isBefore(AppScope.of(ctx).state.today) ? ' · ${l.overdue}' : ''}'),
+              subtitle: Text(formatMoney(d.payAmount)),
+              onTap: () => set(() {
+                chosen = d;
+                early = false;
+              }),
+            ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            leading: Icon(early ? Icons.radio_button_checked : Icons.radio_button_off, color: early ? ctx.scheme.primary : ctx.fam.text2),
+            title: Text(l.loanPaymentEarly),
+            subtitle: Text(l.loanPaymentEarlyNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
+            onTap: () => set(() => early = true),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.cancel)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, (early ? null : chosen,)), child: Text(l.next)),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Сроки графика кредита на ближайшие два месяца (вместе с просроченными).
+List<DueItem> loanDues(AppState state, String debtId) =>
+    state.dueItems(state.today.add(const Duration(days: 62))).where((d) => d.planned.debtId == debtId).toList();
+
+/// «Оплатить» на карточке кредита (N04): платёж засчитывается в срок графика,
+/// а не уходит мимо него. Один просроченный срок или ближайший — сразу его
+/// оплата; просроченных несколько — выбор срока (или «вне графика»); сроков
+/// нет — платёж вне графика.
+Future<void> payBankDebt(BuildContext context, DebtInfo debt) async {
+  final state = AppScope.of(context).state;
+  final dues = loanDues(state, debt.id);
+  if (dues.isEmpty) return showBankPaySheet(context, debt);
+  if (dues.where((d) => d.date.isBefore(state.today)).length > 1) {
+    final pick = await askLoanDue(context, dues);
+    if (pick == null || !context.mounted) return;
+    final due = pick.$1;
+    return due == null ? showBankPaySheet(context, debt, offSchedule: true) : showPayDueSheet(context, due);
+  }
+  return showPayDueSheet(context, dues.first);
+}
+
+/// Платёж по кредиту без привязки к сроку графика. [offSchedule] — у долга
+/// есть график, и человек явно выбрал платёж вне его: срок не закроется.
+Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? principal, DateTime? date, String? initialAccount, bool offSchedule = false}) {
   final l = context.l10n;
   final state = AppScope.of(context).state;
   final principalField = TextEditingController(text: principal == null ? '' : amountToField(principal));
@@ -178,11 +252,12 @@ Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? princip
   var account = state.activeAccounts.any((a) => a.id == initialAccount) ? initialAccount : _firstAccount(context);
   return showFormSheet<void>(
     context,
-    title: '${l.pay}: ${debt.name}',
+    title: offSchedule ? '${l.payOffSchedule}: ${debt.name}' : '${l.pay}: ${debt.name}',
     titleAction: InfoTip(l.repaymentNote, title: l.repayHelpTitle),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text('${l.balanceLeft}: ${formatMoney(state.debtBalance(debt.id))}', style: TextStyle(color: ctx.fam.text2)),
+        if (offSchedule) Padding(padding: const EdgeInsets.only(top: 4), child: Text(l.loanPaymentEarlyNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2))),
         const SizedBox(height: 12),
         AmountField(controller: principalField, label: l.principalPart),
         const SizedBox(height: 12),

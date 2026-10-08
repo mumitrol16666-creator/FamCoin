@@ -311,47 +311,6 @@ class _TransactionFieldsState extends State<TransactionFields> {
 
   /// Какой срок кредита оплачивается: один из неоплаченных или «досрочно».
   /// `null` — отмена; `(null,)` — досрочно, вне графика.
-  Future<(DueItem?,)?> _askLoanDue(List<DueItem> dues) async {
-    final l = context.l10n;
-    final locale = Localizations.localeOf(context).toString();
-    var chosen = dues.first;
-    var early = false;
-    return showDialog<(DueItem?,)>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => AlertDialog(
-          title: Text(l.loanPaymentWhichTitle),
-          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            for (final d in dues)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                leading: Icon(!early && chosen == d ? Icons.radio_button_checked : Icons.radio_button_off, color: !early && chosen == d ? ctx.scheme.primary : ctx.fam.text2),
-                title: Text('${DateFormat.MMMMd(locale).format(d.date)}${d.date.isBefore(AppScope.of(ctx).state.today) ? ' · ${l.overdue}' : ''}'),
-                subtitle: Text(formatMoney(d.payAmount)),
-                onTap: () => set(() {
-                  chosen = d;
-                  early = false;
-                }),
-              ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              leading: Icon(early ? Icons.radio_button_checked : Icons.radio_button_off, color: early ? ctx.scheme.primary : ctx.fam.text2),
-              title: Text(l.loanPaymentEarly),
-              subtitle: Text(l.loanPaymentEarlyNote, style: TextStyle(fontSize: 12, color: ctx.fam.text2)),
-              onTap: () => set(() => early = true),
-            ),
-          ]),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.cancel)),
-            FilledButton(onPressed: () => Navigator.pop(ctx, (early ? null : chosen,)), child: Text(l.next)),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _saveInstallment(int amount) async {
     final l = context.l10n;
     final state = AppScope.of(context).state;
@@ -435,7 +394,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
           DueItem? due;
           if (dues.isNotEmpty) {
             _asking = true;
-            final pick = await _askLoanDue(dues);
+            final pick = await askLoanDue(context, dues);
             _asking = false;
             if (pick == null || !mounted) return;
             due = pick.$1;
@@ -447,7 +406,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
           if (due != null) {
             await showPayDueSheet(nav.context, due, date: date, initialAmount: amount, initialAccount: payAccount);
           } else {
-            await showBankPaySheet(nav.context, debt, principal: amount, date: date, initialAccount: payAccount);
+            await showBankPaySheet(nav.context, debt, principal: amount, date: date, initialAccount: payAccount, offSchedule: true);
           }
           return;
         }

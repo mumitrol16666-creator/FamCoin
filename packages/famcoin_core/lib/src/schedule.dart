@@ -8,7 +8,9 @@
 library;
 
 import 'events.dart' show liabilityAccount;
+import 'formulas/loans.dart' show monthlyRate;
 import 'ledger.dart';
+import 'money.dart' show roundHalfUp;
 import 'serialization.dart';
 
 /// Один срок платежа: дата и ключ для отметки «оплачено».
@@ -197,6 +199,21 @@ Map<String, dynamic> mergePlannedUpsert(Map<String, dynamic>? stored, Map<String
     throw LedgerException('Этот платёж уже изменили на другом устройстве', code: 'entityChanged');
   }
   return {...incoming, 'paid': stored['paid'] ?? const <String>[], 'rev': rev + 1};
+}
+
+/// Сумма срока планового платежа по банковскому долгу (CS03) — одна для
+/// приложения, календаря, прогноза и сводок бота. Беспроцентная рассрочка
+/// (`kind: installment`): не больше остатка — последний платёж бывает меньше
+/// обычного. Кредит с процентами: не больше остатка плюс проценты за месяц
+/// (как в графике `buildSchedule`) — последний платёж меньше, но проценты из
+/// него не выпадают. Остаток не известен или нулевой — сумма платежа.
+int debtDueAmount(Ledger l, {required int amount, required String debtId, required String kind, double rate = 0}) {
+  final account = liabilityAccount(debtId);
+  final left = l.hasAccount(account) ? l.balance(account) : 0;
+  if (left <= 0 || amount <= 0) return amount;
+  final interest = kind == 'installment' ? 0 : roundHalfUp(left * monthlyRate(rate));
+  final cap = left + interest;
+  return cap < amount ? cap : amount;
 }
 
 /// Сколько осталось внести к сроку возврата личного долга (N01): договорённая

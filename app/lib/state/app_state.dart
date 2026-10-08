@@ -744,13 +744,14 @@ class AppState extends ChangeNotifier {
   int? _dueAmount(PlannedInfo p, String period) {
     final person = p.person;
     if (person == null) {
-      // Рассрочка: платёж округлён вверх, и последний срок бывает больше остатка
-      // (100 000 ₸ на 3 месяца — 3 × 33 334). Платить больше долга нельзя, а
-      // обязательства и прогноз не должны включать лишние тиын-копейки (процентов нет).
+      // Последний платёж рассрочки или кредита бывает меньше обычного: платить
+      // больше долга (с процентами месяца) нельзя, и обязательства с прогнозом
+      // не должны его завышать. Расчёт общий с ботом (CS03).
       final debtId = p.debtId;
-      if (debtId == null || bankDebt(debtId)?.kind != 'installment') return null;
-      final left = debtBalance(debtId);
-      return left > 0 && left < p.amount ? left : null;
+      final debt = debtId == null ? null : bankDebt(debtId);
+      if (debt == null) return null;
+      final due = debtDueAmount(ledger, amount: p.amount, debtId: debt.id, kind: debt.kind, rate: debt.rate);
+      return due == p.amount ? null : due;
     }
     return personDueLeft(ledger, planId: p.id, person: person, amount: p.amount, period: period);
   }

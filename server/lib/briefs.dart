@@ -19,7 +19,7 @@ String _period(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 int _minor(Object? v) => v == null ? 0 : parseMinor(v);
 
 /// Плановые платежи и разовые покупки, не оплаченные и попадающие в [from, until].
-List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dynamic>> planned, DateTime from, DateTime until, {String locale = 'ru'}) {
+List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dynamic>> planned, DateTime from, DateTime until, {String locale = 'ru', Map<String, Map<String, dynamic>> debts = const {}}) {
   final out = <(Map<String, dynamic>, DateTime)>[];
   // Сроки считает ядро: ежемесячные, недельные, годовые и разовые покупки (D88).
   final horizon = DateTime(from.year, from.month + 3, 0);
@@ -39,6 +39,15 @@ List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dyna
         out.add(({...p, 'name': '${locale == 'kk' ? 'Қарыз' : 'Долг'}: $person', 'amount': '$left'}, o.date));
         continue;
       }
+      // Платёж по долгу: последний бывает меньше обычного — сумма по общему
+      // с приложением расчёту ядра (CS03), а не сохранённый платёж.
+      final debtId = p['debtId'] as String?;
+      final debt = debtId == null ? null : debts[debtId];
+      if (debt != null) {
+        final amount = debtDueAmount(ledger, amount: _minor(p['amount']), debtId: debtId!, kind: '${debt['kind'] ?? 'loan'}', rate: (debt['rate'] as num?)?.toDouble() ?? 0);
+        out.add(({...p, 'amount': '$amount'}, o.date));
+        continue;
+      }
       out.add((p, o.date));
     }
   }
@@ -47,7 +56,7 @@ List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dyna
 }
 
 class BriefInput {
-  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}, this.monthRemindersEnabled = true});
+  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}, this.debts = const {}, this.monthRemindersEnabled = true});
   final Ledger ledger;
   final DateTime today;
   final Map<String, dynamic> profile;
@@ -60,6 +69,10 @@ class BriefInput {
   /// тем же словарём, что и в боте, — в сводке не бывает `food` или id.
   final Map<String, Map<String, dynamic>> categories;
 
+  /// Банковские долги владельца: id → данные (`kind`, `rate`) — сумма срока
+  /// рассрочки и кредита считается как в приложении (CS03).
+  final Map<String, Map<String, dynamic>> debts;
+
   String categoryName(String id) => chatCategoryName(id, locale, categories);
 }
 
@@ -70,7 +83,7 @@ Brief morningBrief(BriefInput i) {
   final today = i.today;
   // D48/D50: никаких «до зарплаты» — остаток на счетах и лимит владельца.
   final limit = i.profile['dailyLimit'] == null ? null : parseMinor(i.profile['dailyLimit']);
-  final dueToday = _due(i.ledger, i.planned, today, today, locale: i.locale);
+  final dueToday = _due(i.ledger, i.planned, today, today, locale: i.locale, debts: i.debts);
 
   final lines = <String>[
     kk ? 'Шоттарда: <b>${_kzt(i.ledger.liquid())}</b>.' : 'На счетах: <b>${_kzt(i.ledger.liquid())}</b>.',
@@ -82,7 +95,7 @@ Brief morningBrief(BriefInput i) {
       lines.add('• ${p['name']} — ${_kzt(_minor(p['amount']))}');
     }
   }
-  final soon = _due(i.ledger, i.planned, today.add(const Duration(days: 1)), today.add(const Duration(days: 3)), locale: i.locale);
+  final soon = _due(i.ledger, i.planned, today.add(const Duration(days: 1)), today.add(const Duration(days: 3)), locale: i.locale, debts: i.debts);
   if (soon.isNotEmpty) {
     lines.add(kk ? 'Жақын 3 күнде: ${soon.map((e) => '${e.$1['name']} (${e.$2.day}.${e.$2.month.toString().padLeft(2, '0')})').join(', ')}.' : 'В ближайшие 3 дня: ${soon.map((e) => '${e.$1['name']} (${e.$2.day}.${e.$2.month.toString().padLeft(2, '0')})').join(', ')}.');
   }
@@ -145,7 +158,7 @@ Brief eveningBrief(BriefInput i) {
       lines.add(kk ? '«$cat» лимиті: ${st.usedPercent?.round()}%.' : 'Лимит «$cat»: ${st.usedPercent?.round()}%.');
     }
   }
-  final dueTomorrow = _due(i.ledger, i.planned, tomorrow, tomorrow, locale: i.locale);
+  final dueTomorrow = _due(i.ledger, i.planned, tomorrow, tomorrow, locale: i.locale, debts: i.debts);
   if (dueTomorrow.isNotEmpty) {
     lines.add(kk ? 'Ертең төлем: ${dueTomorrow.map((e) => e.$1['name']).join(', ')}.' : 'Завтра платёж: ${dueTomorrow.map((e) => e.$1['name']).join(', ')}.');
   }

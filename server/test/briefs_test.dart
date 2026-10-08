@@ -148,4 +148,28 @@ void personDueBriefTests() {
     });
     expect(morningBrief(input()).body, isNot(contains('Брат')), reason: 'договорённость исполнена частями, долг 20 000 без срока');
   });
+
+  test('CS03: последний платёж рассрочки в сводке — остаток, как в приложении (RU/KK); кредит — остаток плюс проценты месяца', () {
+    Ledger debtOf(int balance) {
+      final l = Ledger();
+      applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});
+      applyLedgerCommand(l, {'type': 'opening', 'id': 'o', 'date': '2026-09-01', 'account': 'card', 'amount': '${kzt(100000)}'});
+      applyLedgerCommand(l, {'type': 'openingDebt', 'id': 'd', 'date': '2026-09-01', 'debtId': 'red', 'amount': '${kzt(balance)}'});
+      return l;
+    }
+    final phone = {'id': 'pl', 'name': 'Телефон', 'amount': '${kzt(50000)}', 'day': 10, 'category': 'other', 'debtId': 'red', 'paid': <String>[], 'start': '2026-09-01'};
+    String brief(Ledger l, Map<String, dynamic> debt, String locale) => morningBrief(BriefInput(
+          ledger: l, today: DateTime(2026, 10, 10), profile: const {}, planned: [phone], limits: const [], locale: locale,
+          debts: {'red': debt},
+        )).body;
+    for (final locale in ['ru', 'kk']) {
+      final body = brief(debtOf(10000), {'name': 'Телефон', 'kind': 'installment', 'rate': 0}, locale);
+      expect(body, contains('10 000 ₸'), reason: locale);
+      expect(body, isNot(contains('50 000 ₸')), reason: locale);
+    }
+    // Кредит под 24 %: остаток 10 000 + проценты 200 — проценты из платежа не выпадают.
+    expect(brief(debtOf(10000), {'name': 'Телефон', 'kind': 'loan', 'rate': 24}, 'ru'), contains('10 200 ₸'));
+    // Обычный месяц — обычный платёж.
+    expect(brief(debtOf(300000), {'name': 'Телефон', 'kind': 'loan', 'rate': 24}, 'ru'), contains('50 000 ₸'));
+  });
 }
