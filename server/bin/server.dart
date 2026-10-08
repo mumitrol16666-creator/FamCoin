@@ -62,6 +62,7 @@ Future<void> _run() async {
     notifications,
     stars: int.tryParse(env['PRO_STARS'] ?? ''),
     days: int.tryParse(env['PRO_DAYS'] ?? ''),
+    adminChat: int.tryParse(env['TELEGRAM_ADMIN_CHAT'] ?? ''),
   )..start();
   Maintenance(db).start();
   final ai = AiService(db, ChatModel(apiKey: env['OPENAI_API_KEY'], model: env['OPENAI_CHAT_MODEL']), chatQuota: int.tryParse(env['AI_CHAT_QUOTA'] ?? ''));

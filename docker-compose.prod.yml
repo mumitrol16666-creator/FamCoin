@@ -50,6 +50,8 @@ services:
       PRO_DAYS: ${PRO_DAYS:-365}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Чат оператора: сигнал, если оплату Pro не удаётся сохранить или провести.
+      TELEGRAM_ADMIN_CHAT: ${TELEGRAM_ADMIN_CHAT:-}
       # Ключ поставщика ИИ: распознавание голосовых в боте, консультант.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-}

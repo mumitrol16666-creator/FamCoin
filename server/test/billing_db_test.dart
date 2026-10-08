@@ -21,8 +21,12 @@ class _FakeTelegram extends Telegram {
   /// То, что Telegram ещё не получил подтверждение: события по update_id.
   final updates = <Map<String, dynamic>>[];
 
+  /// Отправленные сообщения: чат и текст.
+  final sent = <(Object?, String)>[];
+
   @override
   Future<Map<String, dynamic>?> call(String method, Map<String, Object?> body) async {
+    if (method == 'sendMessage') sent.add((body['chat_id'], '${body['text']}'));
     if (method != 'getUpdates') return {'ok': true};
     final from = body['offset'] as int;
     return {
@@ -33,6 +37,27 @@ class _FakeTelegram extends Telegram {
       ],
     };
   }
+}
+
+/// Выдача Pro падает, пока [failing] (таблица платежей недоступна).
+class _FlakyBilling extends BillingService {
+  _FlakyBilling(super.db, super.telegram, super.notifications, {super.adminChat});
+
+  bool failing = true;
+
+  @override
+  Future<ProGrant?> grant(TxSession tx, {required String userId, required String chargeId, required int telegramUserId, required int stars}) {
+    if (failing) throw StateError('таблица payments недоступна');
+    return super.grant(tx, userId: userId, chargeId: chargeId, telegramUserId: telegramUserId, stars: stars);
+  }
+}
+
+/// Процесс «падает» сразу после сохранения оплаты в очередь, до выдачи Pro.
+class _CrashAfterSave extends BillingService {
+  _CrashAfterSave(super.db, super.telegram, super.notifications);
+
+  @override
+  Future<void> process(String chargeId) async {}
 }
 
 Map<String, dynamic> _paid(int updateId, String userId, String charge) => {
@@ -47,6 +72,7 @@ Map<String, dynamic> _paid(int updateId, String userId, String charge) => {
 void main() {
   Pool? pool;
   final created = <String>[];
+  final charges = <String>[];
 
   setUpAll(() async {
     final db = Pool.withEndpoints(
@@ -65,6 +91,8 @@ void main() {
     for (final id in created) {
       await deleteUserData(db, id);
     }
+    await db.execute(Sql.named('DELETE FROM payment_inbox WHERE charge_id = ANY(@c)'), parameters: {'c': charges});
+    await db.execute(Sql.named("DELETE FROM payment_inbox WHERE payment->>'invoice_payload' = ANY(@p)"), parameters: {'p': [for (final id in created) 'pro:$id']});
     await db.close();
   });
 
@@ -90,6 +118,17 @@ void main() {
     final notifications = NotificationService(pool!, LedgerService(pool!), tg, WebPush(pool!, subject: 'mailto:test@example.test'));
     return (tg, BillingService(pool!, tg, notifications));
   }
+
+  NotificationService notif(Telegram tg) => NotificationService(pool!, LedgerService(pool!), tg, WebPush(pool!, subject: 'mailto:test@example.test'));
+
+  Future<Map<String, Object?>> inboxRow(String charge) async {
+    final r = await pool!.execute(Sql.named('SELECT status, attempts, last_error FROM payment_inbox WHERE charge_id = @c'), parameters: {'c': charge});
+    return r.isEmpty ? {} : {'status': r.first[0], 'attempts': r.first[1], 'error': r.first[2]};
+  }
+
+  /// Подошло время повтора (не ждать паузу в тесте).
+  Future<void> due(String charge) =>
+      pool!.execute(Sql.named('UPDATE payment_inbox SET next_at = now() WHERE charge_id = @c'), parameters: {'c': charge});
 
   Future<List<Object?>> state(String userId) async {
     final u = await pool!.execute(Sql.named('SELECT plan, pro_until FROM users WHERE id = @u'), parameters: {'u': userId});
@@ -153,5 +192,103 @@ void main() {
     // Повторная доставка уже подтверждённых событий ничего не меняет.
     await real(4242, const {'id': 4242}, _paid(500, a, 'charge-a-$stamp')['message']['successful_payment'] as Map<String, dynamic>);
     expect((await state(a))[2], 1);
+  });
+
+  test('выдача Pro падает дольше предела: оплата подтверждена Telegram только после сохранения, видна в админке, оператору сигнал; после восстановления Pro выдан ровно один раз', () async {
+    if (skip()) return;
+    final userId = await newUser();
+    final charge = 'charge-long-${DateTime.now().microsecondsSinceEpoch}';
+    charges.add(charge);
+    final tg = _FakeTelegram(pool!);
+    final billing = _FlakyBilling(pool!, tg, notif(tg), adminChat: 999);
+    tg.updates.add(_paid(700, userId, charge));
+
+    await tg.pollOnce();
+    expect(tg.offset, 701, reason: 'оплата сохранена в очереди — только тогда Telegram получает подтверждение');
+    expect((await state(userId))[2], 0);
+    expect(await inboxRow(charge), {'status': 'pending', 'attempts': 1, 'error': contains('таблица payments недоступна')});
+
+    for (var i = 2; i <= BillingService.maxInboxAttempts + 3; i++) {
+      await due(charge);
+      await billing.retryInbox();
+    }
+    final failed = await inboxRow(charge);
+    expect(failed['status'], 'failed', reason: 'после предела — «нужен разбор», а не пропуск');
+    expect(failed['attempts'], BillingService.maxInboxAttempts + 3, reason: 'повторы продолжаются и после предела');
+    final alerts = tg.sent.where((m) => m.$1 == 999).toList();
+    expect(alerts, hasLength(1), reason: 'оператор получает сигнал один раз');
+    expect(alerts.single.$2, contains(charge));
+    final listed = (await billing.inbox()).where((p) => p['chargeId'] == charge).toList();
+    expect(listed, hasLength(1));
+    expect(listed.single['status'], 'failed');
+    expect('${listed.single['email']}', startsWith('billing-'));
+    expect((await state(userId))[0], isNot('pro'));
+
+    // База восстановилась: ближайший повтор выдаёт Pro.
+    billing.failing = false;
+    await due(charge);
+    await billing.retryInbox();
+    final after = await state(userId);
+    expect([after[0], after[2]], ['pro', 1]);
+    expect((await inboxRow(charge))['status'], 'done');
+    expect((await billing.inbox()).where((p) => p['chargeId'] == charge), isEmpty);
+
+    // Ни повтор из админки, ни повторная доставка события больше ничего не меняют.
+    await expectLater(billing.retry(charge), throwsA(isA<ApiError>().having((e) => e.status, 'status', 404)));
+    final (again, _) = service();
+    again.updates.add(_paid(700, userId, charge));
+    await again.pollOnce();
+    final last = await state(userId);
+    expect(last[2], 1);
+    expect(last[1], after[1], reason: 'срок Pro не продлён второй раз');
+  });
+
+  test('перезапуск между сохранением оплаты и выдачей Pro: после старта Pro выдан ровно один раз', () async {
+    if (skip()) return;
+    final userId = await newUser();
+    final charge = 'charge-crash-${DateTime.now().microsecondsSinceEpoch}';
+    charges.add(charge);
+    final tg = _FakeTelegram(pool!);
+    _CrashAfterSave(pool!, tg, notif(tg));
+    tg.updates.add(_paid(800, userId, charge));
+    await tg.pollOnce();
+    expect(tg.offset, 801);
+    expect(await inboxRow(charge), {'status': 'pending', 'attempts': 0, 'error': null});
+    expect((await state(userId))[2], 0);
+
+    // Новый процесс: при старте проводит всё сохранённое.
+    final tg2 = _FakeTelegram(pool!);
+    final restarted = BillingService(pool!, tg2, notif(tg2));
+    await restarted.retryInbox();
+    final s = await state(userId);
+    expect([s[0], s[2]], ['pro', 1]);
+    expect((await inboxRow(charge))['status'], 'done');
+    expect(tg2.sent.where((m) => m.$2.contains('Pro')), hasLength(1), reason: 'платившему пришло «Pro включён»');
+
+    await restarted.retryInbox();
+    expect((await state(userId))[1], s[1]);
+  });
+
+  test('перезапуск после выдачи Pro, но до отметки в очереди: повтор не продлевает Pro и не шлёт уведомление второй раз', () async {
+    if (skip()) return;
+    final userId = await newUser();
+    final charge = 'charge-mark-${DateTime.now().microsecondsSinceEpoch}';
+    charges.add(charge);
+    final (tg, _) = service();
+    tg.updates.add(_paid(900, userId, charge));
+    await tg.pollOnce();
+    final granted = await state(userId);
+    expect([granted[0], granted[2]], ['pro', 1]);
+
+    // Отметка «проведено» потерялась (запись снова pending).
+    await pool!.execute(Sql.named("UPDATE payment_inbox SET status = 'pending', done_at = NULL WHERE charge_id = @c"), parameters: {'c': charge});
+    final tg2 = _FakeTelegram(pool!);
+    final restarted = BillingService(pool!, tg2, notif(tg2));
+    await restarted.retryInbox();
+    final s = await state(userId);
+    expect(s[2], 1);
+    expect(s[1], granted[1], reason: 'срок Pro тот же');
+    expect((await inboxRow(charge))['status'], 'done');
+    expect(tg2.sent, isEmpty, reason: 'повторного «Pro включён» нет');
   });
 }

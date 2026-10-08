@@ -290,6 +290,16 @@ Handler buildHandler(
       admin.require(_bearer(req));
       return _json(200, await billing.all());
     })
+    ..get('/admin/payments/inbox', (Request req) async {
+      admin.require(_bearer(req));
+      return _json(200, await billing.inbox());
+    })
+    ..post('/admin/payments/inbox/<charge>/retry', (Request req, String charge) async {
+      admin.require(_bearer(req));
+      final status = await billing.retry(Uri.decodeComponent(charge));
+      await admin.audit_('payment_retry', target: null, details: {'charge': Uri.decodeComponent(charge), 'status': status});
+      return _json(200, {'status': status});
+    })
     ..post('/admin/payments/<id>/refund', (Request req, String id) async {
       admin.require(_bearer(req));
       await billing.refund(id);

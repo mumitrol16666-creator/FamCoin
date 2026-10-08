@@ -43,24 +43,33 @@ Map<String, dynamic> _callback(int updateId) => {
     };
 
 void main() {
-  test('платёж, который не обрабатывается 30 раз, пропускается: очередь бота не блокируется навсегда', () async {
+  test('оплата, которую не удаётся сохранить, не подтверждается и после 30 попыток: оператор получает сигнал, после восстановления событие проведено', () async {
+    // Раньше после 30 ошибок оплата подтверждалась Telegram и оставалась только
+    // в журнале процесса (аудит 08.10, CS02). Теперь обработчик лишь сохраняет
+    // её в очередь, и пока сохранить нельзя — событие ждёт.
     final tg = _FakeTelegram()..batches.add([_payment(100, 'chBad'), _callback(101)]);
     var calls = 0;
     var handled = 0;
+    var storeDown = true;
+    final stuck = <(int, int)>[];
     tg.onPayment = (chatId, from, payment) async {
       calls++;
-      throw StateError('вечная ошибка');
+      if (storeDown) throw StateError('база недоступна');
     };
     tg.onCallback = (q) async => handled++;
-    for (var i = 0; i < Telegram.maxPaymentAttempts - 1; i++) {
+    tg.onPaymentStuck = (id, n) => stuck.add((id, n));
+    for (var i = 0; i < Telegram.maxPaymentAttempts + 10; i++) {
       expect(await tg.pollOnce(), greaterThan(Duration.zero));
-      expect(tg.offset, 0, reason: 'до предела событие не подтверждено');
+      expect(tg.offset, 0, reason: 'несохранённая оплата не подтверждается ни на какой попытке');
     }
-    expect(handled, 0, reason: 'следующие события ждут');
+    expect(handled, 0, reason: 'более поздние события не перепрыгивают оплату');
+    expect(stuck, [(100, Telegram.maxPaymentAttempts)], reason: 'сигнал оператору — один раз');
+
+    storeDown = false;
     expect(await tg.pollOnce(), Duration.zero);
-    expect(calls, Telegram.maxPaymentAttempts);
-    expect(tg.offset, 102, reason: 'после предела платёж записан в журнал, offset ушёл дальше');
-    expect(handled, 1, reason: 'очередь снова идёт');
+    expect(calls, Telegram.maxPaymentAttempts + 11);
+    expect(tg.offset, 102);
+    expect(handled, 1);
   });
 
   test('оплата: обработчик упал до сохранения — offset не двигается, событие приходит снова и обрабатывается', () async {
