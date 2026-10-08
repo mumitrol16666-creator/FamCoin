@@ -1361,6 +1361,8 @@
   "catchUpExpenseNote": "Есепке алынбаған шығыстар",
   "catchUpIncomeNote": "Есепке алынбаған кіріс",
   "noteOptional": "Ескертпе (міндетті емес)",
+  "borrowMore": "Тағы қарыз алдым",
+  "lendMore": "Тағы қарыз бердім",
   "debtForgivenAction": "Төлемсіз жабу",
   "debtForgivenTitle": "«{person}» алдындағы қарыз жабылсын ба?",
   "@debtForgivenTitle": {"placeholders": {"person": {"type": "String"}}},
@@ -1559,5 +1561,16 @@
   "deleteWithRefundTitle": "Сатып алудың қайтарымы бар",
   "deleteWithRefundBody": "Бұл сатып алу бойынша қайтарым: {amount}. Қайтарымсыз жоюға болмайды, әйтпесе ақша екі рет қайтады. Сатып алуды қайтарыммен бірге жою керек пе?",
   "@deleteWithRefundBody": {"placeholders": {"amount": {"type": "String"}}},
-  "deleteWithRefundAction": "Екеуін де жою"
+  "deleteWithRefundAction": "Екеуін де жою",
+  "welcomeTitle": "Қош келдіңіз, {name}",
+  "@welcomeTitle": {"placeholders": {"name": {"type": "String"}}},
+  "welcomeTitleNoName": "FamCoin-ге қош келдіңіз",
+  "welcomeLead": "FamCoin бүгін қанша жұмсауға болатынын және ақшаның қайда кететінін көрсетеді. Қалай бастайтыныңызды таңдаңыз",
+  "welcomeQuickTitle": "Жылдам бастау",
+  "welcomeQuickMeta": "шамамен бір минут",
+  "welcomeQuickBody": "Аты, шот және күніне қанша жұмсайсыз. Қалғанын кейін қосасыз",
+  "welcomeFullTitle": "Толық баптау",
+  "welcomeFullMeta": "шамамен 5 минут",
+  "welcomeFullBody": "Қосымша несиелер, міндетті төлемдер, қарыздар, лимиттер, мақсат және хабарламалар",
+  "welcomeFoot": "Бәрін кейін баптауда өзгертуге болады"
 }

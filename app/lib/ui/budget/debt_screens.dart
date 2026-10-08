@@ -6,6 +6,7 @@ import '../../state/app_scope.dart';
 import '../../state/app_state.dart';
 import '../../state/models.dart';
 import '../../theme/app_theme.dart';
+import '../ops/add_transaction_sheet.dart';
 import '../ops/transaction_tile.dart';
 import '../widgets/common.dart';
 import 'sheets.dart';
@@ -208,6 +209,16 @@ class PersonDebtScreen extends StatelessWidget {
                       style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                       onPressed: () => showPersonRepaySheet(context, d),
                       child: Text(d.oweMe ? l.debtReceiveAction : l.debtPayAction),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      icon: const Icon(Icons.add),
+                      label: Text(d.oweMe ? l.lendMore : l.borrowMore),
+                      onPressed: () => showAddTransactionSheet(context, draft: VoiceDraft(
+                        kind: d.oweMe ? VoiceKind.lendOut : VoiceKind.borrow,
+                        person: d.person,
+                      )),
                     ),
                     // Вернуть всё и закрыть без оплаты — реже, тише и под главным.
                     Wrap(alignment: WrapAlignment.center, children: [

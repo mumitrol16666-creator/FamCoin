@@ -9,7 +9,7 @@ import 'state/update_check.dart';
 import 'theme/app_theme.dart';
 import 'ui/auth/login_screen.dart';
 import 'ui/auth/pin_screen.dart';
-import 'ui/onboarding/onboarding_screen.dart';
+import 'ui/onboarding/welcome_screen.dart';
 import 'ui/shell.dart';
 import 'ui/widgets/common.dart';
 import 'ui/widgets/content_width.dart';
@@ -170,7 +170,7 @@ class _Home extends StatelessWidget {
             ),
           );
         }
-        return state.onboarded ? const Shell() : const OnboardingScreen();
+        return state.onboarded ? const Shell() : const OnboardingGate();
       },
     );
   }

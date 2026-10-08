@@ -351,19 +351,16 @@ class LedgerService {
           throw ApiError(400, 'bad_request');
         }
         if (utf8.encode(jsonEncode(data)).length > maxEntityBytes) throw ApiError(400, 'bad_request');
-        if (kind == 'goal' && ctx.plan == 'free') {
-          final others = await ctx.s.execute(
-            Sql.named("SELECT count(*) FROM entities WHERE user_id = @u AND kind = 'goal' AND id <> @id"),
-            parameters: {'u': ctx.userId, 'id': id},
+        if ((kind == 'goal' || kind == 'limit') && ctx.plan == 'free') {
+          // Обычная версия ограничивает только новые цели и лимиты (D141).
+          // Созданные в Pro после его окончания остаются и правятся: иначе при
+          // трёх лимитах нельзя было поправить сумму ни одного, даже из первых двух.
+          final r = await ctx.s.execute(
+            Sql.named('SELECT count(*), bool_or(id = @id) FROM entities WHERE user_id = @u AND kind = @k'),
+            parameters: {'u': ctx.userId, 'k': kind, 'id': id},
           );
-          if ((others.first[0] as int) >= freeGoals) throw ApiError(402, 'plan_limit');
-        }
-        if (kind == 'limit' && ctx.plan == 'free') {
-          final others = await ctx.s.execute(
-            Sql.named("SELECT count(*) FROM entities WHERE user_id = @u AND kind = 'limit' AND id <> @id"),
-            parameters: {'u': ctx.userId, 'id': id},
-          );
-          if ((others.first[0] as int) >= freeLimits) throw ApiError(402, 'plan_limit');
+          final exists = r.first[1] == true;
+          if (!exists && (r.first[0] as int) >= (kind == 'goal' ? freeGoals : freeLimits)) throw ApiError(402, 'plan_limit');
         }
         var next = data;
         if (paidMarkKinds.contains(kind)) {

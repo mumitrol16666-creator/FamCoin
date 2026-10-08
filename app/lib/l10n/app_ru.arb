@@ -1634,6 +1634,8 @@
   "catchUpExpenseNote": "Неучтённые траты",
   "catchUpIncomeNote": "Неучтённый доход",
   "noteOptional": "Заметка (необязательно)",
+  "borrowMore": "Взял ещё",
+  "lendMore": "Дал ещё",
   "debtForgivenAction": "Закрыть без оплаты",
   "debtForgivenTitle": "Закрыть долг перед «{person}»?",
   "@debtForgivenTitle": {"placeholders": {"person": {"type": "String"}}},
@@ -1833,5 +1835,16 @@
   "deleteWithRefundTitle": "У покупки есть возврат",
   "deleteWithRefundBody": "Возврат по этой покупке: {amount}. Покупку нельзя удалить без него, иначе деньги вернутся дважды. Удалить покупку вместе с возвратом?",
   "@deleteWithRefundBody": {"placeholders": {"amount": {"type": "String"}}},
-  "deleteWithRefundAction": "Удалить оба"
+  "deleteWithRefundAction": "Удалить оба",
+  "welcomeTitle": "Добро пожаловать, {name}",
+  "@welcomeTitle": {"placeholders": {"name": {"type": "String"}}},
+  "welcomeTitleNoName": "Добро пожаловать в FamCoin",
+  "welcomeLead": "FamCoin покажет, сколько можно потратить сегодня и куда уходят деньги. Выберите, как начать",
+  "welcomeQuickTitle": "Быстрый старт",
+  "welcomeQuickMeta": "около минуты",
+  "welcomeQuickBody": "Имя, счёт и сколько тратить в день. Остальное добавите по ходу дела",
+  "welcomeFullTitle": "Подробная настройка",
+  "welcomeFullMeta": "около 5 минут",
+  "welcomeFullBody": "Ещё кредиты, обязательные платежи, долги, лимиты, цель и уведомления",
+  "welcomeFoot": "Всё можно изменить позже в настройках"
 }

@@ -51,7 +51,11 @@ class _AddSheet extends StatefulWidget {
 
 class _AddSheetState extends State<_AddSheet> {
   /// Есть введённые данные — закрытие требует подтверждения.
-  final _dirty = ValueNotifier<bool>(false);
+  // Предзаполненная форма уже содержит черновик до построения полей.
+  // Тогда их инициализация не уведомляет родителя во время build.
+  late final _dirty = ValueNotifier<bool>(widget.draft != null &&
+      (widget.draft!.amount != null || widget.draft!.note.isNotEmpty ||
+          (widget.draft!.person?.isNotEmpty ?? false)));
 
   @override
   void dispose() {

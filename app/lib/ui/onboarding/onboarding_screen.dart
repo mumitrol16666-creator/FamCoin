@@ -11,11 +11,44 @@ import '../more/categories_screen.dart';
 import 'notification_step.dart';
 import '../widgets/common.dart';
 
+/// Уровень настройки, который человек выбирает на приветствии.
+enum OnboardingLevel {
+  /// Имя, счёт и дневной лимит — остальное добавляется в самом приложении.
+  quick,
+
+  /// Вся анкета.
+  full,
+}
+
+/// Шаги анкеты. Порядок задаёт [_stepsOf]; номер шага на экране — позиция в нём.
+enum _Step { about, mode, account, debts, planned, people, daily, limits, goal, notifications, summary }
+
+const _quickSteps = [_Step.about, _Step.account, _Step.daily];
+const _fullSteps = [
+  _Step.about,
+  _Step.mode,
+  _Step.account,
+  // Кредиты раньше обязательных платежей: платёж по кредиту создаётся
+  // вместе с кредитом, и на следующем шаге он уже виден в списке.
+  _Step.debts,
+  _Step.planned,
+  _Step.people,
+  _Step.daily,
+  _Step.limits,
+  _Step.goal,
+  _Step.notifications,
+  _Step.summary,
+];
+
 /// S06 — анкета первого запуска. Всё введённое отправляется одной
 /// командой: либо сохраняется целиком, либо не сохраняется ничего.
-/// Любой шаг, кроме счёта, можно пропустить и заполнить позже.
+/// Любой шаг, кроме имени и счёта, можно пропустить и заполнить позже.
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({super.key, this.level = OnboardingLevel.full, this.onBack});
+  final OnboardingLevel level;
+
+  /// Возврат на приветствие с первого шага; `null` — стрелки на первом шаге нет.
+  final VoidCallback? onBack;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -47,7 +80,7 @@ class _LimitDraft {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const steps = 11;
+  late final List<_Step> _steps = widget.level == OnboardingLevel.quick ? _quickSteps : _fullSteps;
   int _step = 0;
   bool _busy = false;
 
@@ -158,7 +191,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     // Выбор уведомлений — отдельным запросом после анкеты: он не часть
     // журнала. Если не дошёл, останутся значения по умолчанию (всё включено),
     // человек поправит в «Ещё → Уведомления» — анкету из-за этого не ронять.
-    if (ok) {
+    // В быстром старте шага нет, и по умолчанию остаётся «всё включено».
+    if (ok && _steps.contains(_Step.notifications)) {
       try {
         await state.api.updateNotificationSettings(state.token, Map<String, Object?>.from(_notif));
       } catch (_) {}
@@ -171,29 +205,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final l = context.l10n;
     final fam = context.fam;
     final state = AppScope.of(context).state;
-    final canSkip = _step != 0 && _step != 2 && _step < steps - 1;
-    final canNext = switch (_step) { 0 => _aboutValid, 2 => _accountValid, _ => true };
+    final current = _steps[_step];
+    final last = _step == _steps.length - 1;
+    final canSkip = current != _Step.about && current != _Step.account && !last;
+    final canNext = switch (current) { _Step.about => _aboutValid, _Step.account => _accountValid, _ => true };
 
-    final (title, hint, tip, body) = switch (_step) {
-      0 => (l.ob0Title, l.ob0Hint, l.tipAbout, _aboutStep()),
-      1 => (l.ob1Title, l.ob1Hint, l.tipMode, _modeStep()),
-      2 => (l.ob2Title, l.ob2Hint, l.tipAccount, _accountStep()),
-      // Кредиты раньше обязательных платежей: платёж по кредиту создаётся
-      // вместе с кредитом, и на следующем шаге он уже виден в списке.
-      3 => (l.ob5Title, l.ob5Hint, l.tipDebts, _debtStep()),
-      4 => (l.ob4Title, l.ob4Hint, l.tipPlanned, _plannedStep()),
-      5 => (l.ob6Title, l.ob6Hint, l.tipPeople, _peopleStep()),
-      6 => (l.obDailyTitle, l.obDailyHint, l.tipDailyLimit, _dailyStep()),
-      7 => (l.ob7Title, l.ob7Hint, l.tipLimits, _limitsStep()),
-      8 => (l.obGoalTitle, l.obGoalHint, l.tipGoal, _goalStep()),
-      9 => (l.obNotifTitle, l.obNotifHint, l.tipNotif, NotificationStep(values: _notif, onToggle: (k, v) => setState(() => _notif[k] = v))),
-      _ => (l.ob8Title, l.ob8Hint, l.tipSummary, _summaryStep(state)),
+    final (title, hint, tip, body) = switch (current) {
+      _Step.about => (l.ob0Title, l.ob0Hint, l.tipAbout, _aboutStep()),
+      _Step.mode => (l.ob1Title, l.ob1Hint, l.tipMode, _modeStep()),
+      _Step.account => (l.ob2Title, l.ob2Hint, l.tipAccount, _accountStep()),
+      _Step.debts => (l.ob5Title, l.ob5Hint, l.tipDebts, _debtStep()),
+      _Step.planned => (l.ob4Title, l.ob4Hint, l.tipPlanned, _plannedStep()),
+      _Step.people => (l.ob6Title, l.ob6Hint, l.tipPeople, _peopleStep()),
+      _Step.daily => (l.obDailyTitle, l.obDailyHint, l.tipDailyLimit, _dailyStep()),
+      _Step.limits => (l.ob7Title, l.ob7Hint, l.tipLimits, _limitsStep()),
+      _Step.goal => (l.obGoalTitle, l.obGoalHint, l.tipGoal, _goalStep()),
+      _Step.notifications => (l.obNotifTitle, l.obNotifHint, l.tipNotif, NotificationStep(values: _notif, onToggle: (k, v) => setState(() => _notif[k] = v))),
+      _Step.summary => (l.ob8Title, l.ob8Hint, l.tipSummary, _summaryStep(state)),
     };
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l.obStep(_step + 1, steps)),
-        leading: _step == 0 ? null : IconButton(tooltip: l.tipBack, icon: const Icon(Icons.arrow_back), onPressed: () => setState(() => _step--)),
+        title: Text(l.obStep(_step + 1, _steps.length)),
+        leading: _step == 0
+            ? (widget.onBack == null ? null : IconButton(tooltip: l.tipBack, icon: const Icon(Icons.arrow_back), onPressed: widget.onBack))
+            : IconButton(tooltip: l.tipBack, icon: const Icon(Icons.arrow_back), onPressed: () => setState(() => _step--)),
         actions: [
           if (canSkip) TextButton(onPressed: () => setState(() => _step++), child: Text(l.skip)),
           const SizedBox(width: 4),
@@ -204,7 +240,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(children: [
-              for (var i = 0; i < steps; i++)
+              for (var i = 0; i < _steps.length; i++)
                 Expanded(
                   child: Container(
                     height: 4,
@@ -231,7 +267,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: _step < steps - 1
+            child: !last
                 ? FilledButton(onPressed: canNext ? () => setState(() => _step++) : null, child: Text(l.next))
                 : FilledButton(
                     style: FilledButton.styleFrom(backgroundColor: fam.accent, foregroundColor: fam.onAccent),
