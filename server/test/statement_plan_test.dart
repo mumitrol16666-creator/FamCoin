@@ -329,7 +329,7 @@ void main() {
     final internet = {'name': 'Интернет', 'amount': '${kzt(5000)}', 'day': 10, 'category': 'phone', 'paid': <String>[], 'start': '2026-09-01'};
     final loan = {'name': 'Kaspi Кредит', 'amount': '${kzt(45000)}', 'day': 15, 'category': 'other', 'debtId': 'red', 'paid': <String>[], 'start': '2026-09-01'};
 
-    test('списание на сумму платежа около его срока: расход в категорию платежа, срок отмечается оплаченным', () {
+    test('подтверждённое списание на сумму платежа около его срока: расход в категорию платежа, срок отмечается оплаченным', () {
       final st = statement([
         row('2026-09-12', -5000, RowKind.purchase, 'KAZAKHTELECOM'),
         row('2026-09-13', -5000, RowKind.purchase, 'SMALL'), // второй такой же суммы — уже обычная покупка
@@ -339,19 +339,23 @@ void main() {
       final v = view(l, profile: {'dailyLimit': '500000', 'dailyLimitCarry': true, 'dailyLimitSince': '2026-09-01'}, entities: {
         'planned': {'p1': internet},
       });
-      // Перевод Айгуль на ту же сумму около срока октября — не оплата интернета,
-      // пока человек этого не подтвердил (S01).
+      // Ни KAZAKHTELECOM (категория «связь», как у платежа), ни перевод Айгуль на
+      // ту же сумму около срока октября — не оплата интернета, пока человек
+      // этого не подтвердил (S01, CS01): все три строки — предложения.
       final unconfirmed = planImport(st, v, 'kaspi', imp, DateTime(2026, 11, 2));
-      expect(unconfirmed.ops.map((o) => o.group), [PlanGroup.planned, PlanGroup.purchase, PlanGroup.transferOut]);
-      expect(unconfirmed.suggestions.single.n, 2);
-      expect(unconfirmed.suggestions.single.candidates.single.mark, (kind: 'planned', id: 'p1', period: '2026-10'));
+      expect(unconfirmed.ops.map((o) => o.group), [PlanGroup.purchase, PlanGroup.purchase, PlanGroup.transferOut]);
+      expect(unconfirmed.suggestions.map((s) => s.n), [0, 1, 2]);
+      expect(unconfirmed.suggestions.last.candidates.single.mark, (kind: 'planned', id: 'p1', period: '2026-10'));
 
-      final p = planImport(st, v, 'kaspi', imp, DateTime(2026, 11, 2), links: {2: (kind: 'planned', id: 'p1', period: '2026-10')});
+      final p = planImport(st, v, 'kaspi', imp, DateTime(2026, 11, 2), links: {
+        0: (kind: 'planned', id: 'p1', period: '2026-09'),
+        2: (kind: 'planned', id: 'p1', period: '2026-10'),
+      });
       expect(p.ops.map((o) => o.group), [PlanGroup.planned, PlanGroup.purchase, PlanGroup.planned]);
       expect(p.suggestions, isEmpty);
-      expect(p.linked, [2]);
+      expect(p.linked, [0, 2]);
       expect(p.ops[0].command['splits'], {'phone': '${kzt(5000)}'});
-      expect(p.ops[0].command['meta'], {'who': 'shared', 'note': 'Интернет', 'planned': 'p1', 'period': '2026-09', 'bank': 'KAZAKHTELECOM', 'src': 'kaspi'});
+      expect(p.ops[0].command['meta'], {'who': 'shared', 'note': 'Интернет', 'planned': 'p1', 'period': '2026-09', 'bank': 'KAZAKHTELECOM', 'link': 'user', 'src': 'kaspi'});
       expect(p.ops[0].mark, (kind: 'planned', id: 'p1', period: '2026-09'));
       expect(p.ops[2].mark, (kind: 'planned', id: 'p1', period: '2026-10'));
       expect(p.restartCarry, isTrue, reason: 'обычная покупка 13.09 попала в окно переноса');
@@ -374,13 +378,17 @@ void main() {
       final st = statement([row('2026-09-12', -5000, RowKind.purchase, 'KAZAKHTELECOM')], opening: 100000);
       final l = ledgerWith([opening('2026-09-01', 100000)]);
       final v = view(l, profile: {'dailyLimit': '500000', 'dailyLimitCarry': true, 'dailyLimitSince': '2026-09-01'}, entities: {
-        'planned': {'p1': internet},
+        'planned': {'p1': {...internet, 'name': 'Kazakhtelecom'}},
       });
-      expect(planImport(st, v, 'kaspi', imp, today).restartCarry, isFalse);
+      final p = planImport(st, v, 'kaspi', imp, today);
+      expect(p.ops.single.group, PlanGroup.planned, reason: 'название платежа в описании');
+      expect(p.restartCarry, isFalse);
     });
 
     test('другая сумма, оплаченный срок, далеко от срока, платёж начат позже — обычный расход', () {
       final l = ledgerWith([opening('2026-09-01', 100000)]);
+      // Название платежа есть в описании строки — единственный признак, который связывает сам.
+      final internet = {'name': 'Kazakhtelecom', 'amount': '${kzt(5000)}', 'day': 10, 'category': 'phone', 'paid': <String>[], 'start': '2026-09-01'};
       PlanGroup group(StatementRow r, Map<String, dynamic> planned) =>
           planImport(statement([r], opening: 100000), view(l, entities: {'planned': {'p1': planned}}), 'kaspi', imp, today).ops.single.group;
       expect(group(row('2026-09-12', -5200, RowKind.purchase, 'KAZAKHTELECOM'), internet), PlanGroup.purchase);
@@ -531,15 +539,103 @@ void main() {
       expect(planImport(st, unknown, 'kaspi', imp, today, links: {0: (kind: 'planned', id: 'nope', period: '2026-09')}).ops.single.group, PlanGroup.purchase);
     });
 
-    test('признак, кроме суммы и даты, связывает сразу: название платежа в описании или категория магазина', () {
+    test('сразу связывает только название платежа в описании; магазин той же категории — лишь предложение', () {
       final byName = statement([row('2026-09-12', -5000, RowKind.transfer, 'Коммунальные услуги ТОО')], opening: 100000);
       final v = view(l, entities: {'planned': {'p1': utilities}});
-      expect(planImport(byName, v, 'kaspi', imp, today).ops.single.group, PlanGroup.planned);
+      final named = planImport(byName, v, 'kaspi', imp, today).ops.single;
+      expect(named.group, PlanGroup.planned);
+      expect((named.command['meta'] as Map)['link'], 'name');
+      // АЛСЕКО — коммунальные по категории, но это догадка (CS01): обычный
+      // расход и предложение связи.
       final byShop = statement([row('2026-09-12', -5000, RowKind.purchase, 'АЛСЕКО')], opening: 100000);
-      expect(planImport(byShop, v, 'kaspi', imp, today).ops.single.group, PlanGroup.planned);
+      final shopPlan = planImport(byShop, v, 'kaspi', imp, today);
+      expect(shopPlan.ops.single.group, PlanGroup.purchase);
+      expect(shopPlan.suggestions.single.candidates.single.mark.id, 'p1');
       // Магазин другой категории — не оплата, даже если сумма и дата подходят.
       final shop = statement([row('2026-09-12', -5000, RowKind.purchase, 'MAGNUM')], opening: 100000);
       expect(planImport(shop, v, 'kaspi', imp, today).ops.single.group, PlanGroup.purchase);
+    });
+  });
+
+  // CS01 (аудит 08.10): одинаковая категория — не доказательство, что покупка
+  // оплачивает именно этот план. Сам связывает только признак, указывающий на
+  // один платёж: название в описании или правило из подтверждения человека.
+  group('CS01: категория магазина не назначает обязательство', () {
+    final parents = {'name': 'Продукты родителям', 'amount': '${kzt(5000)}', 'day': 14, 'category': 'food', 'paid': <String>[], 'start': '2026-09-01'};
+    final birthday = {'name': 'Продукты на день рождения', 'amount': '${kzt(5000)}', 'day': 15, 'category': 'food', 'paid': <String>[], 'start': '2026-09-01'};
+    final magnum = row('2026-09-12', -5000, RowKind.purchase, 'MAGNUM AF51');
+
+    test('один план той же категории: покупка остаётся продуктами в дневном лимите, срок не оплачен, связь предложена', () {
+      final st = statement([magnum], opening: 100000);
+      final l = ledgerWith([opening('2026-09-01', 100000)]);
+      final p = planImport(st, view(l, entities: {'planned': {'parents': parents}}), 'kaspi', imp, today);
+      expect(p.ops.single.group, PlanGroup.purchase);
+      expect(p.ops.single.mark, isNull);
+      expect((p.ops.single.command['meta'] as Map).containsKey('planned'), isFalse);
+      expect(p.suggestions.single.candidates.single.mark, (kind: 'planned', id: 'parents', period: '2026-09'));
+      apply(l, p, st);
+      final day = spendBetween(l, d('2026-09-12'), d('2026-09-12'));
+      expect(day.everyday, kzt(5000), reason: 'из дневных трат ничего не исчезает');
+      expect(day.planned, 0);
+      expect(l.balance('kaspi'), kzt(95000), reason: 'остаток счёта верный в любом случае');
+    });
+
+    test('два плана той же категории: ни одной автоматической отметки, выбор человека закрывает ровно один', () {
+      final st = statement([magnum], opening: 100000);
+      final l = ledgerWith([opening('2026-09-01', 100000)]);
+      final v = view(l, entities: {'planned': {'parents': parents, 'birthday': birthday}});
+      final p = planImport(st, v, 'kaspi', imp, today);
+      expect(p.ops.single.mark, isNull);
+      expect(p.suggestions.single.candidates.map((c) => c.mark.id), ['parents', 'birthday'], reason: 'ближайший срок первым, но выбирает человек');
+
+      final chosen = planImport(st, v, 'kaspi', imp, today, links: {0: (kind: 'planned', id: 'birthday', period: '2026-09')});
+      expect([for (final o in chosen.ops) o.mark?.id], ['birthday']);
+      expect((chosen.ops.single.command['meta'] as Map)['link'], 'user');
+      expect(chosen.suggestions, isEmpty);
+    });
+
+    test('подтверждённая связь становится правилом: следующая выписка связывает ту же строку банка сама и не закрывает другой план', () {
+      // Сентябрь: человек подтвердил, что MAGNUM AF51 — «Продукты родителям».
+      final sep = statement([magnum], opening: 100000);
+      final l = ledgerWith([opening('2026-09-01', 100000)]);
+      final both = {'parents': parents, 'birthday': birthday};
+      final first = planImport(sep, view(l, entities: {'planned': both}), 'kaspi', imp, today, links: {0: (kind: 'planned', id: 'parents', period: '2026-09')});
+      apply(l, first, sep);
+
+      // Октябрь, повторный импорт: та же строка банка и ещё одна покупка на ту же сумму.
+      const imp2 = 'bbbbbbbbbbbb';
+      final oct = statement([
+        row('2026-10-12', -5000, RowKind.purchase, 'MAGNUM AF51'),
+        row('2026-10-13', -5000, RowKind.purchase, 'SMALL 12'),
+      ], opening: 95000, from: '2026-10-01', to: '2026-10-31');
+      final v = view(l, entities: {
+        'planned': {
+          'parents': {...parents, 'paid': ['2026-09']},
+          'birthday': birthday,
+        },
+      });
+      final p = planImport(oct, v, 'kaspi', imp2, DateTime(2026, 11, 2));
+      expect([for (final o in p.ops) o.mark], [(kind: 'planned', id: 'parents', period: '2026-10'), null]);
+      expect((p.ops.first.command['meta'] as Map)['link'], 'rule');
+      expect(p.suggestions.single.n, 1, reason: 'SMALL — только предложение');
+      expect(p.suggestions.single.candidates.map((c) => c.mark.id).toSet(), {'birthday'}, reason: 'срок «родителям» уже занят правилом, день рождения не закрыт');
+
+      // Та же строка банка подтверждалась для обоих планов — правило неоднозначно, решает человек.
+      final l2 = ledgerWith([opening('2026-09-01', 100000)]);
+      final twoRules = statement([magnum, row('2026-09-13', -5000, RowKind.purchase, 'MAGNUM AF51')], opening: 100000);
+      apply(l2, planImport(twoRules, view(l2, entities: {'planned': both}), 'kaspi', imp, today, links: {
+        0: (kind: 'planned', id: 'parents', period: '2026-09'),
+        1: (kind: 'planned', id: 'birthday', period: '2026-09'),
+      }), twoRules);
+      final ambiguous = planImport(
+        statement([row('2026-10-12', -5000, RowKind.purchase, 'MAGNUM AF51')], opening: 90000, from: '2026-10-01', to: '2026-10-31'),
+        view(l2, entities: {'planned': {'parents': {...parents, 'paid': ['2026-09']}, 'birthday': {...birthday, 'paid': ['2026-09']}}}),
+        'kaspi',
+        imp2,
+        DateTime(2026, 11, 2),
+      );
+      expect(ambiguous.ops.single.mark, isNull);
+      expect(ambiguous.suggestions.single.candidates.map((c) => c.mark.id).toSet(), {'parents', 'birthday'});
     });
   });
 

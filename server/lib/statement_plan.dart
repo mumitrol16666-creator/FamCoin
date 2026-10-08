@@ -294,8 +294,11 @@ class _Due {
 ///
 /// [links] — связи «строка выписки → срок платежа», подтверждённые человеком
 /// (номер строки → срок). Без подтверждения строка связывается со сроком лишь
-/// при признаке, кроме суммы и даты: название платежа в описании или совпавшая
-/// категория магазина; остальные совпадения по сумме только предлагаются
+/// при признаке, кроме суммы и даты, и только если он указывает на один платёж:
+/// название платежа в описании или правило — такую же строку банка человек уже
+/// подтверждал оплатой этого платежа. Совпавшая категория магазина — не
+/// признак (CS01: MAGNUM на 5 000 ₸ мог закрыть один из двух «продуктовых»
+/// платежей). Остальные совпадения по сумме только предлагаются
 /// ([ImportPlan.suggestions]).
 ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String importId, DateTime today, {Map<int, DueMark> links = const {}}) {
   final l = v.ledger;
@@ -326,6 +329,9 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
   // Оплаты плановых платежей, отмеченные в приложении: дата у них — день
   // отметки, а не день списания в банке.
   final paidPlanned = <Transaction>[];
+  // Правила из подтверждений человека: такая строка банка (описание) уже
+  // оплачивала этот платёж — описание → id платежей.
+  final rules = <String, Set<String>>{};
   var earlier = false;
   for (final t in l.transactions) {
     if (t.type == EventType.reversal) continue;
@@ -334,6 +340,9 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
     if (!reversed && t.type == EventType.expense && t.meta['note'] is String) {
       final spent = t.postings.where((p) => p.accountId.startsWith('expense:')).toList();
       if (spent.length == 1) history[_plain(t.meta['note'] as String)] = spent.single.accountId.substring(8);
+    }
+    if (!reversed && t.type == EventType.expense && t.meta['link'] == 'user' && t.meta['planned'] is String && t.meta['bank'] is String) {
+      rules.putIfAbsent(_plain(t.meta['bank'] as String), () => {}).add(t.meta['planned'] as String);
     }
     if (amount == 0) continue;
     if (t.type == EventType.opening) {
@@ -344,7 +353,10 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
     final key = '${dateToJson(t.date)}|$amount';
     if (!reversed) {
       live.putIfAbsent(key, () => []).add(t);
-      if (t.meta['planned'] != null) paidPlanned.add(t);
+      // Только отметки из приложения: строка прошлой выписки стоит на дате
+      // банка и уже сопоставлена по дню. Иначе сентябрьский платёж прошлого
+      // импорта «съедал» октябрьское списание той же суммы.
+      if (t.meta['planned'] != null && !_importedRow.hasMatch(t.id)) paidPlanned.add(t);
       if (t.date.isBefore(st.from)) earlier = true;
     } else if (_importedRow.hasMatch(t.id) && !(reversalOf[t.id] ?? '').startsWith('iu')) {
       deleted.putIfAbsent(key, () => []).add(t);
@@ -463,17 +475,17 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
 
   bool eligible(StatementRow r) => r.amount < 0 && r.kind != RowKind.withdrawal && r.kind != RowKind.credit;
 
-  /// Название платежа (или долга) названо в описании строки, либо магазин из
-  /// описания той же категории, что и платёж. Одной суммы и близкой даты для
-  /// этого мало (S01): MAGNUM на 5 000 ₸ — не коммунальная услуга.
-  bool evidence(StatementRow r, _Due d) {
+  /// Чем, кроме суммы и даты, строка указывает на платёж: его название (или
+  /// название долга) есть в описании — `name`; такую же строку банка человек
+  /// уже подтверждал оплатой этого платежа — `rule`. Категория магазина не
+  /// считается (S01, CS01): MAGNUM — продукты, но какие из запланированных
+  /// продуктов, знает только человек.
+  String? evidence(StatementRow r, _Due d) {
     final debtId = d.data['debtId'] as String?;
-    if (debtId == null) {
-      final category = merchantCategory(r.details);
-      if (category != null && category == d.data['category']) return true;
-    }
     final debtName = debtId == null ? null : '${v.of('debt')[debtId]?['name'] ?? ''}';
-    return _namedIn(d.name, r.details) || (debtName != null && _namedIn(debtName, r.details));
+    if (_namedIn(d.name, r.details) || (debtName != null && _namedIn(debtName, r.details))) return 'name';
+    if (rules[_plain(r.details)]?.contains(d.id) ?? false) return 'rule';
+    return null;
   }
 
   Iterable<_Due> candidatesFor(StatementRow r, {required bool Function(_Due) where}) {
@@ -485,7 +497,14 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
     return list;
   }
 
-  _Due? dueFor(StatementRow r) => candidatesFor(r, where: (d) => evidence(r, d)).firstOrNull;
+  /// Срок, который строка оплачивает без подтверждения: признак указывает
+  /// ровно на один платёж (ближайший по дате срок этого платежа). Два разных
+  /// платежа с признаком — решает человек.
+  (_Due, String)? dueFor(StatementRow r) {
+    final found = candidatesFor(r, where: (d) => evidence(r, d) != null).toList();
+    if (found.isEmpty || {for (final d in found) '${d.kind}/${d.id}'}.length > 1) return null;
+    return (found.first, evidence(r, found.first)!);
+  }
 
   // Подтверждённые человеком связи занимают свои сроки раньше всех: иначе их
   // забрала бы другая строка. Подтверждение действует, пока срок не оплачен и
@@ -612,7 +631,7 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
     }
   }
 
-  PlannedOp payment(int n, _Due due) {
+  PlannedOp payment(int n, _Due due, String link) {
     final r = st.rows[n];
     final category = expenseIds.contains(due.data['category']) ? due.data['category'] as String : 'other';
     final mark = (kind: due.kind, id: due.id, period: due.period);
@@ -631,6 +650,10 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
         'period': due.period,
         // Что написано в выписке: рядом с названием платежа видно, какая это покупка.
         if (r.details.isNotEmpty) 'bank': clip(r.details),
+        // Почему строка связана со сроком: подтвердил человек (`user` — из
+        // таких строится правило для следующих выписок), название (`name`) или
+        // прежнее подтверждение (`rule`).
+        'link': link,
         'src': 'kaspi',
       },
     }, categoryName(category, v), mark: mark);
@@ -640,7 +663,9 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
   final loans = <({int n, String name})>[];
   final plain = <int>[];
   for (final n in fresh) {
-    final due = linkedDue[n] ?? dueFor(st.rows[n]);
+    final byUser = linkedDue[n];
+    final auto = byUser == null ? dueFor(st.rows[n]) : null;
+    final due = byUser ?? auto?.$1;
     // Разовую покупку с копилкой оплачивают в приложении: там копилка
     // закрывается и деньги возвращаются на счёт.
     if (due == null || due.data['goal'] != null) {
@@ -652,7 +677,7 @@ ImportPlan planImport(BankStatement st, LedgerView v, String accountId, String i
     if (due.data['debtId'] != null) {
       loans.add((n: n, name: due.name));
     } else {
-      ops.add(payment(n, due));
+      ops.add(payment(n, due, byUser != null ? 'user' : auto!.$2));
     }
   }
 

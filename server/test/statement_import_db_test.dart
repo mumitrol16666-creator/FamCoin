@@ -366,7 +366,7 @@ void main() {
     expect(await paid('p1'), ['2026-09']);
     expect(await paid('p2'), isEmpty, reason: 'без подтверждения кредит не оплачен');
     final payment = v.ledger.byId(importRowId(ok.split(':')[1], 4))!;
-    expect(payment.meta, {'who': 'shared', 'note': 'Подписка ChatGPT', 'planned': 'p1', 'period': '2026-09', 'bank': 'OPENAI *CHATGPT SUBSCR (23,20 USD)', 'src': 'kaspi'});
+    expect(payment.meta, {'who': 'shared', 'note': 'Подписка ChatGPT', 'planned': 'p1', 'period': '2026-09', 'bank': 'OPENAI *CHATGPT SUBSCR (23,20 USD)', 'link': 'name', 'src': 'kaspi'});
     final person = liveOps(v.ledger).singleWhere((t) => '${t.meta['note']}'.contains('Айгуль'));
     expect(person.meta['planned'], isNull);
     expect(person.postings.any((p) => p.accountId == 'expense:other'), isTrue, reason: 'обычный расход, а не оплата кредита');
