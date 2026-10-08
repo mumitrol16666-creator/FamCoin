@@ -1894,24 +1894,58 @@ class AppState extends ChangeNotifier {
         },
       ]);
 
-  /// Копилка закрывается целиком, если на дату [date] в ней столько же, сколько
-  /// сейчас: после этой даты не было пополнений или снятий (APP-07).
+  /// Сколько можно взять из копилки цели [g] датой [date] (N05): не больше её
+  /// остатка ни на одну дату с [date] по сегодня. Перевод задним числом
+  /// уменьшает все более поздние остатки, поэтому снятие после [date] уменьшает
+  /// доступное — иначе копилка ушла бы в минус, а обычный счёт был бы завышен.
+  /// Пополнение после [date] доступное не увеличивает: поздние деньги назад не
+  /// переносятся (APP-07). Сегодня и позже — весь нынешний остаток.
+  int piggyAvailableOn(GoalInfo g, DateTime date) {
+    final acc = g.account;
+    if (acc == null || !ledger.hasAccount(acc)) return 0;
+    var low = ledger.balance(acc);
+    if (date.isBefore(today)) {
+      final at = ledger.balance(acc, asOf: date);
+      if (at < low) low = at;
+      for (final t in ledger.transactions) {
+        if (!t.date.isAfter(date) || t.amountOn(acc) == 0) continue;
+        final b = ledger.balance(acc, asOf: t.date);
+        if (b < low) low = b;
+      }
+    }
+    return low < 0 ? 0 : low;
+  }
+
+  /// Снятия из копилки после [date] — из-за них взять датой [date] можно
+  /// меньше, чем в ней тогда было (N05). Их показывает форма оплаты.
+  List<Transaction> piggyWithdrawalsAfter(GoalInfo g, DateTime date) {
+    final acc = g.account;
+    if (acc == null || !ledger.hasAccount(acc) || !date.isBefore(today)) return const [];
+    return [
+      for (final t in ledger.transactions)
+        if (t.date.isAfter(date) && t.type != EventType.reversal && !ledger.isReversed(t.id) && t.amountOn(acc) < 0) t,
+    ];
+  }
+
+  /// Копилка закрывается целиком, если датой [date] из неё можно взять всё,
+  /// что в ней сейчас (APP-07, N05).
   bool goalClosesFully(GoalInfo g, DateTime date) {
     final acc = g.account;
-    if (acc == null || !ledger.hasAccount(acc) || !date.isBefore(today)) return true;
-    return ledger.balance(acc, asOf: date) == ledger.balance(acc);
+    if (acc == null || !ledger.hasAccount(acc)) return true;
+    return piggyAvailableOn(g, date) >= ledger.balance(acc);
   }
 
   /// Команды закрытия цели. С [date] в прошлом перевод из копилки датируется
-  /// ею и берёт только то, что было накоплено на эту дату; если позже в
-  /// копилку клали ещё, она остаётся открытой с остатком — поздние деньги не
-  /// переносятся задним числом и не теряются.
+  /// ею и берёт столько, сколько можно взять на эту дату, не уводя копилку в
+  /// минус позже ([piggyAvailableOn]); остальное покупки платит счёт оплаты.
+  /// Если в копилке остаётся больше (поздние пополнения), она остаётся открытой
+  /// с остатком — поздние деньги не переносятся задним числом и не теряются.
   List<Map<String, dynamic>> closeGoalCommands(GoalInfo g, {required String returnTo, DateTime? date}) {
     final acc = g.account;
     final when = date == null || !date.isBefore(today) ? today : date;
     final exists = acc != null && ledger.hasAccount(acc);
     final full = goalClosesFully(g, when);
-    final amount = !exists ? 0 : (full ? ledger.balance(acc) : ledger.balance(acc, asOf: when));
+    final amount = !exists ? 0 : piggyAvailableOn(g, when);
     return [
       if (amount > 0) {'type': 'transfer', 'id': newId(), 'date': _date(when), 'from': acc, 'to': returnTo, 'amount': amount.toString()},
       if (full) ...[

@@ -276,6 +276,10 @@ void main() {
       expect(s.goals.map((g) => g.id), [goal.id], reason: 'копилка не закрыта автоматически');
       expect(s.ledger.account(goal.account!).archived, isFalse);
       expect(s.ledger.balance('cash') + s.ledger.balance(goal.account!), kzt(50000), reason: '100 000 минус покупка 50 000: деньги не потеряны и не удвоены');
+      // N05: остаток копилки не уходит в минус ни на одну дату после покупки.
+      for (final day in [sep30, DateTime(2026, 10, 1), DateTime(2026, 10, 2), DateTime(2026, 10, 5)]) {
+        expect(s.ledger.balance(goal.account!, asOf: day), greaterThanOrEqualTo(0), reason: '$day');
+      }
     });
   });
 

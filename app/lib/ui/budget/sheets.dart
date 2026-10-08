@@ -77,8 +77,9 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
   final interest = TextEditingController();
   var account = state.activeAccounts.any((a) => a.id == initialAccount) ? initialAccount : (state.payAccountFor(p) ?? _firstAccount(context));
   var payDate = date == null || date.isAfter(state.today) ? state.today : date;
-  // Покупка из копилки (D90): накопленное вернётся на счёт оплаты той же командой.
-  final fromPiggy = p.once == null ? 0 : state.purchaseSaved(p);
+  // Покупка из копилки (D90): накопленное вернётся на счёт оплаты той же
+  // командой. Сумма — та же, что проведёт оплата на выбранную дату (N05).
+  final goal = p.once == null ? null : state.purchaseGoal(p);
   return showFormSheet<void>(
     context,
     title: title ?? (p.person != null ? plannedTitle(l, p) : '${l.pay}: ${p.name}'),
@@ -126,8 +127,11 @@ Future<void> showPayDueSheet(BuildContext context, DueItem due, {DateTime? date,
           const SizedBox(height: 12),
         ],
         AccountPicker(accounts: state.activeAccounts, value: account, onChanged: (v) => set(() => account = v)),
-        if (fromPiggy > 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text(l.purchaseFromPiggy(moneyInText(fromPiggy)), style: TextStyle(fontSize: 12, color: ctx.fam.text2))),
-        ListenableBuilder(listenable: amount, builder: (_, _) => MinusWarning(accountId: account, amount: parseAmount(amount.text), returned: fromPiggy)),
+        if (goal != null) ..._piggyNotes(ctx, state, goal, payDate, locale),
+        ListenableBuilder(
+          listenable: amount,
+          builder: (_, _) => MinusWarning(accountId: account, amount: parseAmount(amount.text), returned: goal == null ? 0 : state.piggyAvailableOn(goal, payDate)),
+        ),
         const SizedBox(height: 20),
         SubmitButton(
           label: l.pay,
@@ -219,6 +223,22 @@ Future<(DueItem?,)?> askLoanDue(BuildContext context, List<DueItem> dues) async 
       ),
     ),
   );
+}
+
+/// Сколько вернётся из копилки при оплате датой [date] и, если позже из неё
+/// уже брали, — какие снятия урезали сумму (N05). Числа те же, что проведёт оплата.
+List<Widget> _piggyNotes(BuildContext ctx, AppState state, GoalInfo goal, DateTime date, String locale) {
+  final l = ctx.l10n;
+  final style = TextStyle(fontSize: 12, color: ctx.fam.text2);
+  final available = state.piggyAvailableOn(goal, date);
+  final had = goal.account == null || !state.ledger.hasAccount(goal.account!) ? 0 : state.ledger.balance(goal.account!, asOf: date);
+  final later = state.piggyWithdrawalsAfter(goal, date);
+  if (later.isNotEmpty && available < had) {
+    final list = [for (final t in later) '${DateFormat.MMMMd(locale).format(t.date)} — ${moneyInText(-t.amountOn(goal.account!))}'].join(', ');
+    return [Padding(padding: const EdgeInsets.only(top: 8), child: Text(l.piggyLimited(DateFormat.MMMMd(locale).format(date), moneyInText(had), list, moneyInText(available)), style: style.copyWith(color: ctx.fam.warn)))];
+  }
+  if (available <= 0) return const [];
+  return [Padding(padding: const EdgeInsets.only(top: 8), child: Text(l.purchaseFromPiggy(moneyInText(available)), style: style))];
 }
 
 /// Сроки графика кредита на ближайшие два месяца (вместе с просроченными).
