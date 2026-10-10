@@ -4,6 +4,7 @@
 library;
 
 import 'package:famcoin/ui/analytics/analytics_screen.dart';
+import 'package:famcoin/ui/analytics/category_screen.dart';
 import 'package:famcoin/ui/analytics/money_tab.dart';
 import 'package:famcoin/ui/analytics/month_tab.dart';
 import 'package:famcoin/ui/analytics/trend_chart.dart';
@@ -179,4 +180,25 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   }
+
+  testWidgets('«Месяц»: доходы по категориям, нажатие открывает операции категории дохода (D165)', (tester) async {
+    final f = await pumpApp(tester, home: const AnalyticsScreen(), size: const Size(390, 3200));
+    final s = f.state;
+    await s.addIncome(amount: kzt(300000), source: 'salary', account: 'cash', date: s.today);
+    await s.addIncome(amount: kzt(8000), source: 'side', account: 'cash', date: s.today, note: 'уроки');
+    await s.addPersonDebt(kind: 'borrow', amount: kzt(50000), person: 'Вадим', account: 'cash', date: s.today);
+    await tester.pumpAndSettle();
+    expect(find.text('Откуда пришли деньги'), findsOneWidget);
+    expect(s.incomeCategoriesFor(s.monthStart).map((e) => e.key), ['salary', 'side'], reason: 'займ не категория дохода');
+    expect(find.text('Взятое в долг сюда не входит: это не заработок'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    final side = find.text('Подработка');
+    await tester.ensureVisible(side.last);
+    await tester.tap(side.last);
+    await tester.pumpAndSettle();
+    expect(find.byType(CategoryScreen), findsOneWidget);
+    expect(find.text('1 операция'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

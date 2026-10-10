@@ -768,6 +768,22 @@ class Ledger {
     return result;
   }
 
+  /// Доход по категориям за период (D165): ключ — счёт `income:<категория>`.
+  /// Займы, возвраты долгов и переводы сюда не попадают — у них нет счёта
+  /// дохода; сумма по всем категориям равна [PeriodReport.earned].
+  Map<String, int> incomeByCategory(DateTime from, DateTime to) {
+    final result = <String, int>{};
+    for (final tx in _transactions) {
+      if (tx.date.isBefore(from) || !tx.date.isBefore(to)) continue;
+      for (final p in tx.postings) {
+        if (_accounts[p.accountId]!.kind == LedgerKind.income) {
+          result.update(p.accountId, (v) => v + p.amount, ifAbsent: () => p.amount);
+        }
+      }
+    }
+    return result;
+  }
+
   // -------------------------------------------------------------- резервы
 
   String _rkey(String goalId, String accountId) => '$goalId|$accountId';

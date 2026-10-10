@@ -74,6 +74,7 @@ class _MonthTabState extends State<MonthTab> {
     final compare = comparable ? monthCompareText(l, report: report, prev: prev) : '';
 
     final cats = state.categoriesFor(month);
+    final incomeCats = state.incomeCategoriesFor(month);
     final byWho = state.expenseByWho(month);
     final split = state.expenseTypeSplit(month);
     final typeAmounts = [split.mandatory, split.regular, split.discretionary];
@@ -189,6 +190,18 @@ class _MonthTabState extends State<MonthTab> {
         ],
 
         // Как шёл месяц по дням.
+        // Откуда пришли деньги (D165): заработанное по категориям, без займов.
+        SectionHeader(l.monthIncomeWhere),
+        if (incomeCats.isEmpty)
+          EmptyHint(l.noIncomeMonth)
+        else
+          CategoryChart(
+            categories: incomeCats,
+            previousCategories: comparable ? state.incomeCategoriesFor(state.monthOf(offset - 1)) : const [],
+            onOpenCategory: (id) => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryScreen(category: id, month: month, income: true))),
+          ),
+        if (report.borrowed > 0) Padding(padding: const EdgeInsets.only(top: 6), child: Text(l.incomeWithoutBorrowed, style: TextStyle(fontSize: 12, color: fam.text2))),
+
         SectionHeader(l.moneyFlow),
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

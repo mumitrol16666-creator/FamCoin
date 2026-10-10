@@ -9,8 +9,11 @@ import '../widgets/common.dart';
 
 /// S24 — категория в деталях: сумма месяца и составляющие её операции.
 class CategoryScreen extends StatelessWidget {
-  const CategoryScreen({super.key, required this.category, required this.month});
+  const CategoryScreen({super.key, required this.category, required this.month, this.income = false});
   final String category;
+
+  /// Категория дохода (D165): сумма и операции берутся из доходов, лимита нет.
+  final bool income;
   final DateTime month;
 
   @override
@@ -22,9 +25,9 @@ class CategoryScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: state,
       builder: (context, _) {
-        final total = state.categoriesFor(month).where((e) => e.key == category).firstOrNull?.value ?? 0;
-        final txs = state.categoryTransactions(category, month);
-        final limit = state.limits.where((x) => x.category == category).firstOrNull;
+        final total = (income ? state.incomeCategoriesFor(month) : state.categoriesFor(month)).where((e) => e.key == category).firstOrNull?.value ?? 0;
+        final txs = state.categoryTransactions(category, month, income: income);
+        final limit = income ? null : state.limits.where((x) => x.category == category).firstOrNull;
         return Scaffold(
           appBar: AppBar(title: Text(categoryName(l, category))),
           body: TransactionHistoryList(

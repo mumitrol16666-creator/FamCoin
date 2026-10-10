@@ -129,6 +129,15 @@ List<Map<String, Object?>> _categories(AppState s, AppLocalizations l, DateTime 
   ];
 }
 
+/// Доходы месяца по категориям (D165) с прошлым месяцем рядом — не больше 12.
+List<Map<String, Object?>> _incomeCategories(AppState s, AppLocalizations l, DateTime month, {required bool withPrevious}) {
+  final prev = {for (final e in s.incomeCategoriesFor(DateTime(month.year, month.month - 1, 1))) e.key: e.value};
+  return [
+    for (final e in s.incomeCategoriesFor(month).take(12))
+      {'name': categoryName(l, e.key), 'amount': _t(e.value), if (withPrevious) 'previousMonthAmount': _t(prev[e.key] ?? 0)},
+  ];
+}
+
 Map<String, Object?> _types(AppState s, DateTime month) {
   final split = s.expenseTypeSplit(month);
   return {'mandatory': _t(split.mandatory), 'regular': _t(split.regular), 'discretionary': _t(split.discretionary)};
@@ -252,6 +261,7 @@ Map<String, Object?> aiChatContext(AppState s, AppLocalizations l) {
           ],
     'categoryLimitsTotal': limits.isEmpty ? null : {'usedPercent': _round1(s.budgetUsedPercent), 'monthElapsedPercent': _round1(s.monthElapsedPercent)},
     'expenseByCategory': _categories(s, l, month, withPrevious: hasPrev),
+    'incomeByCategory': _incomeCategories(s, l, month, withPrevious: hasPrev),
     'expenseCategoriesTotal': allCategories,
     'expenseByType': _types(s, month),
     'monthEndBalanceForecast': {
@@ -347,6 +357,7 @@ Map<String, Object?> aiReviewContext(AppState s, AppLocalizations l, DateTime mo
     'month': {'income': _t(sum.income), 'expense': _t(sum.expense), 'debtPayments': _t(sum.debtPayments), 'incomeMinusExpense': _t(sum.income - sum.expense)},
     'previousMonth': hasPrev ? {'month': _monthText(prevMonth, l), 'income': _t(sum.prevIncome), 'expense': _t(sum.prevExpense)} : null,
     'expenseByCategory': _categories(s, l, sum.month, withPrevious: hasPrev),
+    'incomeByCategory': _incomeCategories(s, l, sum.month, withPrevious: hasPrev),
     'expenseByType': _types(s, sum.month),
     'averageEverydaySpendPerDay': _t(sum.avgDaily),
     'plannedPayments': {'paid': sum.paymentsPaid, 'total': sum.paymentsTotal},

@@ -1038,6 +1038,16 @@ class AppState extends ChangeNotifier {
       ledger.report(monthStart, DateTime(monthStart.year, monthStart.month + 1, 1));
 
   /// Расход по категориям месяца: id категории → сумма, по убыванию.
+  /// Доходы месяца по категориям, по убыванию (D165). Сумма равна
+  /// заработанному за месяц — без займов и возвратов долгов.
+  List<MapEntry<String, int>> incomeCategoriesFor(DateTime monthStart) {
+    final end = DateTime(monthStart.year, monthStart.month + 1, 1);
+    return [
+      for (final e in ledger.incomeByCategory(monthStart, end).entries)
+        if (e.value != 0) MapEntry(e.key.substring(e.key.indexOf(':') + 1), e.value),
+    ]..sort((a, b) => b.value.compareTo(a.value));
+  }
+
   List<MapEntry<String, int>> categoriesFor(DateTime monthStart) {
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
     final raw = ledger.expenseByCategory(monthStart, end);
@@ -1154,8 +1164,12 @@ class AppState extends ChangeNotifier {
   }
 
   /// Операции месяца, затронувшие категорию расхода.
-  List<Transaction> categoryTransactions(String category, DateTime monthStart) {
+  List<Transaction> categoryTransactions(String category, DateTime monthStart, {bool income = false}) {
     final end = DateTime(monthStart.year, monthStart.month + 1, 1);
+    if (income) {
+      final acc = incomeAccount(category);
+      return userTransactions.where((t) => !t.date.isBefore(monthStart) && t.date.isBefore(end) && t.postings.any((p) => p.accountId == acc)).toList();
+    }
     if (category == debtsCategory) {
       final ids = {for (final t in ledger.debtPaymentsIn(monthStart, end)) t.id};
       return userTransactions.where((t) => ids.contains(t.id)).toList();
