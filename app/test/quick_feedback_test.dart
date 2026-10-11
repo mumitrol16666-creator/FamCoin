@@ -1,6 +1,6 @@
-/// D166: отклик на быструю операцию — индикатор на плитке до ответа сервера,
-/// «монетка» с вибрацией после записи, два касания — две траты, выключатель
-/// в настройках.
+/// D166: отклик на записанную операцию — индикатор на плитке до ответа
+/// сервера, «монетка» с вибрацией после записи (плитка и обычная форма),
+/// два касания — две траты, выключатель в настройках.
 library;
 
 import 'dart:async';
@@ -14,11 +14,13 @@ import 'package:famcoin/theme/app_theme.dart';
 import 'package:famcoin/ui/home/quick_actions.dart';
 import 'package:famcoin/ui/more/settings_screen.dart';
 import 'package:famcoin/ui/widgets/record_feedback.dart';
+import 'package:famcoin_core/famcoin_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'audit_regression_test.dart' show FakeServer;
+import 'ux_gaps_a_test.dart' show openForm, pumpForm;
 
 Future<(FakeServer, Settings)> pumpRow(WidgetTester tester, {Widget? home, Map<String, Object> prefs = const {}}) async {
   tester.view.physicalSize = const Size(390, 844);
@@ -99,5 +101,22 @@ void main() {
     await tester.tap(find.text('Звук при записи'));
     await tester.pumpAndSettle();
     expect(settings.recordSound, isFalse);
+  });
+
+  testWidgets('обычная форма: «монетка» после сохранения расхода, при ошибке сети тихо', (tester) async {
+    recordFeedbackLog.clear();
+    final f = await pumpForm(tester);
+    await openForm(tester);
+    await tester.enterText(find.byType(TextField).first, '1500');
+    await tester.pump();
+    f.offline = true;
+    await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+    await tester.pumpAndSettle();
+    expect(recordFeedbackLog, isEmpty, reason: 'запись не прошла — звука нет');
+    f.offline = false;
+    await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+    await tester.pumpAndSettle();
+    expect(f.state.userTransactions.where((t) => t.type == EventType.expense).length, 1, reason: 'повтор после ошибки сети — одна трата');
+    expect(recordFeedbackLog, ['coin']);
   });
 }

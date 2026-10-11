@@ -15,6 +15,7 @@ import '../more/categories_screen.dart';
 import '../onboarding/onboarding_screen.dart' show DayPicker;
 import 'voice_sheet.dart';
 import '../widgets/common.dart';
+import '../widgets/record_feedback.dart';
 import 'big_purchase.dart';
 import 'income_goals_sheet.dart';
 
@@ -361,7 +362,9 @@ class _TransactionFieldsState extends State<TransactionFields> {
     }
     if (!mounted) return;
     widget.dirty?.value = false;
-    Navigator.of(context).pop();
+    final nav = Navigator.of(context);
+    nav.pop();
+    recordedFeedback(nav.context);
     messenger.showSnackBar(SnackBar(content: Text(l.installmentSaved)));
   }
 
@@ -461,6 +464,7 @@ class _TransactionFieldsState extends State<TransactionFields> {
     widget.dirty?.value = false;
     final nav = Navigator.of(context);
     nav.pop();
+    recordedFeedback(nav.context);
     // После дохода — предложение отложить часть на цели (D96). Лист сам
     // говорит, что доход записан, поэтому «Операция записана» не дублируем.
     // Непредвиденную трату можно покрыть из копилки (D101).
@@ -820,7 +824,12 @@ class _TransactionFieldsState extends State<TransactionFields> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: InfoBanner(_error!, color: fam.warnBg, icon: Icons.error_outline)),
         FilledButton(
-          onPressed: _valid && !_busy ? _save : null,
+          onPressed: _valid && !_busy
+              ? () {
+                  armRecordFeedback(context);
+                  _save();
+                }
+              : null,
           child: _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : Text(l.save),
         ),
       ]),
