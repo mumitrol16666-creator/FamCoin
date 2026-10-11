@@ -157,6 +157,39 @@
     // Проверка обновлений (D103): приложение просит перезагрузить страницу,
     // когда на сервере новая сборка.
     window.famcoinReload = function () { window.location.reload(); };
+    // Звук записи операции (D166): «монетка» синтезируется Web Audio, файлов
+    // нет. arm() вызывается внутри касания — Safari разрешает звук только
+    // контексту, созданному по жесту; coin() играет позже, после ответа сервера.
+    window.famcoinSound = {
+      _ctx: null,
+      arm: function () {
+        try {
+          var C = window.AudioContext || window.webkitAudioContext;
+          if (!C) return;
+          if (!this._ctx) this._ctx = new C();
+          if (this._ctx.state === 'suspended') this._ctx.resume();
+        } catch (e) {}
+      },
+      coin: function () {
+        try {
+          this.arm();
+          var ctx = this._ctx;
+          if (!ctx) return;
+          var t = ctx.currentTime;
+          [[988, 0], [1319, 0.08]].forEach(function (p) {
+            var o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sine';
+            o.frequency.value = p[0];
+            g.gain.setValueAtTime(0.0001, t + p[1]);
+            g.gain.exponentialRampToValueAtTime(0.22, t + p[1] + 0.012);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + p[1] + 0.32);
+            o.connect(g).connect(ctx.destination);
+            o.start(t + p[1]);
+            o.stop(t + p[1] + 0.36);
+          });
+        } catch (e) {}
+      }
+    };
     window.famcoinPush = {
       _ios: function () {
         return /iPad|iPhone|iPod/.test(navigator.userAgent) ||

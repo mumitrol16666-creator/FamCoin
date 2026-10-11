@@ -23,6 +23,9 @@ class FakeServer {
 
   /// Следующая команда применяется на сервере, но ответ до клиента не доходит.
   bool dropNextResponse = false;
+
+  /// Медленная сеть: команды ждут этого будущего перед обработкой.
+  Future<void>? commandGate;
   int revision = 0;
   int applied = 0;
   final ledger = Ledger();
@@ -127,6 +130,7 @@ class FakeServer {
     if (req.url.path.startsWith('/ai')) return _ai(req);
     final cmd = jsonDecode(req.body) as Map<String, dynamic>;
     final id = cmd['commandId'] as String;
+    await commandGate;
     if (seen.contains(id)) return http.Response(jsonEncode({'revision': revision, 'repeated': true}), 200);
     try {
       final before = ledger.transactions.length;

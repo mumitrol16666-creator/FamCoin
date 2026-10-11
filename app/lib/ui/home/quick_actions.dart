@@ -8,6 +8,7 @@ import '../../state/models.dart';
 import '../../theme/app_theme.dart';
 import '../budget/sheets.dart';
 import '../widgets/common.dart';
+import '../widgets/record_feedback.dart';
 import '../ops/big_purchase.dart';
 
 /// Быстрые операции (D46): ряд плиток на главной. Тап — расход записан
@@ -15,8 +16,38 @@ import '../ops/big_purchase.dart';
 /// Долгое нажатие (D106) — записать с другой суммой: лист с подставленной
 /// суммой плитки, «Записать» проводит трату один раз, сама плитка не меняется;
 /// в том же листе — «Настроить плитку».
-class QuickActionsRow extends StatelessWidget {
+///
+/// Отклик (D166): пока сервер не ответил, на плитке вместо значка крутится
+/// индикатор; после записи — вибрация и звук «монетки» (отключается в
+/// настройках). Повторное нажатие не блокируется: два касания — две поездки.
+class QuickActionsRow extends StatefulWidget {
   const QuickActionsRow({super.key});
+
+  @override
+  State<QuickActionsRow> createState() => _QuickActionsRowState();
+}
+
+class _QuickActionsRowState extends State<QuickActionsRow> {
+  /// Сколько записей по плитке ещё ждут ответа сервера.
+  final _inFlight = <String, int>{};
+
+  Future<void> _tracked(String id, Future<void> Function() run) async {
+    setState(() => _inFlight[id] = (_inFlight[id] ?? 0) + 1);
+    try {
+      await run();
+    } finally {
+      if (mounted) {
+        setState(() {
+          final left = (_inFlight[id] ?? 1) - 1;
+          if (left <= 0) {
+            _inFlight.remove(id);
+          } else {
+            _inFlight[id] = left;
+          }
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,12 +84,26 @@ class QuickActionsRow extends StatelessWidget {
                   margin: const EdgeInsets.only(right: 10, bottom: 4),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
-                    onTap: () => _record(context, state, q, q.amount),
-                    onLongPress: () => _other(context, state, q),
+                    onTap: () {
+                      armRecordFeedback(context);
+                      _tracked(q.id, () => _record(context, state, q, q.amount));
+                    },
+                    onLongPress: () {
+                      armRecordFeedback(context);
+                      _tracked(q.id, () => _other(context, state, q));
+                    },
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                        CategoryGlyph(categoryById(q.category), size: 20, color: context.scheme.primary),
+                        if (_inFlight.containsKey(q.id))
+                          SizedBox(
+                            key: ValueKey('quick-busy-${q.id}'),
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2.2, color: context.scheme.primary),
+                          )
+                        else
+                          CategoryGlyph(categoryById(q.category), size: 20, color: context.scheme.primary),
                         const SizedBox(height: 6),
                         Text(q.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                         MoneyText(q.amount, style: TextStyle(fontSize: 12, color: fam.text2)),
@@ -115,6 +160,7 @@ class QuickActionsRow extends StatelessWidget {
       () => state.addExpense(amount: amount, category: q.category, account: account, date: state.today, note: q.name, time: timeToField(TimeOfDay.now()), plannedPurchase: kind.planned_, unexpected: kind.unexpected_),
     );
     if (!ok) return;
+    if (context.mounted) recordedFeedback(context);
     if (kind.unexpected_ && context.mounted && await offerCoverFromGoal(context, state, amount: amount, account: account)) return;
     // Свежая запись — первая в журнале; «Отменить» проводит отмену, история остаётся.
     final tx = state.userTransactions.firstOrNull;

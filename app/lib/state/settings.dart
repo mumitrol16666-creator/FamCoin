@@ -93,6 +93,13 @@ class Settings extends ChangeNotifier {
   }
 
   /// Советы на главной (D96): выключатель в настройках, по умолчанию включены.
+  /// Звук «монетки» и лёгкая вибрация после записи операции (D166).
+  bool get recordSound => _prefs.getBool('recordSound') ?? true;
+  set recordSound(bool value) {
+    _prefs.setBool('recordSound', value);
+    notifyListeners();
+  }
+
   bool get tipsEnabled => _prefs.getBool('tipsEnabled') ?? true;
   set tipsEnabled(bool value) {
     _prefs.setBool('tipsEnabled', value);
