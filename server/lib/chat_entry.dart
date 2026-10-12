@@ -822,9 +822,14 @@ class ChatEntry {
   /// открывает срок. Повторное нажатие повторяет ту же команду — журнал
   /// примет её один раз. Сообщение дополняется строкой об исходе, кнопка
   /// этого платежа заменяется на «Отменить».
-  Future<String?> _payDue(int chatId, int messageId, Map<String, dynamic> message, List<String> parts) async {
-    if (parts.length < 3) return null;
-    final planId = parts[1], period = parts[2], undo = parts.length > 3 && parts[3] == 'u';
+  Future<String?> _payDue(int chatId, int messageId, Map<String, dynamic> message, String data) async {
+    // Разбор с конца: id платежа может содержать «:» (срок личного долга —
+    // `pd:Имя`), период — нет.
+    final undo = data.endsWith(':u');
+    final core = data.substring(2, undo ? data.length - 2 : data.length);
+    final cut = core.lastIndexOf(':');
+    if (cut <= 0 || cut == core.length - 1) return null;
+    final planId = core.substring(0, cut), period = core.substring(cut + 1);
     final userId = await _userOf(chatId);
     final v = userId == null ? null : await ledger.view(userId);
     if (userId == null || v == null) return 'Чат не привязан к аккаунту.';
@@ -965,7 +970,7 @@ class ChatEntry {
     final messageId = message?['message_id'] as int?;
     final data = q['data'] as String? ?? '';
     if (data.startsWith('q:') && chatId != null) return _quick(chatId, data.substring(2));
-    if (data.startsWith('p:') && chatId != null && messageId != null) return _payDue(chatId, messageId, message!, data.split(':'));
+    if (data.startsWith('p:') && chatId != null && messageId != null) return _payDue(chatId, messageId, message!, data);
     if (data.startsWith('i:') && chatId != null && messageId != null && imports != null) return imports!.press(chatId, messageId, data.split(':'));
     final parts = data.split(':');
     if (parts.length < 3 || parts[0] != 'd' || chatId == null || messageId == null) return null;

@@ -95,6 +95,16 @@ void main() {
     expect(b.body, contains('· на счёте «Наличные» не хватает'), reason: 'на наличных 2 500, нужно 5 000 — одним нажатием нельзя');
   });
 
+  test('срок личного долга: id с двоеточием, кнопка «Оплатил» возвращает остаток долга человеку', () {
+    final l = _ledger();
+    applyLedgerCommand(l, {'type': 'borrow', 'id': 'b', 'date': '2026-10-02', 'account': 'card', 'person': 'Maestro', 'amount': '${kzt(63000)}'});
+    applyLedgerCommand(l, {'type': 'repaymentMade', 'id': 'r', 'date': '2026-10-10', 'account': 'card', 'person': 'Maestro', 'principal': '${kzt(15000)}'});
+    const due = {'id': 'pd:Maestro', 'name': 'Maestro', 'amount': '6300000', 'day': 1, 'category': 'other', 'paid': <String>[], 'person': 'Maestro', 'onDate': '2026-10-12'};
+    final b = dueReminder(_input(l, today, const [due]), const [_card], stage: 'noon')!;
+    expect(b.title, 'Сегодня платёж: Долг: Maestro — 48 000 ₸');
+    expect(b.buttons, [[{'text': '✅ Оплатил: Долг: Maestro', 'callback_data': 'p:pd:Maestro:2026-10-12'}]]);
+  });
+
   test('слишком длинный ключ платежа — без кнопки, но в тексте есть', () {
     final l = _ledger();
     final long = {...net, 'id': 'pd:${'Ооооооооооооооооооооооооооооо'}'};

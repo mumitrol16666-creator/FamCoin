@@ -131,6 +131,33 @@ void main() {
     expect((await ledger.view(id))!.ledger.liquid(), kzt(100000));
   });
 
+  test('кнопка «Оплатил» у срока личного долга: id `pd:Имя` разбирается, возврат записан, срок отмечен', () async {
+    if (skip()) return;
+    final ledger = LedgerService(pool!);
+    final tg = _Telegram(pool!);
+    final chat = ChatEntry(pool!, ledger, tg);
+    final chatId = 930000000 + DateTime.now().microsecondsSinceEpoch % 99999999;
+    final r = await AuthService(pool!).register('dues-${DateTime.now().microsecondsSinceEpoch}-${seq++}@example.test', 'Test-pass-12345', 'ru');
+    final id = ((r['user'] as Map)['id']) as String;
+    users.add(id);
+    Future<void> cmd(Map<String, dynamic> c) => ledger.command(id, {'commandId': 'c${seq++}-${DateTime.now().microsecondsSinceEpoch}', ...c});
+    await cmd({'type': 'updateProfile', 'profile': {'onboarded': true}});
+    await cmd({'type': 'addMoneyAccount', 'accountId': 'card'});
+    await cmd({'type': 'upsertEntity', 'kind': 'account', 'entityId': 'card', 'data': {'name': 'Kaspi Gold', 'type': 'card'}});
+    await cmd({'type': 'opening', 'id': 'op', 'date': '2026-09-01', 'account': 'card', 'amount': '${kzt(100000)}'});
+    await cmd({'type': 'borrow', 'id': 'b', 'date': '2026-10-02', 'account': 'card', 'person': 'Maestro', 'amount': '${kzt(63000)}'});
+    await cmd({'type': 'upsertEntity', 'kind': 'planned', 'entityId': 'pd:Maestro', 'data': {'name': 'Maestro', 'amount': '${kzt(63000)}', 'day': 1, 'category': 'other', 'person': 'Maestro', 'onDate': '2026-10-12'}});
+    await pool!.execute(Sql.named('UPDATE users SET telegram_chat_id = @c WHERE id = @u'), parameters: {'c': chatId, 'u': id});
+    Future<void> press(String data) => chat.onCallback({'id': 'q', 'data': data, 'message': {'message_id': 9, 'chat': {'id': chatId}, 'text': 'Сегодня платёж'}});
+    await press('p:pd:Maestro:2026-10-12');
+    expect('${tg.last('answerCallbackQuery')['text']}', 'Записано');
+    final v = (await ledger.view(id))!;
+    expect(v.ledger.liquid(), kzt(100000), reason: '163 000 на счёте минус 63 000 возврата');
+    expect((v.of('planned')['pd:Maestro']!['paid'] as List), ['2026-10-12']);
+    await press('p:pd:Maestro:2026-10-12:u');
+    expect((await ledger.view(id))!.ledger.liquid(), kzt(163000));
+  });
+
   test('без сроков сегодня стадия отмечается без уведомления; выключатель payments', () async {
     if (skip()) return;
     final ledger = LedgerService(pool!);

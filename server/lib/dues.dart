@@ -65,7 +65,7 @@ List<DueEntry> dueEntries(Ledger ledger, List<(Map<String, dynamic>, DateTime)> 
     String? reason;
     ChatAccount? account;
     final debt = p['debtId'] == null ? null : debts['${p['debtId']}'];
-    if (id.isEmpty || p['once'] != null || p['onDate'] != null && p['person'] == null) {
+    if (id.isEmpty || p['once'] != null) {
       reason = kk ? 'қолданбада' : 'в приложении';
     } else if (p['debtId'] != null && (debt == null || (debt['kind'] != 'installment' && ((debt['rate'] as num?)?.toDouble() ?? 0) > 0))) {
       reason = kk ? 'қолданбада (пайызды несие)' : 'в приложении (кредит с процентами)';
