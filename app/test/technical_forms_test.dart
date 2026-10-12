@@ -598,7 +598,8 @@ void main() {
       expect(s.dueItems(DateTime(2026, 12, 31)), isEmpty);
       // Срок в прошлом, долг ещё есть; новый заём без срока снимает его.
       await s.addPersonDebt(kind: 'borrow', amount: kzt(10000), person: 'Друг', account: 'cash', date: s.today, dueDate: DateTime(2026, 9, 30));
-      expect(s.personDuePlan('Друг')!.amount, kzt(30000), reason: 'сумма срока — весь остаток долга');
+      expect(s.personDuePlan('Друг')!.amount, 0, reason: 'сумма 0 — весь остаток долга к дате (D170)');
+      expect(s.dueItems(DateTime(2026, 12, 31)).single.payAmount, kzt(30000), reason: 'к сроку — весь долг');
       f.now = DateTime(2026, 10, 15);
       await s.addPersonDebt(kind: 'borrow', amount: kzt(5000), person: 'Друг', account: 'cash', date: s.today);
       expect(s.personDuePlan('Друг'), isNull, reason: 'прошедший срок снят, просрочка по старому договору не висит');
