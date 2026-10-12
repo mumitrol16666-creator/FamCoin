@@ -79,9 +79,10 @@ class BudgetPaymentsPage extends StatelessWidget {
                             [
                               scheduleLabel(l, locale, p.every, p.day, p.weekday, p.monthOfYear),
                               if (paidNow) (p.every == everyYear ? l.paidThisYear : l.paidThisMonth),
-                              if (next != null) '${l.nextPayment}: ${DateFormat.MMMMd(locale).format(next.date)}',
+                              // Прошедший срок — «просрочен», а не «следующий».
+                              if (next != null) '${next.date.isBefore(state.today) ? l.overdue : l.nextPayment}: ${DateFormat.MMMMd(locale).format(next.date)}',
                             ].join(' · '),
-                            style: TextStyle(fontSize: 12, color: paidNow ? fam.income : fam.text2),
+                            style: TextStyle(fontSize: 12, color: paidNow ? fam.income : next != null && next.date.isBefore(state.today) ? fam.expense : fam.text2),
                           ),
                           trailing: MoneyText(p.amount),
                           // Нет ближайшего срока (всё оплачено) — нажатие открывает правку.

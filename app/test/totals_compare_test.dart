@@ -91,7 +91,7 @@ void main() {
       await tester.tap(find.text('Всё'));
       await tester.pumpAndSettle();
       expect(find.textContaining('траты '), findsNothing);
-      await tester.tap(find.text('Действующие'));
+      await tester.tap(find.text('Активные'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'хлеб');
       await tester.pumpAndSettle();

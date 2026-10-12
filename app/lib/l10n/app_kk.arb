@@ -1533,6 +1533,7 @@
   "budgetTilePaymentsNext": "Жақын: {date} · {amount}",
   "@budgetTilePaymentsNext": {"placeholders": {"date": {"type": "String"}, "amount": {"type": "String"}}},
   "budgetTileOverdue": "Мерзімі өткен: {n}",
+  "budgetTilePaymentsOverdueSum": "Мерзімі өткен: {amount}",
   "@budgetTileOverdue": {"placeholders": {"n": {"type": "int"}}},
   "budgetTilePurchasesNone": "Жоспарланбаған",
   "budgetTilePurchases": "Жоспарланған: {n}",

@@ -40,7 +40,9 @@ class BudgetScreen extends StatelessWidget {
         // личных долгов живут на своих страницах.
         final due = state.dueItems(state.today.add(const Duration(days: 62))).where((d) => d.planned.once == null && d.planned.person == null).toList();
         final paymentsCount = state.planned.where((p) => p.once == null && p.person == null).length;
-        final overdue = due.where((d) => d.date.isBefore(state.today)).length;
+        final overdueItems = due.where((d) => d.date.isBefore(state.today)).toList();
+        final overdue = overdueItems.length;
+        final overdueSum = overdueItems.fold(0, (s, d) => s + d.payAmount);
         final next = due.where((d) => !d.date.isBefore(state.today)).firstOrNull;
 
         // Покупки и цели.
@@ -69,11 +71,15 @@ class BudgetScreen extends StatelessWidget {
           _Tile(
             icon: Icons.event_repeat_outlined,
             title: l.budgetTilePayments,
-            summary: paymentsCount == 0 && next == null
-                ? l.budgetTilePaymentsNone
-                : next == null
-                    ? l.budgetTilePaymentsCount(paymentsCount)
-                    : l.budgetTilePaymentsNext(DateFormat.MMMd(locale).format(next.date), moneyInText(next.payAmount)),
+            // Просрочка важнее ближайшего срока: пока она есть, в сводке только она.
+            summary: overdue > 0
+                ? l.budgetTilePaymentsOverdueSum(moneyInText(overdueSum))
+                : paymentsCount == 0 && next == null
+                    ? l.budgetTilePaymentsNone
+                    : next == null
+                        ? l.budgetTilePaymentsCount(paymentsCount)
+                        : l.budgetTilePaymentsNext(DateFormat.MMMd(locale).format(next.date), moneyInText(next.payAmount)),
+            summaryColor: overdue > 0 ? context.fam.expense : null,
             badge: overdue > 0 ? l.budgetTileOverdue(overdue) : null,
             onTap: () => open(const BudgetPaymentsPage()),
           ),
@@ -171,20 +177,20 @@ class _Tile extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(border: Border.all(color: fam.line), borderRadius: BorderRadius.circular(16)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               CategoryAvatar(icon),
-              const Spacer(),
-              if (badge != null)
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: fam.expense.withValues(alpha: .16), borderRadius: BorderRadius.circular(999)),
-                    child: Text(badge!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fam.expense)),
-                  ),
-                )
-              else
-                Icon(Icons.chevron_right, size: 20, color: fam.text2),
+              Icon(Icons.chevron_right, size: 20, color: fam.text2),
             ]),
+            // Бейдж — своей строкой под значком (D169): в строке со значком в
+            // узком тайле ему не хватало места, и «Просрочено: 2» резалось до «Про…».
+            if (badge != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: fam.expense.withValues(alpha: .16), borderRadius: BorderRadius.circular(999)),
+                child: Text(badge!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fam.expense)),
+              ),
+            ],
             const SizedBox(height: 10),
             Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
