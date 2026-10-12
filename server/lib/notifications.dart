@@ -10,7 +10,8 @@ import 'package:postgres/postgres.dart';
 
 import 'auth_service.dart';
 import 'briefs.dart';
-import 'chat_entry.dart' show quickButtons;
+import 'chat_entry.dart' show chatAccounts, quickButtons;
+import 'dues.dart';
 import 'signals.dart';
 import 'ledger_service.dart';
 import 'telegram.dart';
@@ -61,6 +62,8 @@ class NotificationService {
       if (now.hour >= morningHour && now.hour < eveningHour) await runBriefs('morning', now);
       if (now.hour >= eveningHour) await runBriefs('evening', now);
       if (now.hour >= monthHour) await runMonth(now);
+      if (now.hour >= dueNoonHour) await runDueReminders('noon', now);
+      if (now.hour >= dueEveningHour) await runDueReminders('evening', now);
       await retryDeliveries();
     } catch (e, st) {
       stderr.writeln('notifications: ${e.runtimeType}\n$st');
@@ -148,6 +151,65 @@ class NotificationService {
     } catch (e) {
       stderr.writeln('month nudge for $userId: ${e.runtimeType}');
     }
+  }
+
+  /// Напоминания о платежах (D167, часть 3): полдень — сегодняшние сроки и
+  /// просрочка, вечер — сегодняшние, если всё ещё не отмечены. Отметка стадии
+  /// ставится и когда напоминать не о чем, чтобы не пересчитывать каждую минуту.
+  Future<void> runDueReminders(String stage, DateTime now) async {
+    final today = _day(DateTime(now.year, now.month, now.day));
+    final flag = stage == 'noon' ? 'sentDue12' : 'sentDue18';
+    final users = await db.execute(
+      Sql.named('''
+        SELECT u.id FROM users u
+        WHERE (u.profile->>'onboarded') = 'true'
+          AND coalesce((u.notif->>'payments')::boolean, true)
+          AND coalesce(u.notif->>@flag, '') <> @today
+          AND EXISTS (SELECT 1 FROM entities e WHERE e.user_id = u.id AND e.kind IN ('planned', 'purchase'))
+        LIMIT $batchSize'''),
+      parameters: {'flag': flag, 'today': today},
+    );
+    final ids = [for (final r in users) r[0].toString()];
+    for (var i = 0; i < ids.length; i += concurrency) {
+      await Future.wait([
+        for (final id in ids.skip(i).take(concurrency))
+          sendDueReminder(id, DateTime(now.year, now.month, now.day), stage, dedupKey: '${stage == 'noon' ? 'due12' : 'due18'}:$today', mark: (flag: flag, value: today))
+              .timeout(const Duration(seconds: 90))
+              .catchError((Object e) {
+                stderr.writeln('due reminder $stage for $id: ${e.runtimeType}');
+                return false;
+              }),
+      ]);
+    }
+  }
+
+  /// Одно напоминание о платежах; без сроков — только отметка стадии.
+  Future<bool> sendDueReminder(String userId, DateTime today, String stage, {String? dedupKey, ({String flag, String value})? mark}) async {
+    final v = await ledger.view(userId);
+    if (v == null) return false;
+    final brief = dueReminder(briefInputOf(v, today), chatAccounts(v), stage: stage);
+    if (brief == null) {
+      if (mark != null) await _mark(userId, mark);
+      return false;
+    }
+    return notify(userId, 'system', brief.title, brief.body, dedupKey: dedupKey, mark: mark, buttons: brief.buttons);
+  }
+
+  /// Вход сводок и напоминаний из данных владельца (справочники — с id).
+  static BriefInput briefInputOf(LedgerView v, DateTime today, {bool monthRemindersEnabled = true, List<List<Map<String, String>>> quickButtons = const []}) {
+    List<Map<String, dynamic>> ofKind(String k) => [for (final e in v.of(k).entries) {...e.value, 'id': e.key}];
+    return BriefInput(
+      monthRemindersEnabled: monthRemindersEnabled,
+      ledger: v.ledger,
+      today: today,
+      profile: v.profile,
+      planned: [...ofKind('planned'), ...ofKind('purchase')],
+      limits: ofKind('limit'),
+      locale: v.locale,
+      categories: v.of('category'),
+      debts: v.of('debt'),
+      quickButtons: quickButtons,
+    );
   }
 
   /// Предпросмотр никогда не предлагает закрыть незавершённый месяц.
@@ -417,6 +479,7 @@ class NotificationService {
       'evening': notif['evening'] != false,
       'month': notif['month'] != false,
       'signals': notif['signals'] != false,
+      'payments': notif['payments'] != false,
       'telegramLinked': r.first[1] == true,
       'telegramAvailable': telegram.enabled,
       'pushDevices': await push.deviceCount(userId),
@@ -425,7 +488,7 @@ class NotificationService {
 
   Future<void> updateSettings(String userId, Map<String, dynamic> body) async {
     final patch = <String, Object?>{};
-    for (final k in ['morning', 'evening', 'month', 'signals']) {
+    for (final k in ['morning', 'evening', 'month', 'signals', 'payments']) {
       if (body[k] is bool) patch[k] = body[k];
     }
     if (patch.isEmpty) throw ApiError(400, 'bad_request');

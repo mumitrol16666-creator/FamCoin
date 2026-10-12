@@ -23,10 +23,12 @@ String _period(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 int _minor(Object? v) => v == null ? 0 : parseMinor(v);
 
 /// Плановые платежи и разовые покупки, не оплаченные и попадающие в [from, until].
+/// В каждой записи — `period` срока (ключ отметки «оплачено»), `name` и
+/// `amount` к оплате; напоминания о платежах (D167, часть 3) строят по ним кнопки.
 /// [keepBefore] — оставить и сроки раньше [from], которые попали в просмотр
 /// (с начала платежа): так утренняя сводка видит просрочку (D167). Без него
 /// прошедшие сроки только забирают свою часть остатка рассрочки (FV-C04).
-List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dynamic>> planned, DateTime from, DateTime until, {String locale = 'ru', Map<String, Map<String, dynamic>> debts = const {}, bool keepBefore = false}) {
+List<(Map<String, dynamic>, DateTime)> dueWindow(Ledger ledger, List<Map<String, dynamic>> planned, DateTime from, DateTime until, {String locale = 'ru', Map<String, Map<String, dynamic>> debts = const {}, bool keepBefore = false}) {
   final out = <(Map<String, dynamic>, DateTime)>[];
   // Сроки считает ядро: ежемесячные, недельные, годовые и разовые покупки (D88).
   // Просроченные сроки (D167) попадают сюда же, если [from] раньше сегодня:
@@ -44,10 +46,10 @@ List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dyna
       if (person != null) {
         final left = personDueLeft(ledger, planId: '${p['id'] ?? ''}', person: person, amount: _minor(p['amount']), period: o.period);
         if (left <= 0) continue;
-        out.add(({...p, 'name': '${locale == 'kk' ? 'Қарыз' : 'Долг'}: $person', 'amount': '$left'}, o.date));
+        out.add(({...p, 'name': '${locale == 'kk' ? 'Қарыз' : 'Долг'}: $person', 'amount': '$left', 'period': o.period}, o.date));
         continue;
       }
-      out.add((p, o.date));
+      out.add(({...p, 'period': o.period}, o.date));
     }
   }
   out.sort((a, b) {
@@ -138,7 +140,7 @@ Brief morningBrief(BriefInput i) {
   }
 
   // Сроки одним проходом: просрочено, сегодня, ближайшие две недели.
-  final window = _due(l, i.planned, today.subtract(const Duration(days: overdueLookbackDays)), today.add(const Duration(days: upcomingDays)), locale: i.locale, debts: i.debts, keepBefore: true);
+  final window = dueWindow(l, i.planned, today.subtract(const Duration(days: overdueLookbackDays)), today.add(const Duration(days: upcomingDays)), locale: i.locale, debts: i.debts, keepBefore: true);
   // Просрочка — по одному сроку на платёж, самому свежему: оплату мимо
   // приложения часто не отмечают, и список старых месяцев был бы шумом.
   final latestOverdue = <String, (Map<String, dynamic>, DateTime)>{};
@@ -265,7 +267,7 @@ Brief eveningBrief(BriefInput i) {
       lines.add(kk ? '«$cat» лимиті: ${st.usedPercent?.round()}%.' : 'Лимит «$cat»: ${st.usedPercent?.round()}%.');
     }
   }
-  final dueTomorrow = _due(i.ledger, i.planned, tomorrow, tomorrow, locale: i.locale, debts: i.debts);
+  final dueTomorrow = dueWindow(i.ledger, i.planned, tomorrow, tomorrow, locale: i.locale, debts: i.debts);
   if (dueTomorrow.isNotEmpty) {
     lines.add(kk ? 'Ертең төлем: ${dueTomorrow.map((e) => '${e.$1['name']} — ${_kzt(_minor(e.$1['amount']))}').join(', ')}.' : 'Завтра платёж: ${dueTomorrow.map((e) => '${e.$1['name']} — ${_kzt(_minor(e.$1['amount']))}').join(', ')}.');
   }

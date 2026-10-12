@@ -18,6 +18,7 @@ import 'package:postgres/postgres.dart';
 
 import 'auth_service.dart';
 import 'briefs.dart';
+import 'dues.dart';
 import 'ledger_service.dart';
 import 'notifications.dart';
 import 'speech.dart';
@@ -815,6 +816,92 @@ class ChatEntry {
 
   /// Нажатие быстрой операции: черновик с её суммой и категорией. Запись —
   /// всё равно только после «Записать», как и у набранной фразы.
+  /// Кнопка «Оплатил» под напоминанием о платеже (D167, часть 3):
+  /// `p:<платёж>:<срок>` записывает платёж со счёта, которым его платили
+  /// раньше, и закрывает срок; `p:<платёж>:<срок>:u` отменяет запись и
+  /// открывает срок. Повторное нажатие повторяет ту же команду — журнал
+  /// примет её один раз. Сообщение дополняется строкой об исходе, кнопка
+  /// этого платежа заменяется на «Отменить».
+  Future<String?> _payDue(int chatId, int messageId, Map<String, dynamic> message, List<String> parts) async {
+    if (parts.length < 3) return null;
+    final planId = parts[1], period = parts[2], undo = parts.length > 3 && parts[3] == 'u';
+    final userId = await _userOf(chatId);
+    final v = userId == null ? null : await ledger.view(userId);
+    if (userId == null || v == null) return 'Чат не привязан к аккаунту.';
+    final kk = v.locale == 'kk';
+    final kind = v.of('planned').containsKey(planId) ? 'planned' : v.of('purchase').containsKey(planId) ? 'purchase' : null;
+    if (kind == null) return kk ? 'Бұл төлем енді жоқ.' : 'Этого платежа уже нет.';
+    final plan = {...v.of(kind)[planId]!, 'id': planId};
+    final paid = ((plan['paid'] as List?) ?? const []).cast<String>();
+    final now = _now();
+    final today = DateTime(now.year, now.month, now.day);
+    final accounts = chatAccounts(v);
+
+    String text() {
+      final original = '${message['text'] ?? ''}'.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+      return original;
+    }
+    List<List<Map<String, String>>> others() {
+      final rows = ((message['reply_markup'] as Map?)?['inline_keyboard'] as List?) ?? const [];
+      return [
+        for (final row in rows)
+          [for (final b in row as List) if (!'${(b as Map)['callback_data']}'.startsWith('p:$planId:$period')) Map<String, String>.from(b)],
+      ].where((r) => r.isNotEmpty).toList();
+    }
+
+    if (undo) {
+      final tx = v.ledger.transactions.where((t) => t.meta['planned'] == planId && t.meta['period'] == period && t.meta['viaBot'] == true && !v.ledger.isReversed(t.id)).lastOrNull;
+      if (tx == null) return kk ? 'Болдырмайтын ештеңе жоқ.' : 'Отменять нечего.';
+      try {
+        await ledger.command(userId, {
+          'type': 'batch',
+          'commandId': 'tg-due-undo-$planId-$period',
+          'commands': [
+            {'type': 'reverse', 'txId': tx.id, 'id': newChatId()},
+            {'type': setPaidCommand, 'kind': kind, 'entityId': planId, 'period': period, 'paid': false},
+          ],
+        });
+      } on ApiError catch (e) {
+        return e.message ?? (kk ? 'Болдырмау мүмкін болмады.' : 'Не удалось отменить.');
+      }
+      await telegram.edit(chatId, messageId, '${text()}\n↩️ ${kk ? 'Болдырылмады' : 'Отменено'}: ${plan['name']}', buttons: others().isEmpty ? null : others());
+      return kk ? 'Болдырылмады' : 'Отменено';
+    }
+
+    if (paid.contains(period)) return kk ? 'Бұл мерзім әлдеқашан белгіленген.' : 'Этот срок уже отмечен.';
+    final window = dueWindow(v.ledger, [plan], today.subtract(const Duration(days: overdueLookbackDays)), today.add(const Duration(days: upcomingDays)), locale: v.locale, debts: v.of('debt'), keepBefore: true);
+    final entry = dueEntries(v.ledger, window, accounts, v.of('debt'), locale: v.locale).where((e) => e.period == period).firstOrNull;
+    if (entry == null) return kk ? 'Бұл мерзім әлдеқашан жабылған.' : 'Этот срок уже закрыт.';
+    if (!entry.quick) return kk ? 'Бір басумен болмайды: ${entry.reason}.' : 'Одним нажатием нельзя: ${entry.reason}.';
+    final account = entry.account!;
+    final link = {'planned': planId, 'period': period, 'viaBot': true, 'time': '${_two(now.hour)}:${_two(now.minute)}'};
+    final date = dateToJson(today);
+    final person = plan['person'] as String?;
+    final fact = person != null
+        ? {'type': 'repaymentMade', 'id': newChatId(), 'date': date, 'account': account.id, 'person': person, 'principal': '${entry.amount}', 'meta': link}
+        : plan['debtId'] != null
+            ? {'type': 'loanPayment', 'id': newChatId(), 'date': date, 'account': account.id, 'debtId': plan['debtId'], 'principal': '${entry.amount}', 'interest': '0', 'meta': link}
+            : {'type': 'expense', 'id': newChatId(), 'date': date, 'account': account.id, 'splits': {'${plan['category'] ?? 'other'}': '${entry.amount}'}, 'meta': {'who': 'shared', 'note': '${plan['name']}', ...link}};
+    try {
+      await ledger.command(userId, {
+        'type': 'batch',
+        'commandId': 'tg-due-$planId-$period',
+        'commands': [
+          fact,
+          {'type': setPaidCommand, 'kind': kind, 'entityId': planId, 'period': period, 'paid': true},
+        ],
+      });
+    } on ApiError catch (e) {
+      return e.message ?? (kk ? 'Жазу мүмкін болмады.' : 'Не удалось записать.');
+    }
+    final buttons = [
+      ...others(),
+      [{'text': '↩️ ${kk ? 'Болдырмау' : 'Отменить'}: ${plan['name']}', 'callback_data': 'p:$planId:$period:u'}],
+    ];
+    await telegram.edit(chatId, messageId, '${text()}\n✅ ${kk ? 'Төленді' : 'Оплачено'}: ${plan['name']} — ${formatMoney(entry.amount)} · ${account.name}', buttons: buttons);
+    return kk ? 'Жазылды' : 'Записано';
+  }
+
   Future<String?> _quick(int chatId, String quickId) async {
     final userId = await _userOf(chatId);
     final v = userId == null ? null : await ledger.view(userId);
@@ -878,6 +965,7 @@ class ChatEntry {
     final messageId = message?['message_id'] as int?;
     final data = q['data'] as String? ?? '';
     if (data.startsWith('q:') && chatId != null) return _quick(chatId, data.substring(2));
+    if (data.startsWith('p:') && chatId != null && messageId != null) return _payDue(chatId, messageId, message!, data.split(':'));
     if (data.startsWith('i:') && chatId != null && messageId != null && imports != null) return imports!.press(chatId, messageId, data.split(':'));
     final parts = data.split(':');
     if (parts.length < 3 || parts[0] != 'd' || chatId == null || messageId == null) return null;
