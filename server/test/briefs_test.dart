@@ -347,6 +347,21 @@ void main167() {
     });
   });
 
+  group('D167 утро, мелочи после проверки на проде', () {
+    test('без единой записи — «Записей пока нет», а не «уже 11 дней»; перерасход — не «доступно −N»', () {
+      final l = ledger(); // начальный остаток 1.09, записей нет
+      final fresh = BriefInput(ledger: l, today: DateTime(2026, 9, 12), profile: const {'dailyLimit': '500000'}, planned: const [], limits: const [], locale: 'ru');
+      expect(morningBrief(fresh).body, contains('Записей пока нет.'));
+      expect(morningBrief(fresh).body, isNot(contains('уже')));
+      spend(l, 'a', '2026-09-12', 'food', 8500);
+      final over = BriefInput(ledger: l, today: DateTime(2026, 9, 12), profile: const {'dailyLimit': '500000'}, planned: const [], limits: const [], locale: 'ru');
+      expect(morningBrief(over).body, contains('Лимит на сегодня исчерпан: перерасход 3 500 ₸.'));
+      expect(morningBrief(over).body, isNot(contains('−')));
+      final kk = BriefInput(ledger: l, today: DateTime(2026, 9, 12), profile: const {'dailyLimit': '500000'}, planned: const [], limits: const [], locale: 'kk');
+      expect(morningBrief(kk).body, contains('Бүгінгі лимит таусылған: артық 3 500 ₸.'));
+    });
+  });
+
   group('D167 вечер', () {
     test('нулевая категория не показывается', () {
       final l = ledger();

@@ -127,7 +127,11 @@ Brief morningBrief(BriefInput i) {
   final hadRecords = l.transactions.any((t) => t.date == yesterday && !l.isReversed(t.id) && t.type != EventType.reversal);
   final spentYesterday = spendBetween(l, yesterday, yesterday).everyday;
   final quiet = hadRecords ? 0 : quietDays(l, yesterday);
-  if (quiet > 1) {
+  final anyRecords = l.transactions.any((t) => t.type != EventType.opening && t.type != EventType.reversal && !l.isReversed(t.id));
+  if (!anyRecords) {
+    // Новый владелец с начальным остатком задним числом: «уже 11 дней» было бы неправдой.
+    lines.add(kk ? 'Әзірге жазба жоқ.' : 'Записей пока нет.');
+  } else if (quiet > 1) {
     lines.add(kk ? '$quiet күн бойы жазба жоқ.' : 'Записей нет уже $quiet ${_daysRu(quiet)}.');
   } else if (!hadRecords) {
     lines.add(kk ? 'Кеше жазба болмады.' : 'Вчера записей не было.');
@@ -147,8 +151,13 @@ Brief morningBrief(BriefInput i) {
   final daily = dailyLimitState(l, i.profile, today);
   lines.add(kk ? 'Шоттарда: <b>${_kzt(l.liquid())}</b>.' : 'На счетах: <b>${_kzt(l.liquid())}</b>.');
   if (daily.available != null) {
-    final capped = daily.capped ? (kk ? ' (шоттағы ақшамен шектелген)' : ' (ограничено деньгами на счетах)') : '';
-    lines.add(kk ? 'Бүгін қолжетімді: ${_kzt(daily.available!)}$capped.' : 'Доступно сегодня: ${_kzt(daily.available!)}$capped.');
+    if (daily.available! < 0) {
+      // Перерасход прошлых дней при переносе или уже потраченное сегодня — не «доступно −N».
+      lines.add(kk ? 'Бүгінгі лимит таусылған: артық ${_kzt(-daily.available!)}.' : 'Лимит на сегодня исчерпан: перерасход ${_kzt(-daily.available!)}.');
+    } else {
+      final capped = daily.capped ? (kk ? ' (шоттағы ақшамен шектелген)' : ' (ограничено деньгами на счетах)') : '';
+      lines.add(kk ? 'Бүгін қолжетімді: ${_kzt(daily.available!)}$capped.' : 'Доступно сегодня: ${_kzt(daily.available!)}$capped.');
+    }
   }
 
   // Сроки одним проходом: просрочено, сегодня, ближайшие две недели.
