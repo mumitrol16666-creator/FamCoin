@@ -9,9 +9,13 @@ import 'package:famcoin_core/famcoin_core.dart';
 import 'chat_entry.dart';
 
 class Brief {
-  const Brief(this.title, this.body);
+  const Brief(this.title, this.body, {this.buttons});
   final String title;
   final String body;
+
+  /// Inline-кнопки Telegram под сообщением (D167): например, быстрые
+  /// операции в вечернем отчёте пустого дня. В приложение и push не идут.
+  final List<List<Map<String, String>>>? buttons;
 }
 
 String _period(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
@@ -19,17 +23,21 @@ String _period(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 int _minor(Object? v) => v == null ? 0 : parseMinor(v);
 
 /// Плановые платежи и разовые покупки, не оплаченные и попадающие в [from, until].
-List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dynamic>> planned, DateTime from, DateTime until, {String locale = 'ru', Map<String, Map<String, dynamic>> debts = const {}}) {
+/// [keepBefore] — оставить и сроки раньше [from], которые попали в просмотр
+/// (с начала платежа): так утренняя сводка видит просрочку (D167). Без него
+/// прошедшие сроки только забирают свою часть остатка рассрочки (FV-C04).
+List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dynamic>> planned, DateTime from, DateTime until, {String locale = 'ru', Map<String, Map<String, dynamic>> debts = const {}, bool keepBefore = false}) {
   final out = <(Map<String, dynamic>, DateTime)>[];
   // Сроки считает ядро: ежемесячные, недельные, годовые и разовые покупки (D88).
-  final horizon = DateTime(from.year, from.month + 3, 0);
+  // Просроченные сроки (D167) попадают сюда же, если [from] раньше сегодня:
+  // остаток рассрочки распределяется по срокам в одном проходе (FV-C04),
+  // поэтому просрочку и будущее считают одним вызовом и делят по датам.
   for (final p in planned) {
     // Погашенный кредит больше не требует оплаты — то же правило, что в приложении (R04).
     final person = p['person'] as String?;
     if (!plannedDebtActive(ledger, p['debtId'] as String?, person: person)) continue;
     final paid = ((p['paid'] as List?) ?? const []).cast<String>();
-    final end = until.isBefore(horizon) ? until : horizon;
-    for (final o in PaySchedule.fromJson(p).occurrences(PaySchedule.fromJson(p).scanFrom(from), end)) {
+    for (final o in PaySchedule.fromJson(p).occurrences(PaySchedule.fromJson(p).scanFrom(from), until)) {
       if (paid.contains(o.period)) continue;
       // Срок возврата личного долга (D133): сумма — сколько осталось внести к
       // нему (за вычетом частей, N01), название — «Долг: имя».
@@ -55,13 +63,13 @@ List<(Map<String, dynamic>, DateTime)> _due(Ledger ledger, List<Map<String, dyna
     if (debt != null && p['person'] == null) {
       amount = budget.take(debtId: debtId!, amount: amount, kind: '${debt['kind'] ?? 'loan'}', rate: (debt['rate'] as num?)?.toDouble() ?? 0);
     }
-    if (amount > 0 && !date.isBefore(from)) result.add(({...p, 'amount': '$amount'}, date));
+    if (amount > 0 && (keepBefore || !date.isBefore(from))) result.add(({...p, 'amount': '$amount'}, date));
   }
   return result;
 }
 
 class BriefInput {
-  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}, this.debts = const {}, this.monthRemindersEnabled = true});
+  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}, this.debts = const {}, this.monthRemindersEnabled = true, this.quickButtons = const []});
   final Ledger ledger;
   final DateTime today;
   final Map<String, dynamic> profile;
@@ -78,31 +86,100 @@ class BriefInput {
   /// рассрочки и кредита считается как в приложении (CS03).
   final Map<String, Map<String, dynamic>> debts;
 
+  /// Кнопки быстрых операций владельца для пустого вечера (D167); пусто —
+  /// плиток нет, тогда отчёт подсказывает записать сообщением боту.
+  final List<List<Map<String, String>>> quickButtons;
+
   String categoryName(String id) => chatCategoryName(id, locale, categories);
 }
 
 String _kzt(int minor) => formatMoney(minor);
 
+/// С какого дня просматривать сроки ради просрочки (платёж без даты начала
+/// смотрится с этого месяца, с датой — с неё) и на сколько дней вперёд
+/// смотреть ближайшие платежи (D167).
+const overdueLookbackDays = 60;
+const upcomingDays = 14;
+
+String _dm(DateTime d) => '${d.day}.${d.month.toString().padLeft(2, '0')}';
+
 Brief morningBrief(BriefInput i) {
   final kk = i.locale == 'kk';
   final today = i.today;
-  // D48/D50: никаких «до зарплаты» — остаток на счетах и лимит владельца.
+  final yesterday = today.subtract(const Duration(days: 1));
+  final l = i.ledger;
   final limit = i.profile['dailyLimit'] == null ? null : parseMinor(i.profile['dailyLimit']);
-  final dueToday = _due(i.ledger, i.planned, today, today, locale: i.locale, debts: i.debts);
+  final lines = <String>[];
 
-  final lines = <String>[
-    kk ? 'Шоттарда: <b>${_kzt(i.ledger.liquid())}</b>.' : 'На счетах: <b>${_kzt(i.ledger.liquid())}</b>.',
-    if (limit != null) kk ? 'Бүгінгі лимит: ${_kzt(limit)}.' : 'Лимит на сегодня: ${_kzt(limit)}.',
-  ];
+  // Вчера: повседневные траты против дневного лимита (D167). Запланированные
+  // и непредвиденные в лимит не входят (D74, D101) — как на главной.
+  final hadRecords = l.transactions.any((t) => t.date == yesterday && !l.isReversed(t.id) && t.type != EventType.reversal);
+  final spentYesterday = spendBetween(l, yesterday, yesterday).everyday;
+  if (!hadRecords) {
+    lines.add(kk ? 'Кеше жазба болмады.' : 'Вчера записей не было.');
+  } else if (limit == null || limit <= 0) {
+    lines.add(kk ? 'Кеше жұмсалды: <b>${_kzt(spentYesterday)}</b>.' : 'Вчера потрачено: <b>${_kzt(spentYesterday)}</b>.');
+  } else if (spentYesterday <= limit) {
+    lines.add(kk
+        ? 'Кеше: <b>${_kzt(spentYesterday)}</b>, лимит ${_kzt(limit)} — сыйдыңыз ✅'
+        : 'Вчера: <b>${_kzt(spentYesterday)}</b> при лимите ${_kzt(limit)} — уложились ✅');
+  } else {
+    lines.add(kk
+        ? 'Кеше: <b>${_kzt(spentYesterday)}</b>, лимит ${_kzt(limit)} — ${_kzt(spentYesterday - limit)} артық ⚠'
+        : 'Вчера: <b>${_kzt(spentYesterday)}</b> при лимите ${_kzt(limit)} — на ${_kzt(spentYesterday - limit)} больше ⚠');
+  }
+
+  // Деньги и доступное сегодня — по тому же расчёту, что карточка на главной.
+  final daily = dailyLimitState(l, i.profile, today);
+  lines.add(kk ? 'Шоттарда: <b>${_kzt(l.liquid())}</b>.' : 'На счетах: <b>${_kzt(l.liquid())}</b>.');
+  if (daily.available != null) {
+    final capped = daily.capped ? (kk ? ' (шоттағы ақшамен шектелген)' : ' (ограничено деньгами на счетах)') : '';
+    lines.add(kk ? 'Бүгін қолжетімді: ${_kzt(daily.available!)}$capped.' : 'Доступно сегодня: ${_kzt(daily.available!)}$capped.');
+  }
+
+  // Сроки одним проходом: просрочено, сегодня, ближайшие две недели.
+  final window = _due(l, i.planned, today.subtract(const Duration(days: overdueLookbackDays)), today.add(const Duration(days: upcomingDays)), locale: i.locale, debts: i.debts, keepBefore: true);
+  // Просрочка — по одному сроку на платёж, самому свежему: оплату мимо
+  // приложения часто не отмечают, и список старых месяцев был бы шумом.
+  final latestOverdue = <String, (Map<String, dynamic>, DateTime)>{};
+  for (final d in window) {
+    if (d.$2.isBefore(today)) latestOverdue['${d.$1['id'] ?? d.$1['name']}'] = d;
+  }
+  final overdue = latestOverdue.values.toList()..sort((a, b) => a.$2.compareTo(b.$2));
+  final dueToday = [for (final d in window) if (d.$2 == today) d];
+  final soon = [for (final d in window) if (d.$2.isAfter(today)) d];
+  int sum(List<(Map<String, dynamic>, DateTime)> xs) => xs.fold(0, (a, d) => a + _minor(d.$1['amount']));
+
+  if (overdue.isNotEmpty) {
+    lines.add(kk ? '⚠ Мерзімі өткен:' : '⚠ Просрочено:');
+    for (final (p, date) in overdue) {
+      lines.add('• ${p['name']} — ${_kzt(_minor(p['amount']))} (${kk ? 'мерзімі' : 'срок'} ${_dm(date)})');
+    }
+  }
   if (dueToday.isNotEmpty) {
     lines.add(kk ? 'Бүгін төлеу керек:' : 'Сегодня к оплате:');
     for (final (p, _) in dueToday) {
       lines.add('• ${p['name']} — ${_kzt(_minor(p['amount']))}');
     }
   }
-  final soon = _due(i.ledger, i.planned, today.add(const Duration(days: 1)), today.add(const Duration(days: 3)), locale: i.locale, debts: i.debts);
   if (soon.isNotEmpty) {
-    lines.add(kk ? 'Жақын 3 күнде: ${soon.map((e) => '${e.$1['name']} (${e.$2.day}.${e.$2.month.toString().padLeft(2, '0')})').join(', ')}.' : 'В ближайшие 3 дня: ${soon.map((e) => '${e.$1['name']} (${e.$2.day}.${e.$2.month.toString().padLeft(2, '0')})').join(', ')}.');
+    lines.add(kk ? 'Алдағы $upcomingDays күнде:' : 'В ближайшие $upcomingDays дней:');
+    for (final (p, date) in soon.take(5)) {
+      lines.add('• ${p['name']} — ${_kzt(_minor(p['amount']))} (${_dm(date)})');
+    }
+    if (soon.length > 5) lines.add(kk ? '• … тағы ${soon.length - 5}' : '• … ещё ${soon.length - 5}');
+  }
+  // Кассовый разрыв (D167): всё, что надо заплатить до конца окна, против
+  // денег на счетах. Отложенное на цели не трогаем — это не деньги на платежи.
+  final need = sum(overdue) + sum(dueToday) + sum(soon);
+  final money = l.freeLiquid();
+  if (need > 0 && need > money) {
+    final until = soon.isNotEmpty ? soon.last.$2 : today;
+    lines.add(kk
+        ? '❗ ${_dm(until)} дейінгі төлемдерге ${_kzt(need - (money < 0 ? 0 : money))} жетпейді: төлеу керек ${_kzt(need)}, шоттарда ${_kzt(money < 0 ? 0 : money)}.'
+        : '❗ Не хватает ${_kzt(need - (money < 0 ? 0 : money))} на платежи до ${_dm(until)}: к оплате ${_kzt(need)}, свободно на счетах ${_kzt(money < 0 ? 0 : money)}.');
+  } else if (need > 0) {
+    lines.add(kk ? 'Төлемдерге ақша жетеді ✅' : 'На платежи денег хватает ✅');
   }
   // Совет дня (D97): тот же набор, что на главной приложения; один на всех,
   // меняется каждый день.
@@ -119,11 +196,13 @@ Brief eveningBrief(BriefInput i) {
 
   final byCat = <String, int>{};
   var spentToday = 0;
+  var recordsToday = 0;
   // Все проводки по расходным счетам за день, какой бы ни была операция:
   // проценты по кредиту — тоже расход; отмена и отменённая запись гасят
   // друг друга, как в месячном отчёте ядра (D98).
   for (final tx in i.ledger.transactions) {
     if (tx.date != today) continue;
+    if (!i.ledger.isReversed(tx.id) && tx.type != EventType.reversal && tx.type != EventType.opening) recordsToday++;
     for (final p in tx.postings) {
       if (i.ledger.account(p.accountId).kind == LedgerKind.expense) {
         spentToday += p.amount;
@@ -133,15 +212,30 @@ Brief eveningBrief(BriefInput i) {
   }
   // Основная сумма долга — отдельное движение денег, без повторной траты.
   final repaidToday = i.ledger.debtPaymentsBetween(today, tomorrow);
-  final top = byCat.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  // Категория, где запись и её отмена дали ноль, в отчёт не идёт (D167).
+  final top = byCat.entries.where((e) => e.value > 0).toList()..sort((a, b) => b.value.compareTo(a.value));
   final report = i.ledger.report(monthStart, monthEnd);
 
   final lines = <String>[];
-  lines.add(spentToday == 0
-      ? (kk ? 'Бүгін шығыс жазылмады.' : 'Сегодня расходов не записано.')
-      : (kk ? 'Бүгін жұмсалды: <b>${_kzt(spentToday)}</b>.' : 'Сегодня потрачено: <b>${_kzt(spentToday)}</b>.'));
-  for (final e in top.take(3)) {
-    lines.add('• ${i.categoryName(e.key)}: ${_kzt(e.value)}');
+  List<List<Map<String, String>>>? buttons;
+  final empty = recordsToday == 0;
+  if (empty) {
+    // Пустой день (D167): не отчёт, а вопрос — с кнопками быстрых операций,
+    // чтобы ответить одним нажатием прямо из Telegram.
+    lines.add(kk ? 'Бүгін ештеңе жазылмады. Шығын болды ма?' : 'Сегодня ничего не записано. Траты были?');
+    if (i.quickButtons.isNotEmpty) {
+      lines.add(kk ? 'Бір басу — және жазылды:' : 'Одно нажатие — и записано:');
+      buttons = i.quickButtons;
+    } else {
+      lines.add(kk ? 'Ботқа хабарламамен жазыңыз: «кофе 1500».' : 'Напишите боту сообщением: «кофе 1500».');
+    }
+  } else {
+    lines.add(spentToday == 0
+        ? (kk ? 'Бүгін шығыс жазылмады.' : 'Сегодня расходов не записано.')
+        : (kk ? 'Бүгін жұмсалды: <b>${_kzt(spentToday)}</b>.' : 'Сегодня потрачено: <b>${_kzt(spentToday)}</b>.'));
+    for (final e in top.take(3)) {
+      lines.add('• ${i.categoryName(e.key)}: ${_kzt(e.value)}');
+    }
   }
   if (repaidToday > 0) {
     lines.add(kk ? 'Бүгін қарыз өтелді: ${_kzt(repaidToday)}.' : 'Сегодня погашено долгов: ${_kzt(repaidToday)}.');
@@ -151,28 +245,37 @@ Brief eveningBrief(BriefInput i) {
     lines.add(kk ? 'Ай басынан қарыз өтелді: ${_kzt(report.debtPayments)}.' : 'С начала месяца погашено долгов: ${_kzt(report.debtPayments)}.');
   }
 
+  // Лимиты по категориям (D167): превышение и 80 % — в тот вечер, когда
+  // порог пройден, а не каждый день; по воскресеньям — сводка всех превышенных.
   final spentByCat = i.ledger.expenseByCategory(monthStart, monthEnd);
   final elapsed = today.day;
   final daysInMonth = monthEnd.difference(monthStart).inDays;
+  final weekly = today.weekday == DateTime.sunday;
   for (final lim in i.limits) {
-    final cat = i.categoryName(lim['category'] as String? ?? '');
-    final st = limitStatus(spent: spentByCat[expenseAccount(lim['category'] as String? ?? '')] ?? 0, limit: _minor(lim['amount']), elapsedFullDays: elapsed, periodDays: daysInMonth);
-    if (st.exceeded) {
+    final id = lim['category'] as String? ?? '';
+    final cat = i.categoryName(id);
+    final limit = _minor(lim['amount']);
+    if (limit <= 0) continue;
+    final spent = spentByCat[expenseAccount(id)] ?? 0;
+    final before = spent - (byCat[id] ?? 0);
+    final st = limitStatus(spent: spent, limit: limit, elapsedFullDays: elapsed, periodDays: daysInMonth);
+    if (st.exceeded && (before <= limit || weekly)) {
       lines.add(kk ? '⚠ «$cat» лимиті асып кетті: ${_kzt(st.spent)} / ${_kzt(st.limit)}.' : '⚠ Лимит «$cat» превышен: ${_kzt(st.spent)} из ${_kzt(st.limit)}.');
-    } else if (st.warn80) {
+    } else if (!st.exceeded && st.warn80 && before * 5 < limit * 4) {
       lines.add(kk ? '«$cat» лимиті: ${st.usedPercent?.round()}%.' : 'Лимит «$cat»: ${st.usedPercent?.round()}%.');
     }
   }
   final dueTomorrow = _due(i.ledger, i.planned, tomorrow, tomorrow, locale: i.locale, debts: i.debts);
   if (dueTomorrow.isNotEmpty) {
-    lines.add(kk ? 'Ертең төлем: ${dueTomorrow.map((e) => e.$1['name']).join(', ')}.' : 'Завтра платёж: ${dueTomorrow.map((e) => e.$1['name']).join(', ')}.');
+    lines.add(kk ? 'Ертең төлем: ${dueTomorrow.map((e) => '${e.$1['name']} — ${_kzt(_minor(e.$1['amount']))}').join(', ')}.' : 'Завтра платёж: ${dueTomorrow.map((e) => '${e.$1['name']} — ${_kzt(_minor(e.$1['amount']))}').join(', ')}.');
   }
   final preparation = monthPreparationDays(today);
   if (i.monthRemindersEnabled && preparation != null) {
     final reminder = monthPreparation(month: monthStart, days: preparation, locale: i.locale);
     lines.insertAll(0, ['📅 <b>${reminder.title}</b>', reminder.body, '']);
   }
-  return Brief(kk ? 'Кешкі есеп' : 'Вечерний отчёт', lines.join('\n'));
+  final title = empty ? (kk ? 'Бүгін жазба жоқ' : 'Сегодня без записей') : (kk ? 'Кешкі есеп' : 'Вечерний отчёт');
+  return Brief(title, lines.join('\n'), buttons: buttons);
 }
 
 const _monthsRu = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];

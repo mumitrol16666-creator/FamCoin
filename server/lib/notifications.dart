@@ -10,6 +10,7 @@ import 'package:postgres/postgres.dart';
 
 import 'auth_service.dart';
 import 'briefs.dart';
+import 'chat_entry.dart' show quickButtons;
 import 'ledger_service.dart';
 import 'telegram.dart';
 import 'webpush.dart';
@@ -192,9 +193,21 @@ class NotificationService {
       locale: s['locale'] as String? ?? 'ru',
       categories: {for (final e in entities) if (e['kind'] == 'category') e['id'] as String: Map<String, dynamic>.from(e['data'] as Map)},
       debts: {for (final e in entities) if (e['kind'] == 'debt') e['id'] as String: Map<String, dynamic>.from(e['data'] as Map)},
+      quickButtons: kind == 'evening' ? await _quickButtons(userId) : const [],
     );
     final brief = kind == 'morning' ? morningBrief(input) : eveningBrief(input);
-    await notify(userId, kind, brief.title, brief.body, dedupKey: dedupKey, mark: mark);
+    await notify(userId, kind, brief.title, brief.body, dedupKey: dedupKey, mark: mark, buttons: brief.buttons);
+  }
+
+  /// Кнопки быстрых операций для вечера без записей (D167); без привязанного
+  /// Telegram или плиток — пусто.
+  Future<List<List<Map<String, String>>>> _quickButtons(String userId) async {
+    try {
+      final v = await ledger.view(userId);
+      return v == null ? const [] : quickButtons(v);
+    } catch (_) {
+      return const [];
+    }
   }
 
   Ledger _ledgerOf(Map<String, Object?> s) => ledgerFromSnapshot(
@@ -215,15 +228,15 @@ class NotificationService {
   /// второй обработчик или перезапуск ничего не добавляют. [mark] — отметка в
   /// `users.notif`, которая ставится той же транзакцией, что запись. `false` —
   /// такое уведомление уже было.
-  Future<bool> notify(String userId, String kind, String title, String body, {String? openQuery, String? dedupKey, ({String flag, String value})? mark}) async {
+  Future<bool> notify(String userId, String kind, String title, String body, {String? openQuery, String? dedupKey, ({String flag, String value})? mark, List<List<Map<String, String>>>? buttons}) async {
     final id = await db.runTx((tx) async {
       final r = await tx.execute(
         Sql.named('''
-          INSERT INTO notifications (user_id, kind, title, body, open_query, dedup_key, deliver_status)
-          VALUES (@u, @k, @t, @b, @q, @d, 'pending')
+          INSERT INTO notifications (user_id, kind, title, body, open_query, dedup_key, deliver_status, tg_buttons)
+          VALUES (@u, @k, @t, @b, @q, @d, 'pending', @btn)
           ON CONFLICT (user_id, dedup_key) WHERE dedup_key IS NOT NULL DO NOTHING
           RETURNING id'''),
-        parameters: {'u': userId, 'k': kind, 't': title, 'b': body, 'q': openQuery, 'd': dedupKey},
+        parameters: {'u': userId, 'k': kind, 't': title, 'b': body, 'q': openQuery, 'd': dedupKey, 'btn': buttons == null || buttons.isEmpty ? null : TypedValue(Type.jsonb, buttons)},
       );
       if (mark != null) {
         await tx.execute(
@@ -252,7 +265,7 @@ class NotificationService {
               AND (deliver_lease_until IS NULL OR deliver_lease_until <= now())
             RETURNING *
           )
-          SELECT n.user_id, n.kind, n.title, n.body, n.open_query, n.tg_done, n.push_done, u.telegram_chat_id, n.deliver_token
+          SELECT n.user_id, n.kind, n.title, n.body, n.open_query, n.tg_done, n.push_done, u.telegram_chat_id, n.deliver_token, n.tg_buttons
           FROM claimed n JOIN users u ON u.id = n.user_id '''),
         parameters: {'id': id},
       );
@@ -263,6 +276,7 @@ class NotificationService {
       var tgDone = r[5] == true, pushDone = r[6] == true;
       final chatId = r[7] as int?;
       final token = r[8].toString();
+      final buttons = r[9] == null ? null : [for (final row in r[9] as List) [for (final b in row as List) Map<String, String>.from(b as Map)]];
       var renewing = false;
       heartbeat = Timer.periodic(const Duration(seconds: 30), (_) async {
         if (renewing) return;
@@ -291,7 +305,7 @@ class NotificationService {
           final site = origin;
           final link = openQuery != null && site != null && site.startsWith('https://') ? '\n$site/?$openQuery' : '';
           try {
-            tgDone = await telegram.send(chatId, '<b>$title</b>\n$body$link');
+            tgDone = await telegram.send(chatId, '<b>$title</b>\n$body$link', buttons: buttons);
           } catch (e) {
             tgDone = false;
           }

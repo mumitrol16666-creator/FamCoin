@@ -15,12 +15,16 @@ void main() {
     final input = BriefInput(ledger: ledger, today: DateTime(2026, 9, 30), profile: {}, limits: [], locale: 'ru',
       debts: {'red': {'kind': 'installment', 'rate': 0}},
       planned: [{'id':'red-pay','name':'Рассрочка','amount':'5000000','day':30,'debtId':'red','start':'2026-07-01','paid':<String>[]}]);
-    // Весь остаток распределён на июльский просроченный срок, повторного
-    // требования тех же денег за сентябрь в утренней сводке быть не должно.
-    expect(morningBrief(input).body, isNot(contains('Рассрочка —')));
+    // Весь остаток распределён на июльский просроченный срок (D167: он виден
+    // как просрочка), повторного требования тех же денег за сентябрь нет.
+    final body = morningBrief(input).body;
+    expect('Рассрочка —'.allMatches(body).length, 1);
+    expect(body, contains('• Рассрочка — 10 000 ₸ (срок 30.07)'));
+    expect(body, isNot(contains('Сегодня к оплате')));
   });
 
   personDueBriefTests();
+  main167();
   const rent = {'name': 'Аренда', 'amount': '15000000', 'day': 31, 'category': 'home', 'paid': <String>[]};
   const tyres = {'name': 'Колёса', 'amount': '10000000', 'day': 31, 'category': 'transport', 'paid': <String>[], 'once': '2027-03'};
 
@@ -30,15 +34,18 @@ void main() {
     expect(october, contains('Аренда'));
     expect(october, isNot(contains('Колёса')));
 
-    // 29 марта: покупка — «в ближайшие 3 дня», 31-го — «сегодня к оплате».
-    expect(morningBrief(_input(DateTime(2027, 3, 29), [tyres])).body, contains('В ближайшие 3 дня: Колёса (31.03)'));
+    // 29 марта: покупка — «в ближайшие 14 дней», 31-го — «сегодня к оплате».
+    expect(morningBrief(_input(DateTime(2027, 3, 29), [tyres])).body, allOf(contains('В ближайшие 14 дней:'), contains('• Колёса — 100 000 ₸ (31.03)')));
     final march = morningBrief(_input(DateTime(2027, 3, 31), [rent, tyres])).body;
     expect(march, allOf(contains('Сегодня к оплате:'), contains('Колёса — 100 000 ₸'), contains('Аренда — 150 000 ₸')));
 
-    // Куплена — больше не напоминает; в апреле её тоже нет.
+    // Куплена — больше не напоминает; не куплена — в апреле это просрочка (D167).
     final bought = {...tyres, 'paid': ['2027-03']};
     expect(morningBrief(_input(DateTime(2027, 3, 31), [bought])).body, isNot(contains('Колёса')));
-    expect(morningBrief(_input(DateTime(2027, 4, 30), [tyres])).body, isNot(contains('Колёса')));
+    expect(morningBrief(_input(DateTime(2027, 4, 30), [bought])).body, isNot(contains('Колёса')));
+    final april = morningBrief(_input(DateTime(2027, 4, 30), [tyres])).body;
+    expect(april, contains('• Колёса — 100 000 ₸ (срок 31.03)'));
+    expect(april, isNot(contains('Сегодня к оплате')));
   });
 
   test('утренняя сводка: недельный платёж напоминает в свой день недели, годовой — в свой день года', () {
@@ -50,11 +57,13 @@ void main() {
     // Во вторник — «завтра» репетитор, страховка ещё впереди.
     final tue = morningBrief(_input(DateTime(2026, 10, 6), [tutor, insurance])).body;
     expect(tue, contains('Репетитор'));
-    // Отмечена оплатой этой недели (ключ — дата срока) и этого года — не напоминает.
+    // Отмечена оплатой этой недели (ключ — дата срока) и этого года — сегодня
+    // не требует; репетитор остаётся только как следующая среда в ближайших днях.
     final paidTutor = {...tutor, 'paid': ['2026-10-07']};
     final paidInsurance = {...insurance, 'paid': ['2026']};
     final done = morningBrief(_input(DateTime(2026, 10, 7), [paidTutor, paidInsurance])).body;
-    expect(done, isNot(contains('Репетитор')));
+    expect(done, isNot(contains('Сегодня к оплате')));
+    expect(done, contains('• Репетитор — 5 000 ₸ (14.10)'));
     expect(done, isNot(contains('Страховка')));
   });
 
@@ -181,5 +190,105 @@ void personDueBriefTests() {
     expect(brief(debtOf(10000), {'name': 'Телефон', 'kind': 'loan', 'rate': 24}, 'ru'), contains('10 200 ₸'));
     // Обычный месяц — обычный платёж.
     expect(brief(debtOf(300000), {'name': 'Телефон', 'kind': 'loan', 'rate': 24}, 'ru'), contains('50 000 ₸'));
+  });
+}
+
+/// D167: сводки с содержанием — вчера против лимита, просрочка, ближайшие
+/// платежи и кассовый разрыв утром; вечером без нулей, лимиты в день
+/// превышения, пустой день с кнопками.
+void main167() {
+  Ledger ledger({int money = 100000}) {
+    final l = Ledger();
+    applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o', 'date': '2026-09-01', 'account': 'card', 'amount': '${kzt(money)}'});
+    return l;
+  }
+  void spend(Ledger l, String id, String date, String cat, int amount, {bool planned = false}) =>
+      applyLedgerCommand(l, {'type': 'expense', 'id': id, 'date': date, 'account': 'card', 'splits': {cat: '${kzt(amount)}'}, if (planned) 'meta': {'plannedPurchase': true}});
+
+  group('D167 утро', () {
+    test('вчера против дневного лимита: уложились, превысили, без лимита, без записей', () {
+      final l = ledger();
+      spend(l, 'a', '2026-10-11', 'food', 3000);
+      spend(l, 'b', '2026-10-11', 'home', 20000, planned: true); // запланированная — вне лимита
+      final limited = BriefInput(ledger: l, today: DateTime(2026, 10, 12), profile: const {'dailyLimit': '500000'}, planned: const [], limits: const [], locale: 'ru');
+      expect(morningBrief(limited).body, contains('Вчера: <b>3 000 ₸</b> при лимите 5 000 ₸ — уложились ✅'));
+      spend(l, 'c', '2026-10-11', 'cafe', 4000);
+      expect(morningBrief(limited).body, contains('Вчера: <b>7 000 ₸</b> при лимите 5 000 ₸ — на 2 000 ₸ больше ⚠'));
+      final free = BriefInput(ledger: l, today: DateTime(2026, 10, 12), profile: const {}, planned: const [], limits: const [], locale: 'ru');
+      expect(morningBrief(free).body, contains('Вчера потрачено: <b>7 000 ₸</b>.'));
+      expect(morningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 14), profile: const {}, planned: const [], limits: const [], locale: 'ru')).body, contains('Вчера записей не было.'));
+      expect(morningBrief(limited).body, contains('Доступно сегодня: 5 000 ₸.'));
+      final kk = BriefInput(ledger: l, today: DateTime(2026, 10, 12), profile: const {'dailyLimit': '500000'}, planned: const [], limits: const [], locale: 'kk');
+      expect(morningBrief(kk).body, allOf(contains('Кеше: <b>7 000 ₸</b>'), contains('Бүгін қолжетімді: 5 000 ₸.')));
+    });
+
+    test('просрочка: один самый свежий срок на платёж, с датой; кассовый разрыв против свободных денег', () {
+      const rent = {'id': 'rent', 'name': 'Аренда', 'amount': '15000000', 'day': 1, 'category': 'home', 'paid': <String>[], 'start': '2026-08-01'};
+      const net = {'id': 'net', 'name': 'Интернет', 'amount': '500000', 'day': 20, 'category': 'home', 'paid': <String>[], 'start': '2026-08-01'};
+      final poor = BriefInput(ledger: ledger(money: 20000), today: DateTime(2026, 10, 12), profile: const {}, planned: const [rent, net], limits: const [], locale: 'ru');
+      final body = morningBrief(poor).body;
+      expect(body, contains('⚠ Просрочено:'));
+      expect('Аренда —'.allMatches(body).length, 1, reason: 'август и сентябрь не оплачены, но в просрочке только последний срок');
+      expect(body, contains('• Аренда — 150 000 ₸ (срок 1.10)'));
+      expect(body, contains('• Интернет — 5 000 ₸ (срок 20.09)'));
+      expect(body, contains('В ближайшие 14 дней:'));
+      expect(body, contains('• Интернет — 5 000 ₸ (20.10)'));
+      expect(body, isNot(contains('1.11')), reason: 'ноябрьская аренда дальше 14 дней');
+      expect(body, contains('❗ Не хватает 140 000 ₸ на платежи до 20.10: к оплате 160 000 ₸, свободно на счетах 20 000 ₸.'));
+
+      final rich = BriefInput(ledger: ledger(money: 500000), today: DateTime(2026, 10, 12), profile: const {}, planned: const [net], limits: const [], locale: 'ru');
+      expect(morningBrief(rich).body, contains('На платежи денег хватает ✅'));
+      final nothing = BriefInput(ledger: ledger(), today: DateTime(2026, 10, 12), profile: const {}, planned: const [], limits: const [], locale: 'ru');
+      expect(morningBrief(nothing).body, isNot(anyOf(contains('хватает'), contains('Просрочено'))));
+      final kk = BriefInput(ledger: ledger(money: 20000), today: DateTime(2026, 10, 12), profile: const {}, planned: const [rent, net], limits: const [], locale: 'kk');
+      expect(morningBrief(kk).body, allOf(contains('⚠ Мерзімі өткен:'), contains('жетпейді')));
+    });
+  });
+
+  group('D167 вечер', () {
+    test('нулевая категория не показывается', () {
+      final l = ledger();
+      spend(l, 'a', '2026-10-11', 'food', 1200);
+      spend(l, 'b', '2026-10-11', 'cafe', 1790);
+      applyLedgerCommand(l, {'type': 'reverse', 'id': 'r', 'date': '2026-10-11', 'txId': 'a'});
+      final body = eveningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 11), profile: const {}, planned: const [], limits: const [], locale: 'ru')).body;
+      expect(body, contains('• Кафе: 1 790 ₸'));
+      expect(body, isNot(contains(': 0 ₸')), reason: 'отменённая запись в продуктах дала ноль — строки нет');
+    });
+
+    test('лимит категории: предупреждение в вечер превышения и по воскресеньям, а не каждый день', () {
+      final l = ledger();
+      const limits = [{'category': 'cafe', 'amount': '1000000'}];
+      BriefInput at(int day) => BriefInput(ledger: l, today: DateTime(2026, 10, day), profile: const {}, planned: const [], limits: limits, locale: 'ru');
+      spend(l, 'a', '2026-10-05', 'cafe', 8500); // понедельник: 85 % — порог 80 % пройден сегодня
+      expect(eveningBrief(at(5)).body, contains('Лимит «Кафе»: 85%.'));
+      spend(l, 'b', '2026-10-06', 'cafe', 500); // 90 % — ничего нового
+      expect(eveningBrief(at(6)).body, isNot(contains('Лимит «Кафе»')));
+      spend(l, 'c', '2026-10-07', 'cafe', 2000); // превышен сегодня
+      expect(eveningBrief(at(7)).body, contains('⚠ Лимит «Кафе» превышен: 11 000 ₸ из 10 000 ₸.'));
+      spend(l, 'd', '2026-10-08', 'cafe', 300); // по-прежнему превышен — молчим
+      expect(eveningBrief(at(8)).body, isNot(contains('Лимит «Кафе»')));
+      expect(eveningBrief(at(11)).body, contains('⚠ Лимит «Кафе» превышен: 11 300 ₸ из 10 000 ₸.'), reason: 'воскресенье — недельная сводка');
+    });
+
+    test('пустой день: вопрос и кнопки быстрых операций; без плиток — подсказка про бота', () {
+      final l = ledger();
+      spend(l, 'a', '2026-10-10', 'food', 1200);
+      final buttons = [[{'text': 'Кофе · 1 590 ₸', 'callback_data': 'q:1'}]];
+      final b = eveningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 11), profile: const {}, planned: const [], limits: const [], locale: 'ru', quickButtons: buttons));
+      expect(b.title, 'Сегодня без записей');
+      expect(b.body, allOf(contains('Сегодня ничего не записано. Траты были?'), contains('Одно нажатие — и записано:'), contains('С начала месяца:')));
+      expect(b.buttons, buttons);
+      final plain = eveningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 11), profile: const {}, planned: const [], limits: const [], locale: 'ru'));
+      expect(plain.body, contains('Напишите боту сообщением: «кофе 1500».'));
+      expect(plain.buttons, isNull);
+      // День с записью — обычный отчёт без кнопок.
+      final usual = eveningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 10), profile: const {}, planned: const [], limits: const [], locale: 'ru', quickButtons: buttons));
+      expect(usual.title, 'Вечерний отчёт');
+      expect(usual.buttons, isNull);
+      final kk = eveningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 11), profile: const {}, planned: const [], limits: const [], locale: 'kk', quickButtons: buttons));
+      expect(kk.title, 'Бүгін жазба жоқ');
+    });
   });
 }
