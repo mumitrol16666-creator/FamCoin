@@ -90,14 +90,16 @@ class _JournalScreenState extends State<JournalScreen> {
         }
 
         // Итог дня — расход по тому же правилу, что столбик дня в аналитике
-        // (UI01): возвраты, рассрочка и проценты учтены. Он относится ко всему
+        // (UI01): возвраты, рассрочка и проценты учтены. Подписан словом «траты»
+        // (D168): рядом с доходом и возвратом долга голое «− 20 600» читалось
+        // как итог движения денег. Он относится ко всему
         // дню, поэтому показывается только в действующих операциях без поиска:
         // в найденном, удалённом и истории он выдал бы не тот расход за текущий.
         final dayTotals = _view == _View.active && q.isEmpty ? state.expenseByDay() : const <DateTime, int>{};
         String? dayTotal(DateTime day) {
           final v = dayTotals[day];
           if (v == null) return null;
-          return v > 0 ? '− ${formatMoney(v)}' : l.dayRefundedNet(formatMoney(-v));
+          return v > 0 ? l.daySpentTotal(formatMoney(v)) : l.dayRefundedNet(formatMoney(-v));
         }
 
         String monthChip(DateTime m) => toBeginningOfSentenceCase(m.year == state.today.year ? DateFormat.MMMM(locale).format(m) : DateFormat.yMMMM(locale).format(m));

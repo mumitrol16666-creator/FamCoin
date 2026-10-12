@@ -1239,6 +1239,8 @@
   "noPrevMonthData": "За прошлый месяц пока нет данных для сравнения",
   "dayRefundedNet": "возвращено {amount}",
   "@dayRefundedNet": {"placeholders": {"amount": {"type": "String"}}},
+  "daySpentTotal": "траты {amount}",
+  "@daySpentTotal": {"placeholders": {"amount": {"type": "String"}}},
   "@resultVsPrev": {
     "placeholders": {
       "sign": {

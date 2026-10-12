@@ -51,8 +51,8 @@ void main() {
         await s.refund(s.ledger.byId('buy')!, category: 'food', amount: kzt(4000), account: 'cash', date: today);
       });
       expect(chartDay(f.state, today), kzt(6000));
-      expect(find.text('− ${formatMoney(kzt(6000))}'), findsOneWidget);
-      expect(find.text('− ${formatMoney(kzt(10000))}'), findsNothing);
+      expect(find.text('траты ${formatMoney(kzt(6000))}'), findsOneWidget);
+      expect(find.text('траты ${formatMoney(kzt(10000))}'), findsNothing);
     });
 
     testWidgets('покупка в рассрочку и проценты по кредиту входят в итог дня', (tester) async {
@@ -65,7 +65,7 @@ void main() {
         ]);
       });
       expect(chartDay(f.state, today), kzt(121000), reason: 'рассрочка 120 000 + проценты 1 000; тело кредита — не расход');
-      expect(find.text('− ${formatMoney(kzt(121000))}'), findsOneWidget);
+      expect(find.text('траты ${formatMoney(kzt(121000))}'), findsOneWidget);
     });
 
     testWidgets('возврат за покупку прошлого месяца: день с чистым возвратом подписан, а не показан расходом', (tester) async {
@@ -75,7 +75,7 @@ void main() {
       });
       expect(chartDay(f.state, today), -kzt(4000));
       expect(find.text('возвращено ${formatMoney(kzt(4000))}'), findsOneWidget);
-      expect(find.text('− ${formatMoney(kzt(10000))}'), findsOneWidget, reason: '30 августа — своя покупка');
+      expect(find.text('траты ${formatMoney(kzt(10000))}'), findsOneWidget, reason: '30 августа — своя покупка');
     });
 
     testWidgets('удалённая покупка не входит; в «Удалённых», «Истории» и при поиске итог дня не выводится', (tester) async {
@@ -84,23 +84,23 @@ void main() {
         await s.addExpense(amount: kzt(7000), category: 'food', account: 'cash', date: today, id: 'gone', note: 'сыр');
         await s.deleteTransaction('gone');
       });
-      expect(find.text('− ${formatMoney(kzt(3000))}'), findsOneWidget);
+      expect(find.text('траты ${formatMoney(kzt(3000))}'), findsOneWidget);
       await tester.tap(find.text('Удалённые'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('− '), findsNothing, reason: 'отменённое — не текущий расход');
+      expect(find.textContaining('траты '), findsNothing, reason: 'отменённое — не текущий расход');
       await tester.tap(find.text('Всё'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('− '), findsNothing);
+      expect(find.textContaining('траты '), findsNothing);
       await tester.tap(find.text('Действующие'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'хлеб');
       await tester.pumpAndSettle();
-      expect(find.textContaining('− '), findsNothing, reason: 'итог дня не выдаётся за итог найденного');
+      expect(find.textContaining('траты '), findsNothing, reason: 'итог дня не выдаётся за итог найденного');
       // Восстановление возвращает покупку и в итог.
       await tester.enterText(find.byType(TextField).first, '');
       await f.state.restoreTransaction('gone');
       await tester.pumpAndSettle();
-      expect(find.text('− ${formatMoney(kzt(10000))}'), findsOneWidget);
+      expect(find.text('траты ${formatMoney(kzt(10000))}'), findsOneWidget);
     });
   });
 
