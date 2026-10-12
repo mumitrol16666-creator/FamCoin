@@ -236,14 +236,22 @@ void main167() {
       expect(body, contains('В ближайшие 14 дней:'));
       expect(body, contains('• Интернет — 5 000 ₸ (20.10)'));
       expect(body, isNot(contains('1.11')), reason: 'ноябрьская аренда дальше 14 дней');
-      expect(body, contains('❗ Не хватает 140 000 ₸ на платежи до 20.10: к оплате 160 000 ₸, свободно на счетах 20 000 ₸.'));
+      // Как на главной: все неоплаченные сроки до конца месяца (аренда за август,
+      // сентябрь, октябрь и интернет за три месяца) против свободных денег.
+      expect(body, contains('❗ Не хватает 445 000 ₸ на платежи до конца месяца: к оплате 465 000 ₸, свободно на счетах 20 000 ₸.'));
 
       final rich = BriefInput(ledger: ledger(money: 500000), today: DateTime(2026, 10, 12), profile: const {}, planned: const [net], limits: const [], locale: 'ru');
-      expect(morningBrief(rich).body, contains('На платежи денег хватает ✅'));
+      expect(morningBrief(rich).body, contains('На платежи до конца месяца денег хватает ✅'));
+      // День дохода 10-го: горизонт до 9.11 — ноябрьские сроки до него входят.
+      const nov = {'id': 'nov', 'name': 'Кредит', 'amount': '2000000', 'day': 5, 'category': 'other', 'paid': <String>[], 'start': '2026-10-20'};
+      final payday = BriefInput(ledger: ledger(money: 30000), today: DateTime(2026, 10, 12), profile: const {'incomeDay': 10}, planned: const [net, nov], limits: const [], locale: 'ru');
+      final pb = morningBrief(payday).body;
+      expect(pb, contains('❗ Не хватает 5 000 ₸ на платежи до зарплаты 10.11: к оплате 35 000 ₸, свободно на счетах 30 000 ₸.'), reason: 'интернет 20.08, 20.09, 20.10 и кредит 5.11');
+      expect(pb, isNot(contains('• Кредит')), reason: 'в списке ближайших только 14 дней');
       final nothing = BriefInput(ledger: ledger(), today: DateTime(2026, 10, 12), profile: const {}, planned: const [], limits: const [], locale: 'ru');
       expect(morningBrief(nothing).body, isNot(anyOf(contains('хватает'), contains('Просрочено'))));
       final kk = BriefInput(ledger: ledger(money: 20000), today: DateTime(2026, 10, 12), profile: const {}, planned: const [rent, net], limits: const [], locale: 'kk');
-      expect(morningBrief(kk).body, allOf(contains('⚠ Мерзімі өткен:'), contains('жетпейді')));
+      expect(morningBrief(kk).body, allOf(contains('⚠ Мерзімі өткен:'), contains('ай соңына дейінгі төлемдерге'), contains('жетпейді')));
     });
   });
 

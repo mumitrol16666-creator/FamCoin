@@ -160,8 +160,23 @@ Brief morningBrief(BriefInput i) {
     }
   }
 
-  // Сроки одним проходом: просрочено, сегодня, ближайшие две недели.
-  final window = dueWindow(l, i.planned, today.subtract(const Duration(days: overdueLookbackDays)), today.add(const Duration(days: upcomingDays)), locale: i.locale, debts: i.debts, keepBefore: true);
+  // Горизонт денег — как у карточки «Осталось на сегодня» в приложении:
+  // до следующего дня дохода (`incomeDay`), без него — до конца месяца.
+  final incomeDay = (i.profile['incomeDay'] as num?)?.toInt();
+  final DateTime horizon;
+  if (incomeDay == null) {
+    horizon = DateTime(today.year, today.month + 1, 0);
+  } else {
+    DateTime onDay(int y, int m) {
+      final last = DateTime(y, m + 1, 0).day;
+      return DateTime(y, m, incomeDay < last ? incomeDay : last);
+    }
+    final thisMonth = onDay(today.year, today.month);
+    horizon = (thisMonth.isAfter(today) ? thisMonth : onDay(today.year, today.month + 1)).subtract(const Duration(days: 1));
+  }
+  final listUntil = today.add(const Duration(days: upcomingDays));
+  // Сроки одним проходом: просрочено, сегодня, ближайшие две недели и до горизонта.
+  final window = dueWindow(l, i.planned, today.subtract(const Duration(days: overdueLookbackDays)), horizon.isAfter(listUntil) ? horizon : listUntil, locale: i.locale, debts: i.debts, keepBefore: true);
   // Просрочка — по одному сроку на платёж, самому свежему: оплату мимо
   // приложения часто не отмечают, и список старых месяцев был бы шумом.
   final latestOverdue = <String, (Map<String, dynamic>, DateTime)>{};
@@ -170,7 +185,7 @@ Brief morningBrief(BriefInput i) {
   }
   final overdue = latestOverdue.values.toList()..sort((a, b) => a.$2.compareTo(b.$2));
   final dueToday = [for (final d in window) if (d.$2 == today) d];
-  final soon = [for (final d in window) if (d.$2.isAfter(today)) d];
+  final soon = [for (final d in window) if (d.$2.isAfter(today) && !d.$2.isAfter(listUntil)) d];
   int sum(List<(Map<String, dynamic>, DateTime)> xs) => xs.fold(0, (a, d) => a + _minor(d.$1['amount']));
 
   if (overdue.isNotEmpty) {
@@ -192,17 +207,19 @@ Brief morningBrief(BriefInput i) {
     }
     if (soon.length > 5) lines.add(kk ? '• … тағы ${soon.length - 5}' : '• … ещё ${soon.length - 5}');
   }
-  // Кассовый разрыв (D167): всё, что надо заплатить до конца окна, против
-  // денег на счетах. Отложенное на цели не трогаем — это не деньги на платежи.
-  final need = sum(overdue) + sum(dueToday) + sum(soon);
+  // Кассовый разрыв (D167): все неоплаченные сроки до горизонта (вся просрочка
+  // тоже, как в `obligationsUntilIncome` приложения) против свободных денег —
+  // та же цифра, что «на платежи пока не хватает» на главной.
+  final need = sum([for (final d in window) if (!d.$2.isAfter(horizon)) d]);
   final money = l.freeLiquid();
-  if (need > 0 && need > money) {
-    final until = soon.isNotEmpty ? soon.last.$2 : today;
+  final free = money < 0 ? 0 : money;
+  final untilText = incomeDay == null ? (kk ? 'ай соңына дейінгі' : 'до конца месяца') : (kk ? '${_dm(horizon.add(const Duration(days: 1)))} жалақыға дейінгі' : 'до зарплаты ${_dm(horizon.add(const Duration(days: 1)))}');
+  if (need > free) {
     lines.add(kk
-        ? '❗ ${_dm(until)} дейінгі төлемдерге ${_kzt(need - (money < 0 ? 0 : money))} жетпейді: төлеу керек ${_kzt(need)}, шоттарда ${_kzt(money < 0 ? 0 : money)}.'
-        : '❗ Не хватает ${_kzt(need - (money < 0 ? 0 : money))} на платежи до ${_dm(until)}: к оплате ${_kzt(need)}, свободно на счетах ${_kzt(money < 0 ? 0 : money)}.');
+        ? '❗ $untilText төлемдерге ${_kzt(need - free)} жетпейді: төлеу керек ${_kzt(need)}, шоттарда бос ${_kzt(free)}.'
+        : '❗ Не хватает ${_kzt(need - free)} на платежи $untilText: к оплате ${_kzt(need)}, свободно на счетах ${_kzt(free)}.');
   } else if (need > 0) {
-    lines.add(kk ? 'Төлемдерге ақша жетеді ✅' : 'На платежи денег хватает ✅');
+    lines.add(kk ? '$untilText төлемдерге ақша жетеді ✅' : 'На платежи $untilText денег хватает ✅');
   }
   // Совет дня (D97): тот же набор, что на главной приложения; один на всех,
   // меняется каждый день.
