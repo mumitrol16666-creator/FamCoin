@@ -156,9 +156,11 @@ void main() {
       final due = soleDue(s);
       expect(due.date, DateTime(2026, 10, 5));
       expect(due.payAmount, kzt(70000));
-      // Без новой даты прежняя будущая договорённость остаётся как была.
+      // Без новой даты прежний срок остаётся, но означает весь остаток (D170):
+      // карточка обещает «вернуть до даты» весь долг, а не сумму на день договорённости.
       await s.addPersonDebt(kind: 'borrow', amount: kzt(5000), person: 'Друг', account: 'cash', date: s.today);
       expect(soleDue(s).planned.id, due.planned.id);
+      expect(soleDue(s).payAmount, kzt(75000));
     });
 
     test('новый долг без срока после погашенного: прежний исполненный срок не оживает', () async {

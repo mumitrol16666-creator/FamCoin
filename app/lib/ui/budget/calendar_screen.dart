@@ -135,7 +135,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               leading: CategoryAvatar.of(categoryById(p.debtId != null ? debtsCategory : p.category)),
                               title: Text(plannedTitle(l, p)),
                               subtitle: Text('${DateFormat.MMMMd(locale).format(d)} · ${l.paidThisMonth}', style: TextStyle(fontSize: 12, color: fam.income)),
-                              trailing: MoneyText(p.amount, color: fam.text2),
+                              // Срок долга человеку хранит 0 — «весь остаток» (D170), показывать нечего.
+                              trailing: p.amount == 0 ? null : MoneyText(p.amount, color: fam.text2),
                             )
                           : DueTile(due: DueItem(p, d, itemPeriod), locale: locale),
                   ]),

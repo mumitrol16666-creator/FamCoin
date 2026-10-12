@@ -147,6 +147,19 @@ void personDueBriefTests() {
     expect(morningBrief(input(DateTime(2026, 10, 20))).body, isNot(contains('Теща')));
   });
 
+  test('D170: срок долга человеку с суммой 0 — весь остаток, растёт после «взял ещё» и тает после возвратов', () {
+    final l = Ledger();
+    applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});
+    applyLedgerCommand(l, {'type': 'opening', 'id': 'o', 'date': '2026-09-01', 'account': 'card', 'amount': '${kzt(300000)}'});
+    applyLedgerCommand(l, {'type': 'borrow', 'id': 'b1', 'date': '2026-10-04', 'account': 'card', 'person': 'Maestro', 'amount': '${kzt(63000)}'});
+    const due = {'id': 'pd:Maestro', 'name': 'Maestro', 'amount': '0', 'day': 1, 'category': 'other', 'paid': <String>[], 'person': 'Maestro', 'onDate': '2026-10-31'};
+    BriefInput input() => BriefInput(ledger: l, today: DateTime(2026, 10, 31), profile: const {}, planned: const [due], limits: const [], locale: 'ru');
+    expect(morningBrief(input()).body, contains('Долг: Maestro — 63 000 ₸'));
+    applyLedgerCommand(l, {'type': 'borrow', 'id': 'b2', 'date': '2026-10-09', 'account': 'card', 'person': 'Maestro', 'amount': '${kzt(120000)}'});
+    applyLedgerCommand(l, {'type': 'repaymentMade', 'id': 'r', 'date': '2026-10-10', 'account': 'card', 'person': 'Maestro', 'principal': '${kzt(40000)}'});
+    expect(morningBrief(input()).body, contains('Долг: Maestro — 143 000 ₸'), reason: '63 000 + 120 000 − 40 000');
+  });
+
   test('N01: части к сроку вычитаются так же, как в приложении — по общему расчёту ядра', () {
     final l = Ledger();
     applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'card'});

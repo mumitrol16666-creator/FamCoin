@@ -1309,7 +1309,9 @@ class AppState extends ChangeNotifier {
       if (existing != null && (owed == 0 || existing.onDate != null && existing.onDate!.isBefore(today))) return _dropPersonDues(person);
       return const [];
     }
-    final plan = PlannedInfo(newPersonDueId(), person, owed + added, 1, 'other', null, const {}, person: person, onDate: dueDate);
+    // Сумма 0 — «весь остаток долга к дате» (D170): после «взял ещё» без новой
+    // даты срок растёт вместе с долгом, а не остаётся на сумме на день договорённости.
+    final plan = PlannedInfo(newPersonDueId(), person, 0, 1, 'other', null, const {}, person: person, onDate: dueDate);
     return [..._dropPersonDues(person), {'type': 'upsertEntity', 'kind': 'planned', 'entityId': plan.id, 'data': plan.toJson()}];
   }
 
@@ -1319,7 +1321,8 @@ class AppState extends ChangeNotifier {
   Future<void> setPersonDue(PersonDebt d, DateTime? date) {
     final drop = _dropPersonDues(d.person);
     if (date == null) return drop.isEmpty ? Future<void>.value() : sendBatch(drop, requireCurrent: true);
-    final plan = PlannedInfo(newPersonDueId(), d.person, d.amount, 1, 'other', null, const {}, person: d.person, onDate: date);
+    // Сумма 0 — весь остаток долга к дате (D170), как обещает карточка «Вернуть до».
+    final plan = PlannedInfo(newPersonDueId(), d.person, 0, 1, 'other', null, const {}, person: d.person, onDate: date);
     return sendBatch([...drop, {'type': 'upsertEntity', 'kind': 'planned', 'entityId': plan.id, 'data': plan.toJson()}], requireCurrent: true);
   }
 
