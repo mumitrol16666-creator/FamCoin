@@ -1745,6 +1745,8 @@
   "leWriteOffExceeds": "Списать можно не больше остатка долга",
   "leRestoreSuperseded": "У этой операции есть более новая версия, старую восстановить нельзя",
   "unarchiveAccount": "Вернуть из архива",
+  "accountsArchive": "Архив · {n}",
+  "@accountsArchive": {"placeholders": {"n": {"type": "int"}}},
   "unarchiveFailedHint": "Если счёт не возвращается, проверьте, не превышен ли лимит счетов в обычной версии",
   "reportWrittenOff": "Списано долгов: {amount}",
   "@reportWrittenOff": {"placeholders": {"amount": {"type": "String"}}},

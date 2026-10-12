@@ -9,8 +9,17 @@ import '../ops/transaction_tile.dart';
 import '../widgets/common.dart';
 
 /// S08 — счета: остатки, резервы, добавление и архив.
-class AccountsScreen extends StatelessWidget {
+class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key});
+
+  @override
+  State<AccountsScreen> createState() => _AccountsScreenState();
+}
+
+class _AccountsScreenState extends State<AccountsScreen> {
+  /// Архив (D171): копилки реализованных целей и убранные счета живут в
+  /// истории навсегда, но в списке они свёрнуты в одну строку «Архив · N».
+  bool _showArchive = false;
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +30,31 @@ class AccountsScreen extends StatelessWidget {
       listenable: state,
       builder: (context, _) {
         final nw = state.ledger.netWorth();
+        final active = state.moneyAccounts.where((a) => !a.archived).toList();
+        final archived = state.moneyAccounts.where((a) => a.archived).toList();
+        Widget row(dynamic a) => Card(
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AccountScreen(accountId: a.id))),
+                child: Row(children: [
+                  Container(width: 6, height: 72, color: a.archived ? fam.line : a.color),
+                  const SizedBox(width: 12),
+                  Icon(accountTypeIcon(a.type), color: fam.text2),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(
+                        '${accountTypeName(l, a.type)}${a.archived ? ' · ${l.archived}' : ''}${state.ledger.reserved(accountId: a.id) > 0 ? ' · ${l.reserve} ${formatMoney(state.ledger.reserved(accountId: a.id))}' : ''}'
+                        '${state.familyMode && a.owner != null ? ' · ${ownerName(l, state, a.owner)}' : ''}',
+                        style: TextStyle(fontSize: 12, color: fam.text2),
+                      ),
+                    ]),
+                  ),
+                  Padding(padding: const EdgeInsets.only(right: 16), child: MoneyText(state.ledger.balance(a.id))),
+                ]),
+              ),
+            );
         return Scaffold(
           appBar: AppBar(title: Text(l.accounts)),
           floatingActionButton: FloatingActionButton.extended(
@@ -43,30 +77,17 @@ class AccountsScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 12, color: fam.text2)),
                 ]),
               ),
-              for (final a in state.moneyAccounts)
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AccountScreen(accountId: a.id))),
-                    child: Row(children: [
-                      Container(width: 6, height: 72, color: a.archived ? fam.line : a.color),
-                      const SizedBox(width: 12),
-                      Icon(accountTypeIcon(a.type), color: fam.text2),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          Text(
-                            '${accountTypeName(l, a.type)}${a.archived ? ' · ${l.archived}' : ''}${state.ledger.reserved(accountId: a.id) > 0 ? ' · ${l.reserve} ${formatMoney(state.ledger.reserved(accountId: a.id))}' : ''}'
-                            '${state.familyMode && a.owner != null ? ' · ${ownerName(l, state, a.owner)}' : ''}',
-                            style: TextStyle(fontSize: 12, color: fam.text2),
-                          ),
-                        ]),
-                      ),
-                      Padding(padding: const EdgeInsets.only(right: 16), child: MoneyText(state.ledger.balance(a.id))),
-                    ]),
-                  ),
+              for (final a in active) row(a),
+              if (archived.isNotEmpty) ...[
+                TextButton.icon(
+                  key: const ValueKey('accounts-archive'),
+                  onPressed: () => setState(() => _showArchive = !_showArchive),
+                  icon: Icon(_showArchive ? Icons.expand_less : Icons.expand_more),
+                  label: Text(l.accountsArchive(archived.length)),
+                  style: TextButton.styleFrom(foregroundColor: fam.text2, alignment: Alignment.centerLeft),
                 ),
+                if (_showArchive) for (final a in archived) row(a),
+              ],
             ],
           ),
         );

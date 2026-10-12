@@ -1469,6 +1469,7 @@
   "leWriteOffExceeds": "Қарыз қалдығынан артық есептен шығаруға болмайды",
   "leRestoreSuperseded": "Бұл операцияның жаңа нұсқасы бар, ескісін қалпына келтіру мүмкін емес",
   "unarchiveAccount": "Мұрағаттан қайтару",
+  "accountsArchive": "Мұрағат · {n}",
   "unarchiveFailedHint": "Шот қайтпаса, қарапайым нұсқадағы шот лимитінің асып кетпегенін тексеріңіз",
   "reportWrittenOff": "Есептен шығарылған қарыздар: {amount}",
   "@reportWrittenOff": {"placeholders": {"amount": {"type": "String"}}},
