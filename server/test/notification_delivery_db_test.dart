@@ -124,6 +124,8 @@ void main() {
     await cmd({'type': 'addMoneyAccount', 'accountId': 'cash'});
     await cmd({'type': 'opening', 'id': 'op', 'date': '2026-07-01', 'account': 'cash', 'amount': '10000000'});
     await cmd({'type': 'expense', 'id': 'e1', 'date': '2026-08-10', 'account': 'cash', 'splits': {'food': '2000000'}});
+    // Запись «сегодня» (2 сентября): вечерний отчёт в долгой тишине молчит (D167, часть 4).
+    await cmd({'type': 'expense', 'id': 'e2', 'date': '2026-09-02', 'account': 'cash', 'splits': {'food': '150000'}});
     await pool!.execute(Sql.named('UPDATE users SET telegram_chat_id = @c WHERE id = @u'), parameters: {'c': 900000000 + DateTime.now().microsecondsSinceEpoch % 99999999, 'u': id});
     return id;
   }

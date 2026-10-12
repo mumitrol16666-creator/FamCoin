@@ -141,7 +141,8 @@ void main() {
     Future<void> cmd(Map<String, dynamic> c) => ledger.command(id, {'commandId': 'c${seq++}-${DateTime.now().microsecondsSinceEpoch}', ...c});
     await cmd({'type': 'updateProfile', 'profile': {'onboarded': true}});
     await cmd({'type': 'addMoneyAccount', 'accountId': 'card'});
-    await cmd({'type': 'upsertEntity', 'kind': 'planned', 'entityId': 'net', 'data': {'name': 'Интернет', 'amount': '${kzt(5000)}', 'day': 20, 'category': 'home', 'start': '2026-09-01'}});
+    // Платёж с 1 октября: срок 20.10 впереди, просрочки нет.
+    await cmd({'type': 'upsertEntity', 'kind': 'planned', 'entityId': 'net', 'data': {'name': 'Интернет', 'amount': '${kzt(5000)}', 'day': 20, 'category': 'home', 'start': '2026-10-01'}});
     await n.runDueReminders('noon', DateTime(2026, 10, 12, 12));
     expect((await pool!.execute(Sql.named('SELECT count(*) FROM notifications WHERE user_id = @u'), parameters: {'u': id})).single[0], 0);
     var notif = (await pool!.execute(Sql.named('SELECT notif FROM users WHERE id = @u'), parameters: {'u': id})).single[0] as Map;

@@ -133,7 +133,9 @@ void main() {
       final evening = await svc.list(prepare);
       expect(evening.first['body'], contains('Завтра сверка месяца'));
       await svc.updateSettings(prepare, {'month': false});
-      await svc.sendBrief(prepare, 'evening', DateTime(2026, 9, 30));
+      // Записей с 15.09 нет — по расписанию вечер в такой тишине промолчал бы
+      // (D167, часть 4); предпросмотр строит отчёт всегда, и подготовки в нём нет.
+      await svc.sendBrief(prepare, 'evening', DateTime(2026, 9, 30), preview: true);
       expect((await svc.list(prepare)).first['body'], isNot(contains('Завтра сверка месяца')));
     } finally {
       for (final id in ids) {
