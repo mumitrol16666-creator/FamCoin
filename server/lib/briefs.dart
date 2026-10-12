@@ -117,7 +117,10 @@ Brief morningBrief(BriefInput i) {
   // и непредвиденные в лимит не входят (D74, D101) — как на главной.
   final hadRecords = l.transactions.any((t) => t.date == yesterday && !l.isReversed(t.id) && t.type != EventType.reversal);
   final spentYesterday = spendBetween(l, yesterday, yesterday).everyday;
-  if (!hadRecords) {
+  final quiet = hadRecords ? 0 : quietDays(l, yesterday);
+  if (quiet > 1) {
+    lines.add(kk ? '$quiet күн бойы жазба жоқ.' : 'Записей нет уже $quiet ${_daysRu(quiet)}.');
+  } else if (!hadRecords) {
     lines.add(kk ? 'Кеше жазба болмады.' : 'Вчера записей не было.');
   } else if (limit == null || limit <= 0) {
     lines.add(kk ? 'Кеше жұмсалды: <b>${_kzt(spentYesterday)}</b>.' : 'Вчера потрачено: <b>${_kzt(spentYesterday)}</b>.');
@@ -189,7 +192,45 @@ Brief morningBrief(BriefInput i) {
   return Brief(kk ? 'Қайырлы таң' : 'Доброе утро', lines.join('\n'));
 }
 
-Brief eveningBrief(BriefInput i) {
+/// Сколько дней подряд, считая [today], владелец ничего не записывал (D167,
+/// часть 4). Начальные остатки и отмены записями не считаются; до 60.
+int quietDays(Ledger l, DateTime today) {
+  final days = <DateTime>{};
+  DateTime? first;
+  for (final t in l.transactions) {
+    final day = DateTime(t.date.year, t.date.month, t.date.day);
+    if (first == null || day.isBefore(first)) first = day;
+    if (t.type == EventType.opening || t.type == EventType.reversal || l.isReversed(t.id)) continue;
+    days.add(day);
+  }
+  // Раньше первой операции (обычно начального остатка) считать нечего:
+  // новый владелец в первый вечер — один тихий день, а не шестьдесят.
+  final floor = first == null || first.isAfter(today) ? today : first;
+  var n = 0;
+  var d = today;
+  while (n < 60 && !days.contains(d) && !d.isBefore(floor)) {
+    n++;
+    d = d.subtract(const Duration(days: 1));
+  }
+  return n < 1 ? 1 : n;
+}
+
+/// Какие вечера тишины стоят сообщения: первые три дня, пятый, седьмой и
+/// дальше раз в неделю — чтобы ушедшему не писать каждый день.
+bool quietDayWorthNudge(int streak) => streak <= 3 || streak == 5 || streak == 7 || streak % 7 == 0;
+
+String _daysRu(int n) {
+  final r10 = n % 10, r100 = n % 100;
+  if (r100 >= 11 && r100 <= 14) return 'дней';
+  if (r10 == 1) return 'день';
+  if (r10 >= 2 && r10 <= 4) return 'дня';
+  return 'дней';
+}
+
+/// Вечерний отчёт; `null` — сегодня вечером лучше промолчать (долгая тишина
+/// не в тот день, см. [quietDayWorthNudge]). [force] — построить всегда
+/// (предпросмотр из приложения).
+Brief? eveningBrief(BriefInput i, {bool force = false}) {
   final kk = i.locale == 'kk';
   final today = i.today;
   final tomorrow = today.add(const Duration(days: 1));
@@ -221,12 +262,25 @@ Brief eveningBrief(BriefInput i) {
   final lines = <String>[];
   List<List<Map<String, String>>>? buttons;
   final empty = recordsToday == 0;
+  final streak = empty ? quietDays(i.ledger, today) : 0;
+  final preparation = monthPreparationDays(today);
+  if (empty && !force && streak > 1 && !quietDayWorthNudge(streak) && (preparation == null || !i.monthRemindersEnabled)) return null;
   if (empty) {
     // Пустой день (D167): не отчёт, а вопрос — с кнопками быстрых операций,
-    // чтобы ответить одним нажатием прямо из Telegram.
-    lines.add(kk ? 'Бүгін ештеңе жазылмады. Шығын болды ма?' : 'Сегодня ничего не записано. Траты были?');
+    // чтобы ответить одним нажатием прямо из Telegram. Несколько дней подряд
+    // (часть 4): когда была последняя запись и сходится ли остаток.
+    if (streak > 1) {
+      final last = today.subtract(Duration(days: streak));
+      final hasLast = i.ledger.transactions.any((t) => t.type != EventType.opening);
+      lines.add(kk
+          ? '$streak күн бойы жазба жоқ${hasLast ? ', соңғысы — ${_dm(last)}' : ''}. Шоттардағы ${_kzt(i.ledger.liquid())} сәйкес келе ме?'
+          : '$streak ${_daysRu(streak)} без записей${hasLast ? ', последняя — ${_dm(last)}' : ''}. На счетах ${_kzt(i.ledger.liquid())} — сходится?');
+      lines.add(kk ? 'Шығын болса, бір басу:' : 'Если траты были, одно нажатие:');
+    } else {
+      lines.add(kk ? 'Бүгін ештеңе жазылмады. Шығын болды ма?' : 'Сегодня ничего не записано. Траты были?');
+    }
     if (i.quickButtons.isNotEmpty) {
-      lines.add(kk ? 'Бір басу — және жазылды:' : 'Одно нажатие — и записано:');
+      if (streak <= 1) lines.add(kk ? 'Бір басу — және жазылды:' : 'Одно нажатие — и записано:');
       buttons = i.quickButtons;
     } else {
       lines.add(kk ? 'Ботқа хабарламамен жазыңыз: «кофе 1500».' : 'Напишите боту сообщением: «кофе 1500».');
@@ -271,12 +325,15 @@ Brief eveningBrief(BriefInput i) {
   if (dueTomorrow.isNotEmpty) {
     lines.add(kk ? 'Ертең төлем: ${dueTomorrow.map((e) => '${e.$1['name']} — ${_kzt(_minor(e.$1['amount']))}').join(', ')}.' : 'Завтра платёж: ${dueTomorrow.map((e) => '${e.$1['name']} — ${_kzt(_minor(e.$1['amount']))}').join(', ')}.');
   }
-  final preparation = monthPreparationDays(today);
   if (i.monthRemindersEnabled && preparation != null) {
     final reminder = monthPreparation(month: monthStart, days: preparation, locale: i.locale);
     lines.insertAll(0, ['📅 <b>${reminder.title}</b>', reminder.body, '']);
   }
-  final title = empty ? (kk ? 'Бүгін жазба жоқ' : 'Сегодня без записей') : (kk ? 'Кешкі есеп' : 'Вечерний отчёт');
+  final title = !empty
+      ? (kk ? 'Кешкі есеп' : 'Вечерний отчёт')
+      : streak > 1
+          ? (kk ? '$streak күн жазба жоқ' : '$streak ${_daysRu(streak)} без записей')
+          : (kk ? 'Бүгін жазба жоқ' : 'Сегодня без записей');
   return Brief(title, lines.join('\n'), buttons: buttons);
 }
 

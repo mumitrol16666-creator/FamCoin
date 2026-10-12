@@ -238,7 +238,9 @@ class NotificationService {
         parameters: {'flag': mark.flag, 'v': mark.value, 'u': userId},
       );
 
-  Future<void> sendBrief(String userId, String kind, DateTime today, {String? dedupKey, ({String flag, String value})? mark}) async {
+  /// [preview] — по кнопке «Тест» в приложении: отчёт строится всегда, даже
+  /// в вечер, когда расписание промолчало бы (часть 4).
+  Future<void> sendBrief(String userId, String kind, DateTime today, {String? dedupKey, ({String flag, String value})? mark, bool preview = false}) async {
     final s = await ledger.state(userId);
     final l = _ledgerOf(s);
     final entities = (s['entities'] as List).cast<Map<String, dynamic>>();
@@ -258,7 +260,12 @@ class NotificationService {
       debts: {for (final e in entities) if (e['kind'] == 'debt') e['id'] as String: Map<String, dynamic>.from(e['data'] as Map)},
       quickButtons: kind == 'evening' ? await _quickButtons(userId) : const [],
     );
-    final brief = kind == 'morning' ? morningBrief(input) : eveningBrief(input);
+    final brief = kind == 'morning' ? morningBrief(input) : eveningBrief(input, force: preview);
+    if (brief == null) {
+      // Долгая тишина не в тот день: вечером молчим, но день отмечаем.
+      if (mark != null) await _mark(userId, mark);
+      return;
+    }
     await notify(userId, kind, brief.title, brief.body, dedupKey: dedupKey, mark: mark, buttons: brief.buttons);
   }
 

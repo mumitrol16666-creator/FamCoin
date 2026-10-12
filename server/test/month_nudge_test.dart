@@ -50,13 +50,13 @@ void main() {
           monthRemindersEnabled: enabled);
       final expected =
           locale == 'ru' ? 'Завтра сверка месяца' : 'Ертең айды тексеру керек';
-      final b = eveningBrief(input(DateTime(2026, 9, 30)));
+      final b = eveningBrief(input(DateTime(2026, 9, 30)))!;
       expect(b.body, startsWith('📅 <b>$expected</b>'));
       expect(b.body, contains('5–10'));
       expect(b.body, contains('30.09.2026'));
-      expect(eveningBrief(input(DateTime(2026, 9, 30), enabled: false)).body,
+      expect(eveningBrief(input(DateTime(2026, 9, 30), enabled: false))?.body,
           isNot(contains(expected)));
-      expect(eveningBrief(input(DateTime(2026, 9, 29))).body,
+      expect(eveningBrief(input(DateTime(2026, 9, 29)))?.body,
           isNot(contains(expected)));
     }
   });

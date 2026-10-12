@@ -36,12 +36,12 @@ class _Flaky extends NotificationService {
   int failures = 0;
 
   @override
-  Future<void> sendBrief(String userId, String kind, DateTime today, {String? dedupKey, ({String flag, String value})? mark}) {
+  Future<void> sendBrief(String userId, String kind, DateTime today, {String? dedupKey, ({String flag, String value})? mark, bool preview = false}) {
     if (failures > 0) {
       failures--;
       throw StateError('сбой до записи');
     }
-    return super.sendBrief(userId, kind, today, dedupKey: dedupKey, mark: mark);
+    return super.sendBrief(userId, kind, today, dedupKey: dedupKey, mark: mark, preview: preview);
   }
 
   @override

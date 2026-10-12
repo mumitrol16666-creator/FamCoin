@@ -219,7 +219,7 @@ Handler buildHandler(
       if (kind == 'month') {
         await notifications.sendMonthNudgePreview(id, now);
       } else {
-        await notifications.sendBrief(id, kind == 'evening' ? 'evening' : 'morning', DateTime(now.year, now.month, now.day));
+        await notifications.sendBrief(id, kind == 'evening' ? 'evening' : 'morning', DateTime(now.year, now.month, now.day), preview: true);
       }
       return _json(200, {'status': 'ok'});
     })
