@@ -7,6 +7,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:famcoin_core/famcoin_core.dart';
 import 'package:postgres/postgres.dart';
@@ -227,6 +228,10 @@ class LedgerService {
 
   // ------------------------------------------------------------ команды
 
+  /// Вызывается после успешно применённой (не повторной) команды — уже вне
+  /// транзакции, ответ клиенту не ждёт (D167: сигналы о лимитах).
+  void Function(String userId, Map<String, dynamic> cmd)? onApplied;
+
   /// Применяет команду владельца. Возвращает новую ревизию и признак повтора:
   /// команда с тем же `commandId` уже принята и второй раз не применяется.
   Future<({int revision, bool repeated})> command(String userId, Map<String, dynamic> cmd, {bool fromClient = false}) async {
@@ -283,6 +288,13 @@ class LedgerService {
       // В кеш — только после commit: до него читатели видят прежний журнал.
       final done = published;
       if (done != null) _remember(userId, _Cached(result.revision, done));
+      if (done != null && onApplied != null) {
+        try {
+          onApplied!(userId, cmd);
+        } catch (e) {
+          stderr.writeln('onApplied: ${e.runtimeType}');
+        }
+      }
       return result;
     } catch (e) {
       // Журнал в кеше команда не меняла (работала с копией) — он остаётся.

@@ -56,6 +56,8 @@ Future<void> _run() async {
   final ledger = LedgerService(db);
   final telegram = Telegram(db, token: env['TELEGRAM_BOT_TOKEN']);
   final notifications = NotificationService(db, ledger, telegram, WebPush(db, subject: pushSubject(env['CORS_ORIGIN'])), origin: env['CORS_ORIGIN'])..start();
+  // Сигналы о лимитах сразу после записи расхода (D167) — в фоне, ответ не ждёт.
+  ledger.onApplied = (userId, cmd) => unawaited(notifications.checkSignals(userId, cmd));
   final billing = BillingService(
     db,
     telegram,

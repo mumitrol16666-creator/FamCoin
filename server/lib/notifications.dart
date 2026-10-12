@@ -11,6 +11,7 @@ import 'package:postgres/postgres.dart';
 import 'auth_service.dart';
 import 'briefs.dart';
 import 'chat_entry.dart' show quickButtons;
+import 'signals.dart';
 import 'ledger_service.dart';
 import 'telegram.dart';
 import 'webpush.dart';
@@ -210,6 +211,36 @@ class NotificationService {
     }
   }
 
+  /// Сигналы после записи расхода (D167): лимит категории на 80 % и превышен,
+  /// дневной лимит исчерпан. Каждый уходит один раз благодаря ключу; не
+  /// бросает — вызывается из хука команды и ответа клиенту не задерживает.
+  Future<int> checkSignals(String userId, Map<String, dynamic> cmd, {DateTime? now}) async {
+    if (!commandTouchesExpense(cmd)) return 0;
+    try {
+      final preferences = await settings(userId);
+      if (preferences['signals'] == false) return 0;
+      final s = await ledger.state(userId);
+      final entities = (s['entities'] as List).cast<Map<String, dynamic>>();
+      final t = now ?? DateTime.now().toUtc().add(kzOffset);
+      final signals = currentSignals(SignalInput(
+        ledger: _ledgerOf(s),
+        today: DateTime(t.year, t.month, t.day),
+        profile: Map<String, dynamic>.from(s['profile'] as Map? ?? const {}),
+        limits: [for (final e in entities) if (e['kind'] == 'limit') Map<String, dynamic>.from(e['data'] as Map)],
+        locale: s['locale'] as String? ?? 'ru',
+        categories: {for (final e in entities) if (e['kind'] == 'category') e['id'] as String: Map<String, dynamic>.from(e['data'] as Map)},
+      ));
+      var sent = 0;
+      for (final sig in signals) {
+        if (await notify(userId, 'system', sig.title, sig.body, dedupKey: sig.key)) sent++;
+      }
+      return sent;
+    } catch (e, st) {
+      stderr.writeln('signals for $userId: ${e.runtimeType}\n$st');
+      return 0;
+    }
+  }
+
   Ledger _ledgerOf(Map<String, Object?> s) => ledgerFromSnapshot(
         accounts: (s['accounts'] as List).cast(),
         transactions: (s['transactions'] as List).cast(),
@@ -385,6 +416,7 @@ class NotificationService {
       'morning': notif['morning'] != false,
       'evening': notif['evening'] != false,
       'month': notif['month'] != false,
+      'signals': notif['signals'] != false,
       'telegramLinked': r.first[1] == true,
       'telegramAvailable': telegram.enabled,
       'pushDevices': await push.deviceCount(userId),
@@ -393,7 +425,7 @@ class NotificationService {
 
   Future<void> updateSettings(String userId, Map<String, dynamic> body) async {
     final patch = <String, Object?>{};
-    for (final k in ['morning', 'evening', 'month']) {
+    for (final k in ['morning', 'evening', 'month', 'signals']) {
       if (body[k] is bool) patch[k] = body[k];
     }
     if (patch.isEmpty) throw ApiError(400, 'bad_request');
