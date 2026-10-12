@@ -107,7 +107,7 @@ class FakeServer {
     if (req.url.path == '/notifications/read') return http.Response(jsonEncode({'status': 'ok'}), 200);
     if (req.url.path == '/notifications/settings') {
       if (req.method == 'POST') notif.addAll((jsonDecode(req.body) as Map).cast<String, dynamic>());
-      return http.Response(jsonEncode({'morning': notif['morning'] ?? true, 'evening': notif['evening'] ?? true, 'month': notif['month'] ?? true, 'telegramLinked': false, 'telegramAvailable': false, 'pushDevices': 0}), 200);
+      return http.Response(jsonEncode({'morning': notif['morning'] ?? true, 'evening': notif['evening'] ?? true, 'month': notif['month'] ?? true, 'signals': notif['signals'] ?? true, 'payments': notif['payments'] ?? true, 'quiet': notif['quiet'] ?? true, 'telegramLinked': false, 'telegramAvailable': false, 'pushDevices': 0}), 200);
     }
     if (req.url.path == '/push/key') {
       pushKeyCalls++;

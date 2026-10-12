@@ -2,6 +2,8 @@
 /// ошибка и «Повторить»; уже показанная история при сбое обновления остаётся.
 library;
 
+import 'dart:async';
+
 import 'package:famcoin/ui/more/notifications_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -38,7 +40,10 @@ void main() {
     expect(find.text('Доброе утро'), findsOneWidget);
 
     f.offline = true;
-    await tester.fling(find.byType(ListView).first, const Offset(0, 400), 1000);
+    // Обновление вызывается у индикатора напрямую: после переключателей D167
+    // середина списка приходится на Switch, и жест рывка туда не доходит.
+    // show() ждёт анимацию индикатора, а кадры даёт только pump — поэтому не await.
+    unawaited(tester.state<RefreshIndicatorState>(find.byType(RefreshIndicator)).show());
     await tester.pumpAndSettle();
     expect(find.text('Доброе утро'), findsOneWidget, reason: 'история не пропала');
     expect(find.byType(CircularProgressIndicator), findsNothing);

@@ -71,7 +71,7 @@ List<(Map<String, dynamic>, DateTime)> dueWindow(Ledger ledger, List<Map<String,
 }
 
 class BriefInput {
-  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}, this.debts = const {}, this.monthRemindersEnabled = true, this.quickButtons = const [], this.goals = const {}});
+  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}, this.debts = const {}, this.monthRemindersEnabled = true, this.quickButtons = const [], this.goals = const {}, this.quietNudges = true});
   final Ledger ledger;
   final DateTime today;
   final Map<String, dynamic> profile;
@@ -95,6 +95,11 @@ class BriefInput {
   /// Цели владельца: id → данные (`name`, `account` копилки) — для строки
   /// «отложено на цели» в итогах недели (часть 5).
   final Map<String, Map<String, dynamic>> goals;
+
+  /// Напоминать ли записать в пустой вечер (часть 6, выключатель «quiet»);
+  /// при выключенном пустые вечера молчат, кроме подготовки к сверке и
+  /// воскресных итогов недели.
+  final bool quietNudges;
 
   String categoryName(String id) => chatCategoryName(id, locale, categories);
 }
@@ -318,7 +323,8 @@ Brief? eveningBrief(BriefInput i, {bool force = false}) {
   final streak = empty ? quietDays(i.ledger, today) : 0;
   final preparation = monthPreparationDays(today);
   final sunday = today.weekday == DateTime.sunday;
-  if (empty && !force && streak > 1 && !quietDayWorthNudge(streak) && !(sunday && streak < 7) && (preparation == null || !i.monthRemindersEnabled)) return null;
+  final keepQuiet = empty && !force && (streak > 1 && !quietDayWorthNudge(streak) || !i.quietNudges);
+  if (keepQuiet && !(sunday && streak < 7) && (preparation == null || !i.monthRemindersEnabled)) return null;
   if (empty) {
     // Пустой день (D167): не отчёт, а вопрос — с кнопками быстрых операций,
     // чтобы ответить одним нажатием прямо из Telegram. Несколько дней подряд

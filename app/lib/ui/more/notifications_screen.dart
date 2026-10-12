@@ -177,6 +177,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     value: s['month'] != false,
                     onChanged: (v) => _toggle('month', v),
                   ),
+                  // Сигналы и напоминания (D167, часть 6): включены, пока не выключат.
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l.notifSignalsTitle),
+                    subtitle: Text(l.notifSignalsDesc, style: TextStyle(fontSize: 12, color: fam.text2)),
+                    value: s['signals'] != false,
+                    onChanged: (v) => _toggle('signals', v),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l.notifPaymentsTitle),
+                    subtitle: Text(l.notifPaymentsDesc, style: TextStyle(fontSize: 12, color: fam.text2)),
+                    value: s['payments'] != false,
+                    onChanged: (v) => _toggle('payments', v),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l.notifQuietTitle),
+                    subtitle: Text(l.notifQuietDesc, style: TextStyle(fontSize: 12, color: fam.text2)),
+                    value: s['quiet'] != false,
+                    onChanged: (v) => _toggle('quiet', v),
+                  ),
                 ]),
               ),
               _pushCard(context),

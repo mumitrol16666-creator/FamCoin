@@ -333,6 +333,20 @@ void main167() {
     });
   });
 
+  group('D167 выключатель «напоминание записать» (часть 6)', () {
+    test('quiet выключен: пустые вечера молчат, кроме воскресных итогов и подготовки к сверке', () {
+      final l = ledger();
+      spend(l, 'a', '2026-10-06', 'food', 1200);
+      BriefInput at(int day, {bool month = false}) => BriefInput(ledger: l, today: DateTime(2026, 10, day), profile: const {}, planned: const [], limits: const [], locale: 'ru', quietNudges: false, monthRemindersEnabled: month);
+      expect(eveningBrief(at(7)), isNull, reason: 'первый пустой день — тоже тишина');
+      expect(eveningBrief(at(8)), isNull);
+      expect(eveningBrief(at(11))!.body, contains('Итоги недели'), reason: 'воскресенье с записями на неделе');
+      expect(eveningBrief(at(29, month: true))!.body, contains('Через 3 дня сверка месяца'));
+      expect(eveningBrief(at(7), force: true), isNotNull, reason: 'предпросмотр');
+      expect(eveningBrief(at(6))!.title, 'Вечерний отчёт', reason: 'день с записью — как обычно');
+    });
+  });
+
   group('D167 вечер', () {
     test('нулевая категория не показывается', () {
       final l = ledger();

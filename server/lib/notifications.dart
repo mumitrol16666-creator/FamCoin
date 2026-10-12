@@ -250,6 +250,7 @@ class NotificationService {
     final preferences = await settings(userId);
     final input = BriefInput(
       monthRemindersEnabled: preferences['month'] != false,
+      quietNudges: preferences['quiet'] != false,
       ledger: l,
       today: today,
       profile: Map<String, dynamic>.from(s['profile'] as Map? ?? const {}),
@@ -489,6 +490,7 @@ class NotificationService {
       'month': notif['month'] != false,
       'signals': notif['signals'] != false,
       'payments': notif['payments'] != false,
+      'quiet': notif['quiet'] != false,
       'telegramLinked': r.first[1] == true,
       'telegramAvailable': telegram.enabled,
       'pushDevices': await push.deviceCount(userId),
@@ -497,7 +499,7 @@ class NotificationService {
 
   Future<void> updateSettings(String userId, Map<String, dynamic> body) async {
     final patch = <String, Object?>{};
-    for (final k in ['morning', 'evening', 'month', 'signals', 'payments']) {
+    for (final k in ['morning', 'evening', 'month', 'signals', 'payments', 'quiet']) {
       if (body[k] is bool) patch[k] = body[k];
     }
     if (patch.isEmpty) throw ApiError(400, 'bad_request');
