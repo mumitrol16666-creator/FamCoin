@@ -292,6 +292,47 @@ void main167() {
     });
   });
 
+  group('D167 итоги недели (часть 5)', () {
+    test('воскресенье: неделя против прошлой, доходы, топ-3, отложено на цели; в будни блока нет', () {
+      final l = ledger();
+      applyLedgerCommand(l, {'type': 'addMoneyAccount', 'accountId': 'piggy1'});
+      // Прошлая неделя 28.09–4.10: 20 000; эта 5–11.10: 30 000 + доход + копилка.
+      spend(l, 'p1', '2026-09-30', 'food', 20000);
+      spend(l, 'a', '2026-10-06', 'food', 12000);
+      spend(l, 'b', '2026-10-08', 'cafe', 10000);
+      spend(l, 'c', '2026-10-10', 'fun', 8000);
+      applyLedgerCommand(l, {'type': 'income', 'id': 'i', 'date': '2026-10-07', 'account': 'card', 'source': 'salary', 'amount': '${kzt(50000)}'});
+      applyLedgerCommand(l, {'type': 'transfer', 'id': 't', 'date': '2026-10-09', 'from': 'card', 'to': 'piggy1', 'amount': '${kzt(5000)}'});
+      final goals = {'g1': {'name': 'Подушка', 'account': 'piggy1'}};
+      BriefInput at(int day) => BriefInput(ledger: l, today: DateTime(2026, 10, day), profile: const {}, planned: const [], limits: const [], locale: 'ru', goals: goals);
+      final sunday = eveningBrief(at(11))!.body;
+      expect(sunday, contains('📊 <b>Итоги недели (5–11.10)</b>'));
+      expect(sunday, contains('Потрачено: <b>30 000 ₸</b> (прошлая неделя 20 000 ₸, на 50 % больше)'));
+      expect(sunday, contains('Доходы: 50 000 ₸'));
+      expect(sunday, contains('Больше всего: Продукты 12 000 ₸, Кафе 10 000 ₸, Развлечения 8 000 ₸'));
+      expect(sunday, contains('Отложено на цели: 5 000 ₸ (Подушка)'));
+      expect(eveningBrief(at(10))!.body, isNot(contains('Итоги недели')), reason: 'суббота — обычный отчёт');
+      // Воскресенье без записей, но с неделей — отчёт всё равно уходит, с итогами.
+      final quietSunday = eveningBrief(at(11))!;
+      expect(quietSunday.title, 'Сегодня без записей');
+      expect(quietSunday.body, contains('Итоги недели'));
+      final kk = eveningBrief(BriefInput(ledger: l, today: DateTime(2026, 10, 11), profile: const {}, planned: const [], limits: const [], locale: 'kk', goals: goals))!.body;
+      expect(kk, allOf(contains('Апта қорытындысы'), contains('50 % артық'), contains('Мақсаттарға жиналды: 5 000 ₸ (Подушка)')));
+    });
+
+    test('неделя без записей — блока нет; прошлая неделя пустая — без сравнения; трат меньше — «меньше»', () {
+      final l = ledger();
+      BriefInput at(int day) => BriefInput(ledger: l, today: DateTime(2026, 10, day), profile: const {}, planned: const [], limits: const [], locale: 'ru');
+      expect(weeklyDigest(at(11)), isEmpty);
+      spend(l, 'a', '2026-10-06', 'food', 12000);
+      expect(weeklyDigest(at(11))[1], 'Потрачено: <b>12 000 ₸</b>');
+      spend(l, 'p', '2026-10-01', 'food', 24000);
+      expect(weeklyDigest(at(11))[1], 'Потрачено: <b>12 000 ₸</b> (прошлая неделя 24 000 ₸, на 50 % меньше)');
+      spend(l, 'b', '2026-10-07', 'food', 12000);
+      expect(weeklyDigest(at(11))[1], 'Потрачено: <b>24 000 ₸</b> (как на прошлой неделе)');
+    });
+  });
+
   group('D167 вечер', () {
     test('нулевая категория не показывается', () {
       final l = ledger();

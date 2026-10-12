@@ -208,6 +208,7 @@ class NotificationService {
       locale: v.locale,
       categories: v.of('category'),
       debts: v.of('debt'),
+      goals: v.of('goal'),
       quickButtons: quickButtons,
     );
   }
@@ -258,6 +259,7 @@ class NotificationService {
       locale: s['locale'] as String? ?? 'ru',
       categories: {for (final e in entities) if (e['kind'] == 'category') e['id'] as String: Map<String, dynamic>.from(e['data'] as Map)},
       debts: {for (final e in entities) if (e['kind'] == 'debt') e['id'] as String: Map<String, dynamic>.from(e['data'] as Map)},
+      goals: {for (final e in entities) if (e['kind'] == 'goal') e['id'] as String: Map<String, dynamic>.from(e['data'] as Map)},
       quickButtons: kind == 'evening' ? await _quickButtons(userId) : const [],
     );
     final brief = kind == 'morning' ? morningBrief(input) : eveningBrief(input, force: preview);

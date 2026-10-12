@@ -71,7 +71,7 @@ List<(Map<String, dynamic>, DateTime)> dueWindow(Ledger ledger, List<Map<String,
 }
 
 class BriefInput {
-  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}, this.debts = const {}, this.monthRemindersEnabled = true, this.quickButtons = const []});
+  BriefInput({required this.ledger, required this.today, required this.profile, required this.planned, required this.limits, required this.locale, this.categories = const {}, this.debts = const {}, this.monthRemindersEnabled = true, this.quickButtons = const [], this.goals = const {}});
   final Ledger ledger;
   final DateTime today;
   final Map<String, dynamic> profile;
@@ -91,6 +91,10 @@ class BriefInput {
   /// Кнопки быстрых операций владельца для пустого вечера (D167); пусто —
   /// плиток нет, тогда отчёт подсказывает записать сообщением боту.
   final List<List<Map<String, String>>> quickButtons;
+
+  /// Цели владельца: id → данные (`name`, `account` копилки) — для строки
+  /// «отложено на цели» в итогах недели (часть 5).
+  final Map<String, Map<String, dynamic>> goals;
 
   String categoryName(String id) => chatCategoryName(id, locale, categories);
 }
@@ -227,6 +231,55 @@ String _daysRu(int n) {
   return 'дней';
 }
 
+/// Итоги недели (D167, часть 5): в воскресенье вечером — неделя против
+/// прошлой, доходы, три главные категории, отложено на цели. Пусто, если за
+/// неделю не было ни одной записи.
+List<String> weeklyDigest(BriefInput i) {
+  final kk = i.locale == 'kk';
+  final l = i.ledger;
+  final end = i.today.add(const Duration(days: 1)); // исключительно
+  final start = i.today.subtract(const Duration(days: 6));
+  final prevStart = start.subtract(const Duration(days: 7));
+  if (!l.transactions.any((t) => !t.date.isBefore(start) && t.date.isBefore(end) && t.type != EventType.opening && t.type != EventType.reversal && !l.isReversed(t.id))) return const [];
+  final week = l.report(start, end);
+  final prev = l.report(prevStart, start);
+  final lines = <String>['📊 <b>${kk ? 'Апта қорытындысы' : 'Итоги недели'} (${start.day}–${_dm(i.today)})</b>'];
+  String compare() {
+    if (prev.total <= 0) return '';
+    final diff = week.total - prev.total;
+    final pct = (diff.abs() * 100 / prev.total).round();
+    if (pct == 0) return kk ? ' (өткен аптадағыдай)' : ' (как на прошлой неделе)';
+    return kk
+        ? ' (өткен апта ${_kzt(prev.total)}, $pct % ${diff > 0 ? 'артық' : 'кем'})'
+        : ' (прошлая неделя ${_kzt(prev.total)}, на $pct % ${diff > 0 ? 'больше' : 'меньше'})';
+  }
+  lines.add(kk ? 'Жұмсалды: <b>${_kzt(week.total)}</b>${compare()}' : 'Потрачено: <b>${_kzt(week.total)}</b>${compare()}');
+  if (week.income > 0) lines.add(kk ? 'Кіріс: ${_kzt(week.income)}' : 'Доходы: ${_kzt(week.income)}');
+  final top = l.expenseByCategory(start, end).entries.where((e) => e.value > 0).toList()..sort((a, b) => b.value.compareTo(a.value));
+  if (top.isNotEmpty) {
+    lines.add('${kk ? 'Ең көп' : 'Больше всего'}: ${top.take(3).map((e) => '${i.categoryName(e.key.substring(8))} ${_kzt(e.value)}').join(', ')}');
+  }
+  // Отложено на цели: переводы в копилки за неделю, без отменённых.
+  final goalByAccount = {for (final e in i.goals.entries) if (e.value['account'] != null) '${e.value['account']}': '${e.value['name'] ?? ''}'};
+  var saved = 0;
+  final names = <String>{};
+  for (final t in l.transactions) {
+    if (t.type != EventType.transfer || t.date.isBefore(start) || !t.date.isBefore(end) || l.isReversed(t.id)) continue;
+    for (final p in t.postings) {
+      if (p.amount > 0 && p.accountId.startsWith('piggy')) {
+        saved += p.amount;
+        final name = goalByAccount[p.accountId];
+        if (name != null && name.isNotEmpty) names.add(name);
+      }
+    }
+  }
+  if (saved > 0) {
+    final who = names.isEmpty ? '' : ' (${names.join(', ')})';
+    lines.add(kk ? 'Мақсаттарға жиналды: ${_kzt(saved)}$who' : 'Отложено на цели: ${_kzt(saved)}$who');
+  }
+  return lines;
+}
+
 /// Вечерний отчёт; `null` — сегодня вечером лучше промолчать (долгая тишина
 /// не в тот день, см. [quietDayWorthNudge]). [force] — построить всегда
 /// (предпросмотр из приложения).
@@ -264,7 +317,8 @@ Brief? eveningBrief(BriefInput i, {bool force = false}) {
   final empty = recordsToday == 0;
   final streak = empty ? quietDays(i.ledger, today) : 0;
   final preparation = monthPreparationDays(today);
-  if (empty && !force && streak > 1 && !quietDayWorthNudge(streak) && (preparation == null || !i.monthRemindersEnabled)) return null;
+  final sunday = today.weekday == DateTime.sunday;
+  if (empty && !force && streak > 1 && !quietDayWorthNudge(streak) && !(sunday && streak < 7) && (preparation == null || !i.monthRemindersEnabled)) return null;
   if (empty) {
     // Пустой день (D167): не отчёт, а вопрос — с кнопками быстрых операций,
     // чтобы ответить одним нажатием прямо из Telegram. Несколько дней подряд
@@ -299,6 +353,11 @@ Brief? eveningBrief(BriefInput i, {bool force = false}) {
   lines.add(kk ? 'Ай басынан: кіріс ${_kzt(report.income)}, шығыс ${_kzt(report.total)}.' : 'С начала месяца: доходы ${_kzt(report.income)}, расходы ${_kzt(report.total)}.');
   if (report.debtPayments > 0) {
     lines.add(kk ? 'Ай басынан қарыз өтелді: ${_kzt(report.debtPayments)}.' : 'С начала месяца погашено долгов: ${_kzt(report.debtPayments)}.');
+  }
+
+  if (sunday) {
+    final digest = weeklyDigest(i);
+    if (digest.isNotEmpty) lines.addAll(['', ...digest]);
   }
 
   // Лимиты по категориям (D167): превышение и 80 % — в тот вечер, когда
