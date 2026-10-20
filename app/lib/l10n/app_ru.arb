@@ -1847,6 +1847,7 @@
   "debtRepaymentTitle": "Погашение · {name}",
   "@debtRepaymentTitle": {"placeholders": {"name": {"type": "String"}}},
   "debtPaidLine": "Погашено долгов: {amount}, это не расход",
+  "firstRepaymentHint": "Это не расход: деньги ушли на погашение долга. В «Месяце» строка «Погашено долгов»",
   "@debtPaidLine": {"placeholders": {"amount": {"type": "String"}}},
   "movesWrittenOff": "Списано долгов",
   "movesForgiven": "Долгов закрыто без оплаты",

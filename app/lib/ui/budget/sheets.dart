@@ -303,7 +303,14 @@ Future<void> showBankPaySheet(BuildContext context, DebtInfo debt, {int? princip
             final pr = parseAmount(principalField.text, allowZero: true) ?? 0;
             final i = parseAmount(interest.text, allowZero: true) ?? 0;
             if (pr + i == 0 || account == null) return false;
-            return runAction(ctx, () => state.payDebt(debtId: debt.id, account: account!, principal: pr, interest: i, date: date));
+            // Подсказка один раз: на первом погашении кредита в журнале (D171).
+            final firstRepayment = !state.ledger.transactions.any((t) => t.type == EventType.loanPayment);
+            final messenger = ScaffoldMessenger.of(context);
+            final ok = await runAction(ctx, () => state.payDebt(debtId: debt.id, account: account!, principal: pr, interest: i, date: date));
+            if (ok && firstRepayment) {
+              messenger.showSnackBar(SnackBar(content: Text(l.firstRepaymentHint), duration: const Duration(seconds: 6)));
+            }
+            return ok;
           },
         ),
       ]),

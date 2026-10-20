@@ -1569,6 +1569,7 @@
   "debtRepaymentTitle": "Қарызды өтеу · {name}",
   "@debtRepaymentTitle": {"placeholders": {"name": {"type": "String"}}},
   "debtPaidLine": "Қарыз өтелді: {amount}, бұл шығын емес",
+  "firstRepaymentHint": "Бұл шығын емес: ақша қарызды өтеуге кетті. «Ай» бөлімінде «Қарыз өтелді» жолы бар",
   "@debtPaidLine": {"placeholders": {"amount": {"type": "String"}}},
   "movesWrittenOff": "Қарыздар есептен шығарылды",
   "movesForgiven": "Төлемсіз жабылған қарыздар",

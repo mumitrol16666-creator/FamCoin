@@ -80,6 +80,23 @@ void main() {
       expect(s.ledger.balance('cash'), kzt(90000));
     });
 
+    testWidgets('первое погашение кредита показывает подсказку «не расход» один раз', (tester) async {
+      late String debtId;
+      final f = await pumpWith(tester, (c) => showBankPaySheet(c, AppScope.of(c).state.bankDebt(debtId)!));
+      final s = f.state;
+      await s.sendBatch(s.newBankDebtCommands(name: 'Kaspi Red', kind: 'creditCard', balance: kzt(100000), payment: kzt(10000), day: 25));
+      debtId = s.bankDebts.single.id;
+      await openForm(tester);
+      await tester.enterText(find.byType(TextField).first, '10000');
+      await tapButton(tester, 'Оплатить');
+      expect(find.textContaining('Это не расход: деньги ушли'), findsOneWidget);
+      await tester.pumpAndSettle(const Duration(seconds: 7));
+      await openForm(tester);
+      await tester.enterText(find.byType(TextField).first, '5000');
+      await tapButton(tester, 'Оплатить');
+      expect(find.textContaining('Это не расход: деньги ушли'), findsNothing, reason: 'второе погашение — без подсказки');
+    });
+
     testWidgets('частичный возврат личного долга', (tester) async {
       final f = await pumpWith(tester, (c) => showPersonRepaySheet(c, AppScope.of(c).state.personDebts.single));
       final s = f.state;
