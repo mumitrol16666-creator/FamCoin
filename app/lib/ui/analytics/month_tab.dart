@@ -245,6 +245,12 @@ class _MonthTabState extends State<MonthTab> {
           for (final t in state.transactionsOnDay(DateTime(month.year, month.month, widget.selectedDay! + 1)))
             Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: TransactionTile(t)),
 
+        // Погашение долгов видно сразу: деньги ушли, но это не расход.
+        if (report.debtPayments > 0)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+            child: Text(l.debtPaidLine(formatMoney(report.debtPayments)), style: TextStyle(fontSize: 13, color: fam.text2)),
+          ),
         // Движения, не доходы и не расходы: займы, возвраты, списания, уточнения.
         // Свёрнуто — это нужно не каждому и не каждый месяц.
         if (moves.isNotEmpty || report.cashFlow != 0) ...[

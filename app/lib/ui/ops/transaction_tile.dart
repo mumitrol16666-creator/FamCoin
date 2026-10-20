@@ -100,7 +100,7 @@ class TxView {
       case EventType.repaymentMade:
         final bank = other == null ? null : state.bankDebt(other);
         return TxView(
-          title: bank?.name ?? '${l.iReturned} · $other',
+          title: bank != null ? l.debtRepaymentTitle(bank.name) : '${l.iReturned} · $other',
           subtitle: [if (liability != 0) '${l.principalShort} ${formatMoney(-liability)}', if (expense > 0) '${l.catInterest} ${formatMoney(expense)}', ?accountName],
           amount: moneyDelta,
           icon: bank != null ? Icons.account_balance_outlined : Icons.handshake_outlined,
